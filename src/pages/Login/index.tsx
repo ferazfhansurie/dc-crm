@@ -1,4 +1,4 @@
-import logoUrl from "@/assets/images/logo.png";
+import logoUrl from "@/assets/images/dc-logo.png";
 import illustrationUrl from "@/assets/images/illustration.svg";
 import { FormInput, FormCheck } from "@/components/Base/Form";
 import Button from "@/components/Base/Button";
