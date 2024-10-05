@@ -7,7 +7,7 @@ import { DocumentReference, updateDoc, getDoc, getDocs, deleteDoc } from 'fireba
 import { getFirestore, collection, doc, setDoc, DocumentSnapshot } from 'firebase/firestore';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import logoUrl from "@/assets/images/logo.png";
+import logoUrl from "@/assets/images/dc-login-logo.png";
 import LoadingIcon from "@/components/Base/LoadingIcon";
 import { Tab } from '@headlessui/react'
 import { getStorage, ref, uploadBytes, getDownloadURL, listAll } from 'firebase/storage';
@@ -803,7 +803,7 @@ const Main: React.FC = () => {
                 <MessageList 
                   messages={messages} 
                   onSendMessage={sendMessageToAssistant} 
-                  assistantName={assistantInfo?.name || 'Juta Assistant'} 
+                  assistantName={assistantInfo?.name || 'Omniyal Assistant'} 
                   deleteThread={deleteThread} 
                   threadId={threadId}
                 />
