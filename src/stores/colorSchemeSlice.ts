@@ -17,7 +17,7 @@ interface ColorSchemeState {
 
 const getColorScheme = (): ColorSchemes => {
   const colorScheme = localStorage.getItem("colorScheme");
-  return colorSchemes.find((scheme) => scheme === colorScheme) || "default";
+  return colorSchemes.find((scheme) => scheme === colorScheme) || "theme-4";
 };
 
 const initialState: ColorSchemeState = {
