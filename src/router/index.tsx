@@ -67,7 +67,7 @@ import Chart from "../pages/Chart";
 import Slider from "../pages/Slider";
 import ImageZoom from "../pages/ImageZoom";
 import Opportunities from "../pages/Opportunities";
-
+import QuickReplies from "../pages/QuickReplies";
 import Layout from "../themes";
 import { getAuth } from "firebase/auth";
 import { useState, useEffect } from "react";
@@ -121,6 +121,7 @@ function Router() {
         { path: "users-layout-1", element: <UsersLayout1 /> },
         { path: "users-layout-2", element: <UsersLayout2 /> },
         { path: "users-layout-3", element: <UsersLayout3 /> },
+        { path: "users-layout-2/quick-replies", element: <QuickReplies /> },
         { path: "profile-overview-1", element: <ProfileOverview1 /> },
         { path: "profile-overview-2", element: <ProfileOverview2 /> },
         { path: "profile-overview-3", element: <ProfileOverview3 /> },
