@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { getAuth } from "firebase/auth";
 import { initializeApp } from "firebase/app";
 import logoImage from '@/assets/images/placeholder.svg';
-import { getFirestore,Timestamp,  collection, doc, getDoc, onSnapshot, setDoc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, arrayRemove,arrayUnion, writeBatch, serverTimestamp, runTransaction, increment } from "firebase/firestore";
+import { getFirestore,Timestamp,  collection, doc, getDoc, onSnapshot, setDoc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, arrayRemove,arrayUnion, writeBatch, serverTimestamp, runTransaction, increment, getCountFromServer } from "firebase/firestore";
 import {QueryDocumentSnapshot, DocumentData ,Query,CollectionReference, startAfter,limit,deleteField} from 'firebase/firestore'
 import axios, { AxiosError } from "axios";
 import Lucide from "@/components/Base/Lucide";
@@ -163,6 +163,7 @@ interface Employee {
   phone?: string;
   quotaLeads?: number;
   assignedContacts?: number;
+  group?: string;
   // Add other properties as needed
 }
 interface Tag {
@@ -516,6 +517,8 @@ function Main() {
   const [showAllForwardTags, setShowAllForwardTags] = useState(false);
   const [visibleForwardTags, setVisibleForwardTags] = useState<typeof tagList>([]);
 
+  const [totalContacts, setTotalContacts] = useState<number>(0);
+
   // Update this useEffect
   useEffect(() => {
     setVisibleForwardTags(showAllForwardTags ? tagList : tagList.slice(0, 5));
@@ -833,31 +836,25 @@ const sendVoiceMessage = async () => {
     console.log('Initial contacts:', initialContacts);
   }, []);
 
-  const filterContactsByUserRole = (contacts: Contact[], userRole: string, userName: string) => {
+  const filterContactsByUserRole = useCallback((contacts: Contact[], userRole: string, userName: string) => {
+    console.log('Filtering contacts by user role', { userRole, userName, contactsCount: contacts.length });
     switch (userRole) {
-      case '1':
+      case '1': // Admin
         return contacts; // Admin sees all contacts
-      case '2':
-        // Sales sees only contacts assigned to them
+      case '2': // Sales
+      case '3': // Observer
+      case '4': // Manager
+        // Sales, Observer, and Manager see only contacts assigned to them
         return contacts.filter(contact => 
           contact.tags?.some(tag => tag.toLowerCase() === userName.toLowerCase())
         );
-      case '3':
-        // Observer sees only contacts assigned to them
-        return contacts.filter(contact => 
-          contact.tags?.some(tag => tag.toLowerCase() === userName.toLowerCase())
-        );
-      case '4':
-        // Manager sees only contacts assigned to them
-        return contacts.filter(contact => 
-          contact.tags?.some(tag => tag.toLowerCase() === userName.toLowerCase())
-        );
-      case '5':
+      case '5': // Other role
         return contacts;
       default:
+        console.warn(`Unknown user role: ${userRole}`);
         return [];
     }
-  };
+  }, []);
 
   const filterAndSetContacts = useCallback((contactsToFilter: Contact[]) => {
     console.log('Filtering contacts', { 
@@ -865,78 +862,65 @@ const sendVoiceMessage = async () => {
       userRole, 
       userName: userData?.name,
       activeTags,
-      phoneCount,
-      phoneNames,
-      userPhone: userData?.phone,
     });
   
     // Apply role-based filtering first
     let filtered = filterContactsByUserRole(contactsToFilter, userRole, userData?.name || '');
     console.log('After role-based filtering:', { filteredCount: filtered.length });
-
-  // Filter out group chats
-  filtered = filtered.filter(contact => 
-    contact.chat_id && !contact.chat_id.includes('@g.us')
-  );
-  console.log('Filtered out group chats:', { filteredCount: filtered.length });
-
-  // Filter by user's phone if set
-  if (userData?.phone !== null) {
-
-    filtered = filtered.filter(contact => contact.phoneIndex === parseInt(userData?.phone));
-    console.log(`Filtered contacts for user's phone (${phoneNames[userData?.phone]}):`, { filteredCount: filtered.length });
-  }
-
-  // Apply tag-based filtering
-  if (activeTags.includes('all')) {
-    console.log('Showing all contacts');
-  } else if (activeTags.includes('unread')) {
-    filtered = filtered.filter(contact => (contact.unreadCount || 0) > 0);
-    console.log('Filtered unread contacts:', { filteredCount: filtered.length });
-  } else if (activeTags.includes('mine')) {
-    filtered = filtered.filter((contact) => 
-      contact.tags?.some(tag => tag.toLowerCase() === currentUserName.toLowerCase())
+  
+    // Filter out group chats
+    filtered = filtered.filter(contact => 
+      contact.chat_id && !contact.chat_id.includes('@g.us')
     );
-    console.log('Filtered "mine" contacts:', { filteredCount: filtered.length });
-  } else if (userData?.role !== '1') {
-    // Get the user's assigned phone from the employee document
-    const userPhoneNames = userData?.phone && phoneNames[userData.phone] ? [phoneNames[userData.phone]] : [];
-    
-    if (userPhoneNames.length > 0 && userData?.phone !== undefined) {
-      // Only display contacts for the user's assigned phone
-      filtered = filtered.filter(contact => contact.phoneIndex === userData.phone);
-      console.log(`Filtered contacts for ${userPhoneNames[0]}:`, { filteredCount: filtered.length });
-    } else {
-      console.log('User has no assigned phone');
-    }
-  } else if (Object.values(phoneNames).includes(activeTags[0])) {
-    // For role '1', display contacts for the selected phone
-    const phoneIndex = Object.entries(phoneNames).find(([_, name]) => name === activeTags[0])?.[0];
-    if (phoneIndex !== undefined) {
-      filtered = filtered.filter(contact => contact.phoneIndex === parseInt(phoneIndex));
-      console.log(`Filtered contacts for ${activeTags[0]}:`, { filteredCount: filtered.length });
-    }
-    } else {
+    console.log('After filtering group chats:', { filteredCount: filtered.length });
+  
+    // Apply tag-based filtering only if activeTags is not empty and doesn't include 'all'
+    if (activeTags.length > 0 && !activeTags.includes('all')) {
       filtered = filtered.filter(contact => 
-        activeTags.some(tag => contact.tags?.includes(tag))
+        contact.tags?.some(tag => activeTags.includes(tag))
       );
-      console.log('Filtered by active tags:', { filteredCount: filtered.length, activeTags });
+      console.log('After tag-based filtering:', { filteredCount: filtered.length, activeTags });
     }
   
     setFilteredContacts(filtered);
     console.log('Final filtered contacts set:', { filteredCount: filtered.length });
-  }, [userRole, userData, activeTags, currentUserName, phoneCount, phoneNames]);
+  }, [userRole, userData, activeTags, filterContactsByUserRole]);
+
+  useEffect(() => {
+    const fetchContacts = async () => {
+      if (!userData?.companyId) {
+        console.log('No company ID available, skipping contact fetch');
+        return;
+      }
+  
+      console.log('Fetching contacts for company:', userData.companyId);
+      const contactsRef = collection(firestore, `companies/${userData.companyId}/contacts`);
+      const q = query(contactsRef, orderBy("last_message.timestamp", "desc"));
+  
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const updatedContacts = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Contact));
+        console.log('Fetched contacts:', updatedContacts.length);
+        setContacts(updatedContacts);
+        filterAndSetContacts(updatedContacts);
+      }, (error) => {
+        console.error('Error fetching contacts:', error);
+      });
+  
+      return () => unsubscribe();
+    };
+  
+    fetchContacts();
+  }, [userData, filterAndSetContacts]);
 
   useEffect(() => {
     if (initialContacts.length > 0) {
-      const filteredContacts = filterContactsByUserRole(initialContacts, userRole, userData?.name || '');
-      console.log('Filtered contacts:', { count: filteredContacts.length });
-      setContacts(filteredContacts.slice(0, 200));
-      filterAndSetContacts(filteredContacts.slice(0, 200));
-      localStorage.setItem('contacts', LZString.compress(JSON.stringify(filteredContacts)));
+      console.log('Initial contacts:', initialContacts.length);
+      setContacts(initialContacts);
+      filterAndSetContacts(initialContacts);
+      localStorage.setItem('contacts', LZString.compress(JSON.stringify(initialContacts)));
       sessionStorage.setItem('contactsFetched', 'true');
     }
-  }, [initialContacts, userRole, userData]);
+  }, [initialContacts, userRole, userData, filterAndSetContacts]);
 
 
 
@@ -1093,6 +1077,7 @@ const closePDFModal = () => {
       const user = auth.currentUser;
       if (!user) {
         console.error('No authenticated user');
+        toast.error('Authentication error. Please try logging in again.');
         return;
       }
   
@@ -1100,39 +1085,59 @@ const closePDFModal = () => {
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
         console.error('No such document for user!');
+        toast.error('User data not found. Please contact support.');
         return;
       }
       const userData = docUserSnapshot.data();
       const companyId = userData.companyId;
   
+      let successCount = 0;
+      let failureCount = 0;
+
+      const phoneIndex = selectedContact?.phoneIndex || 0;
+  
       for (const message of selectedMessages) {
         try {
+          console.log(`Attempting to delete message: ${message.id}`);
           const response = await axios.delete(
             `https://mighty-dane-newly.ngrok-free.app/api/v2/messages/${companyId}/${selectedChatId}/${message.id}`,
             {
-              data: { deleteForEveryone: true } // Set this to false if you want to delete only for the current user
+              data: { deleteForEveryone: true, phoneIndex: phoneIndex },
+              headers: {
+                'Authorization': `Bearer ${userData.accessToken}` // Ensure you're sending the correct authorization token
+              }
             }
           );
   
           if (response.data.success) {
+            console.log(`Successfully deleted message: ${message.id}`);
             setMessages((prevMessages) => prevMessages.filter((msg) => msg.id !== message.id));
+            successCount++;
           } else {
-            console.error(`Failed to delete message: ${message.id}`);
+            console.error(`Failed to delete message: ${message.id}`, response.data);
+            failureCount++;
           }
         } catch (error) {
-          console.error('Error deleting message:', error);
+          console.error('Error deleting message:', message.id, error);
           if (axios.isAxiosError(error) && error.response) {
             console.error('Error details:', error.response.status, error.response.data);
           }
+          failureCount++;
         }
       }
   
-      toast.success('Messages deleted successfully');
+      if (successCount > 0) {
+        toast.success(`Successfully deleted ${successCount} message(s)`);
+      }
+      if (failureCount > 0) {
+        toast.error(`Failed to delete ${failureCount} message(s)`);
+      }
+  
       setSelectedMessages([]);
       closeDeletePopup();
     } catch (error) {
       console.error('Error in delete operation:', error);
-      toast.error('Failed to delete messages');
+      toast.error('Failed to delete messages. Please try again.');
     }
   };
 
@@ -1955,9 +1960,18 @@ const fetchContactsBackground = async (whapiToken: string, locationId: string, g
     console.log('Active tag:', activeTags[0]);
     console.log('Total contacts:', allContacts.length);
 
-    setContacts(allContacts.slice(0, 200));
+    // Set all contacts to state instead of just the first 200
+    setContacts(allContacts);
+
+    // Store all contacts in localStorage
     localStorage.setItem('contacts', LZString.compress(JSON.stringify(allContacts)));
     sessionStorage.setItem('contactsFetched', 'true');
+    
+    // If you need to limit the displayed contacts, implement pagination in the UI component
+    // For example, you could add a state variable for the current page:
+    // const [currentPage, setCurrentPage] = useState(1);
+    // const contactsPerPage = 200;
+    // const displayedContacts = allContacts.slice((currentPage - 1) * contactsPerPage, currentPage * contactsPerPage);
     
   } catch (error) {
     console.error('Error fetching contacts:', error);
@@ -2829,8 +2843,8 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
     setFilteredContacts(contacts);
   }, [contacts]);
 
-  const handleBinaTag = async (requestType: string, phone: string, first_name: string) => {
-    console.log('Request Payload:', JSON.stringify({ requestType, phone, first_name }));
+  const handleBinaTag = async (requestType: string, phone: string, first_name: string, phoneIndex: number) => {
+    console.log('Request Payload:', JSON.stringify({ requestType, phone, first_name, phoneIndex }));
     
     try {
         const response = await fetch('https://mighty-dane-newly.ngrok-free.app/api/bina/tag', {
@@ -2842,6 +2856,7 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
                 requestType,
                 phone,
                 first_name,
+                phoneIndex,
             }),
         });
 
@@ -2856,6 +2871,34 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
     }
 };
 
+const handleEdwardTag = async (requestType: string, phone: string, first_name: string, phoneIndex: number) => {
+  console.log('Request Payload:', JSON.stringify({ requestType, phone, first_name, phoneIndex }));
+  
+  try {
+      const response = await fetch('https://mighty-dane-newly.ngrok-free.app/api/edward/tag', {
+          method: 'POST', // Ensure this is set to POST
+          headers: {
+              'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+              requestType,
+              phone,
+              first_name,
+              phoneIndex,
+          }),
+      });
+
+      if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Response data:', data);
+  } catch (error) {
+      console.error('Error:', error);
+  }
+};
+
   const addTagBeforeQuote = (contact: Contact) => {
     console.log('Adding tag before quote for contact:', contact.phone);
     console.log('Adding tag before quote for contact:', contact.contactName);
@@ -2863,7 +2906,7 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
       console.error('Phone or firstname is null or undefined');
       return;
     }
-    handleBinaTag('addBeforeQuote', contact.phone, contact.contactName);
+    handleBinaTag('addBeforeQuote', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
   };
 
   const addTagBeforeQuoteEnglish = (contact: Contact) => {
@@ -2873,7 +2916,7 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
       console.error('Phone or firstname is null or undefined');
       return;
     }
-    handleBinaTag('addBeforeQuote', contact.phone, contact.contactName);
+    handleBinaTag('addBeforeQuote', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
 };
 
 const addTagBeforeQuoteMalay = (contact: Contact) => {
@@ -2883,7 +2926,7 @@ const addTagBeforeQuoteMalay = (contact: Contact) => {
       console.error('Phone or firstname is null or undefined');
       return;
     }
-    handleBinaTag('addBeforeQuote', contact.phone, contact.contactName);
+    handleBinaTag('addBeforeQuote', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
 };
 
 const addTagBeforeQuoteChinese = (contact: Contact) => {
@@ -2893,14 +2936,14 @@ const addTagBeforeQuoteChinese = (contact: Contact) => {
       console.error('Phone or firstname is null or undefined');
       return;
     }
-    handleBinaTag('addBeforeQuote', contact.phone, contact.contactName);
+    handleBinaTag('addBeforeQuote', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
 };
   
   const addTagAfterQuote = (contact: Contact) => {
     console.log('Adding tag after quote for contact:', contact.phone);
     console.log('Adding tag after quote for contact:', contact.contactName);
     if (contact.phone && contact.contactName) {
-      handleBinaTag('addAfterQuote', contact.phone, contact.contactName);
+      handleBinaTag('addAfterQuote', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
     } else {
       console.error('Phone or firstname is null or undefined');
     }
@@ -2913,7 +2956,7 @@ const addTagBeforeQuoteChinese = (contact: Contact) => {
       console.error('Phone or firstname is null or undefined');
       return;
     }
-    handleBinaTag('addAfterQuoteEnglish', contact.phone, contact.contactName);
+    handleBinaTag('addAfterQuoteEnglish', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
 };
 
 const addTagAfterQuoteChinese = (contact: Contact) => {
@@ -2923,7 +2966,7 @@ const addTagAfterQuoteChinese = (contact: Contact) => {
       console.error('Phone or firstname is null or undefined');
       return;
     }
-    handleBinaTag('addAfterQuoteChinese', contact.phone, contact.contactName);
+    handleBinaTag('addAfterQuoteChinese', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
 };
 
 const addTagAfterQuoteMalay = (contact: Contact) => {
@@ -2933,7 +2976,7 @@ const addTagAfterQuoteMalay = (contact: Contact) => {
       console.error('Phone or firstname is null or undefined');
       return;
     }
-    handleBinaTag('addAfterQuoteMalay', contact.phone, contact.contactName);
+    handleBinaTag('addAfterQuoteMalay', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
 };
 
 const removeTagBeforeQuote = (contact: Contact) => {
@@ -2943,7 +2986,7 @@ const removeTagBeforeQuote = (contact: Contact) => {
       console.error('Phone or firstname is null or undefined');
       return;
     }
-    handleBinaTag('removeBeforeQuote', contact.phone, contact.contactName);
+    handleBinaTag('removeBeforeQuote', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
 };
 
 const removeTagAfterQuote = (contact: Contact) => {
@@ -2953,7 +2996,7 @@ const removeTagAfterQuote = (contact: Contact) => {
       console.error('Phone or firstname is null or undefined');
       return;
     }
-    handleBinaTag('removeAfterQuote', contact.phone, contact.contactName);
+    handleBinaTag('removeAfterQuote', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
 };
 
 const removeTag5Days = (contact: Contact) => {
@@ -2963,7 +3006,7 @@ const removeTag5Days = (contact: Contact) => {
       console.error('Phone or firstname is null or undefined');
       return;
     }
-    handleBinaTag('remove5DaysFollowUp', contact.phone, contact.contactName);
+    handleBinaTag('remove5DaysFollowUp', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
 };
 
 const removeTagPause = (contact: Contact) => {
@@ -2973,7 +3016,17 @@ const removeTagPause = (contact: Contact) => {
       console.error('Phone or firstname is null or undefined');
       return;
     }
-    handleBinaTag('resumeFollowUp', contact.phone, contact.contactName);
+    handleBinaTag('resumeFollowUp', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
+};
+
+const removeTagEdward = (contact: Contact) => {
+  console.log('Removing tag Edward for contact:', contact.phone);
+  console.log('Removing tag Edward for contact:', contact.contactName);
+  if (!contact.phone || !contact.contactName) {
+    console.error('Phone or firstname is null or undefined');
+    return;
+  }
+  handleEdwardTag('removeFollowUp', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
 };
 
 const fiveDaysFollowUpEnglish = (contact: Contact) => {
@@ -2983,7 +3036,7 @@ const fiveDaysFollowUpEnglish = (contact: Contact) => {
       console.error('Phone or firstname is null or undefined');
       return;
     }
-    handleBinaTag('5DaysFollowUpEnglish', contact.phone, contact.contactName);
+    handleBinaTag('5DaysFollowUpEnglish', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
 };
 
 const fiveDaysFollowUpChinese = (contact: Contact) => {
@@ -2993,7 +3046,7 @@ const fiveDaysFollowUpChinese = (contact: Contact) => {
       console.error('Phone or firstname is null or undefined');
       return;
     }
-    handleBinaTag('5DaysFollowUpChinese', contact.phone, contact.contactName);
+    handleBinaTag('5DaysFollowUpChinese', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
 };
 
 const fiveDaysFollowUpMalay = (contact: Contact) => {
@@ -3003,7 +3056,7 @@ const fiveDaysFollowUpMalay = (contact: Contact) => {
       console.error('Phone or firstname is null or undefined');
       return;
     }
-    handleBinaTag('5DaysFollowUpMalay', contact.phone, contact.contactName);
+    handleBinaTag('5DaysFollowUpMalay', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
 };
 
 const pauseFiveDaysFollowUp = (contact: Contact) => {
@@ -3013,7 +3066,7 @@ const pauseFiveDaysFollowUp = (contact: Contact) => {
     console.error('Phone or firstname is null or undefined');
     return;
   }
-  handleBinaTag('pauseFollowUp', contact.phone, contact.contactName);
+  handleBinaTag('pauseFollowUp', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
 };
 
 
@@ -3437,27 +3490,52 @@ const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
 const [paginatedContacts, setPaginatedContacts] = useState<Contact[]>([]);
 
 useEffect(() => {
-  setLoadingMessage("Loading contacts...");
-  const timer = setTimeout(() => {
-    if (paginatedContacts.length === 0) {
-      setLoadingMessage("There are a lot of contacts, fetching them might take some time...");
+  if (filteredContacts.length === 0) {
+    if (activeTags.length > 0) {
+      setLoadingMessage(`No contacts found for the ${activeTags[0]} tag.`);
+    } else {
+      setLoadingMessage("No contacts found.");
     }
-  }, 15000);
+  } else {
+    setLoadingMessage("Loading contacts...");
+    const timer = setTimeout(() => {
+      if (paginatedContacts.length === 0) {
+        setLoadingMessage("There are a lot of contacts, fetching them might take some time...");
+      }
+    }, 15000);
 
-  return () => clearTimeout(timer);
-}, [paginatedContacts]);
+    return () => clearTimeout(timer);
+  }
+}, [filteredContacts, paginatedContacts, activeTags]);
 
 useEffect(() => {
+  console.log('Filtering contacts', { 
+    contactsLength: contacts.length, 
+    userRole, 
+    userName: userData?.name,
+    activeTags,
+    searchQuery
+  });
+
   let filtered = contacts;
+
+  // Apply role-based filtering
+  if (userRole === "3") {
+    filtered = filtered.filter(contact => 
+      contact.assignedTo?.toLowerCase() === userData?.name?.toLowerCase() ||
+      contact.tags?.some(tag => tag.toLowerCase() === userData?.name?.toLowerCase())
+    );
+  }
 
   // Apply tag filter
   if (activeTags.length > 0) {
     filtered = filtered.filter((contact) => {
       if (activeTags.includes('Mine')) {
-        return contact.tags?.includes(currentUserName);
+        return contact.assignedTo?.toLowerCase() === userData?.name?.toLowerCase() ||
+               contact.tags?.some(tag => tag.toLowerCase() === userData?.name?.toLowerCase());
       }
       if (activeTags.includes('Unassigned')) {
-        return !contact.tags?.some(tag => employeeList.some(employee => employee.name.toLowerCase() === tag.toLowerCase()));
+        return !contact.assignedTo && !contact.tags?.some(tag => employeeList.some(employee => employee.name.toLowerCase() === tag.toLowerCase()));
       }
       if (activeTags.includes('All')) {
         return true;
@@ -3485,7 +3563,7 @@ useEffect(() => {
   }
 
   console.log('Filtered contacts updated:', filtered);
-}, [contacts, searchQuery, activeTags, currentUserName, employeeList]);
+}, [contacts, searchQuery, activeTags, currentUserName, employeeList, userRole, userData]);
 
 // Update the pagination logic
 useEffect(() => {
@@ -3618,14 +3696,26 @@ const sortContacts = (contacts: Contact[]) => {
   const totalPages = Math.ceil(filteredContactsSearch.length / contactsPerPage);
   
   useEffect(() => {
-    const tag = activeTags[0].toLowerCase();
+    console.log('Filtering contacts - Start', { 
+      contactsLength: contacts.length, 
+      activeTags,
+      searchQuery,
+      userRole,
+      userData
+    });
+  
+    const tag = activeTags[0]?.toLowerCase() || 'all';
     let filteredContacts = filterContactsByUserRole(contacts, userRole, userData?.name || '');
     setMessageMode('reply');
-
+  
+    console.log('After filterContactsByUserRole:', filteredContacts.length);
+  
     // First, filter contacts based on the employee's assigned phone
     if (userData?.phone !== undefined && userData.phone !== -1) {
       const userPhoneIndex = parseInt(userData.phone, 10);
       setMessageMode(`phone${userPhoneIndex + 1}`);
+      filteredContacts = filteredContacts.filter(contact => contact.phoneIndex === userPhoneIndex);
+      console.log('After phone filter:', filteredContacts.length);
     }
   
     // Filtering logic
@@ -3638,6 +3728,7 @@ const sortContacts = (contacts: Contact[]) => {
         filteredContacts = filteredContacts.filter(contact => 
           contact.phoneIndex === phoneIndex
         );
+        console.log('After phone name filter:', filteredContacts.length);
       }
     } else {
       // Existing filtering logic for other tags
@@ -3648,7 +3739,7 @@ const sortContacts = (contacts: Contact[]) => {
               !contact.chat_id?.endsWith('@g.us') && 
               !contact.tags?.includes('snooze')
             );
-          }else{
+          } else {
             filteredContacts = filteredContacts.filter(contact => 
               !contact.tags?.includes('snooze')
             );
@@ -3687,19 +3778,26 @@ const sortContacts = (contacts: Contact[]) => {
             !contact.tags?.includes('snooze')
           );
           break;
+        case 'resolved':
+          filteredContacts = filteredContacts.filter(contact => 
+            contact.tags?.includes('resolved') && 
+            !contact.tags?.includes('snooze')
+          );
+          break;
         default:
           filteredContacts = filteredContacts.filter(contact => 
             contact.tags?.some(t => t.toLowerCase() === tag.toLowerCase()) && 
             !contact.tags?.includes('snooze')
           );
       }
+      console.log('After tag filter:', filteredContacts.length);
     }
+  
     filteredContacts = sortContacts(filteredContacts);
-    console.log("MESSAGE MODE", messageMode)
-    let filtered = filteredContacts;
+    console.log("MESSAGE MODE", messageMode);
   
     if (searchQuery) {
-      filtered = filteredContacts.filter((contact) => {
+      filteredContacts = filteredContacts.filter((contact) => {
         const name = (contact.contactName || contact.firstName || '').toLowerCase();
         const phone = (contact.phone || '').toLowerCase();
         const tags = (contact.tags || []).join(' ').toLowerCase();
@@ -3708,11 +3806,12 @@ const sortContacts = (contacts: Contact[]) => {
               phone.includes(searchQuery.toLowerCase()) || 
               tags.includes(searchQuery.toLowerCase());
       });
+      console.log('After search filter:', filteredContacts.length);
     }
-
-    const filteredAndSortedContacts = sortContacts(filteredContacts);
-    setFilteredContacts(filteredAndSortedContacts);
-    // Don't reset the current page here
+  
+    console.log('Final filtered contacts:', filteredContacts.length);
+    setFilteredContacts(filteredContacts);
+  
   }, [contacts, searchQuery, activeTags, showAllContacts, showUnreadContacts, showMineContacts, showUnassignedContacts, showSnoozedContacts, showGroupContacts, currentUserName, employeeList, userData, userRole]);
   
   const handleSnoozeContact = async (contact: Contact) => {
@@ -3797,6 +3896,91 @@ const sortContacts = (contacts: Contact[]) => {
       toast.error('Failed to unsnooze contact');
     }
   };
+
+  const handleResolveContact = async (contact: Contact) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        console.error('No authenticated user');
+        return;
+      }
+  
+      const docUserRef = doc(firestore, 'user', user.email!);
+      const docUserSnapshot = await getDoc(docUserRef);
+      if (!docUserSnapshot.exists()) {
+        console.error('No such document for user!');
+        return;
+      }
+      const userData = docUserSnapshot.data();
+      const companyId = userData.companyId;
+  
+      // Update Firestore
+      if (companyId && contact.id) {
+        const contactRef = doc(firestore, 'companies', companyId, 'contacts', contact.id);
+        await updateDoc(contactRef, {
+          tags: arrayUnion('resolved')
+        });
+      } else {
+        console.error('Invalid companyId or contact.id');
+      }
+      // Update local state
+      setContacts(prevContacts =>
+        prevContacts.map(c =>
+          c.id === contact.id
+            ? { ...c, tags: [...(c.tags || []), 'resolved'] }
+            : c
+        )
+      );
+  
+      toast.success('Contact marked as resolved');
+    } catch (error) {
+      console.error('Error resolving contact:', error);
+      toast.error('Failed to mark contact as resolved');
+    }
+  };
+
+  const handleUnresolveContact = async (contact: Contact) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        console.error('No authenticated user');
+        return;
+      }
+  
+      const docUserRef = doc(firestore, 'user', user.email!);
+      const docUserSnapshot = await getDoc(docUserRef);
+      if (!docUserSnapshot.exists()) {
+        console.error('No such document for user!');
+        return;
+      }
+      const userData = docUserSnapshot.data();
+      const companyId = userData.companyId;
+  
+      // Update Firestore
+      if (companyId && contact.id) {
+        const contactRef = doc(firestore, 'companies', companyId, 'contacts', contact.id);
+        await updateDoc(contactRef, {
+          tags: arrayRemove('resolved')
+        });
+      } else {
+        console.error('Invalid companyId or contact.id');
+      }
+      // Update local state
+      setContacts(prevContacts =>
+        prevContacts.map(c =>
+          c.id === contact.id
+            ? { ...c, tags: c.tags?.filter(tag => tag !== 'resolved') }
+            : c
+        )
+      );
+  
+      toast.success('Contact unmarked as resolved');
+    } catch (error) {
+      console.error('Error unresolving contact:', error);
+      toast.error('Failed to unmark contact as resolved');
+    }
+  };
+
   const handleSelectMessage = (message: Message) => {
     setSelectedMessages(prevSelectedMessages =>
         prevSelectedMessages.includes(message)
@@ -3823,12 +4007,23 @@ const sortContacts = (contacts: Contact[]) => {
         for (const message of selectedMessages) {
           try {
             if (message.type === 'image') {
-              // Ensure we have a valid image link
-              const imageLink = message.image?.link || message.image?.url;
-              if (!imageLink) {
-                throw new Error('Invalid image link');
+              let imageUrl = message.image?.link || message.image?.url;
+              
+              if (!imageUrl && message.image?.data) {
+                // If we have base64 data, upload it to get a URL
+                const base64Data = message.image.data.startsWith('data:') 
+                  ? message.image.data 
+                  : `data:${message.image?.mimetype};base64,${message.image?.data}`;
+                imageUrl = await uploadBase64Image(base64Data, message.image?.mimetype || '');
               }
-              await sendImageMessage(contact.chat_id ?? '', imageLink, message.image?.caption ?? '');
+  
+              if (!imageUrl) {
+                console.error('No valid image data found for message:', message);
+                toast.error(`Failed to forward image: No valid image data`);
+                continue;
+              }
+
+              await sendImageMessage(contact.chat_id ?? '', imageUrl, message.image?.caption ?? '');
             } else if (message.type === 'document') {
               // Ensure we have a valid document link
               const documentLink = message.document?.link;
@@ -3874,6 +4069,24 @@ const sortContacts = (contacts: Contact[]) => {
     } catch (error) {
       console.error('Error in forward process:', error);
       toast.error(`Error in forward process: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const uploadBase64Image = async (base64Data: string, mimeType: string): Promise<string> => {
+    try {
+      const response = await fetch(base64Data);
+      const blob = await response.blob();
+  
+      const storage = getStorage();
+      const storageRef = ref(storage, `images/${Date.now()}.${mimeType.split('/')[1]}`);
+      
+      await uploadBytes(storageRef, blob);
+      const downloadURL = await getDownloadURL(storageRef);
+      
+      return downloadURL;
+    } catch (error) {
+      console.error('Error uploading base64 image:', error);
+      throw error;
     }
   };
 
@@ -4303,23 +4516,17 @@ const sortContacts = (contacts: Contact[]) => {
         removeTag5Days(contact);
       } else if (tagName === 'Pause Follow Up') {
         removeTagPause(contact);
+      } else if (tagName === 'Edward Follow Up') {
+        removeTagEdward(contact);
       }
       // Update state
       setContacts(prevContacts => {
-        if (userData?.role === '3') {
-          // For role 3, remove the contact if the removed tag matches their name
-          return prevContacts.filter(contact => 
-            contact.id !== contactId || 
-            (contact.tags && contact.tags.some(tag => tag.toLowerCase() === userData.name.toLowerCase()))
-          );
-        } else {
-          // For other roles, just update the tags
-          return prevContacts.map(contact =>
-            contact.id === contactId
-              ? { ...contact, tags: contact.tags!.filter(tag => tag !== tagName), assignedTo: undefined }
-              : contact
-          );
-        }
+        // For all roles, just update the tags
+        return prevContacts.map(contact =>
+          contact.id === contactId
+            ? { ...contact, tags: contact.tags!.filter(tag => tag !== tagName), assignedTo: undefined }
+            : contact
+        );
       });
   
       const updatedContacts = contacts.map((contact: Contact) =>
@@ -4616,6 +4823,9 @@ const sortContacts = (contacts: Contact[]) => {
         onSnooze: () => handleSnoozeContact(contact),
         onUnsnooze: () => handleUnsnoozeContact(contact),
         isSnooze: contact.tags?.includes('snooze'),
+        onResolve: () => handleResolveContact(contact),
+        onUnresolve: () => handleUnresolveContact(contact),
+        isResolved: contact.tags?.includes('resolved'),
       },
     });
   };
@@ -5135,6 +5345,30 @@ console.log(prompt);
     }
   };
 
+  useEffect(() => {
+    const fetchTotalContacts = async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const docUserRef = doc(firestore, 'user', user.email!);
+        const docUserSnapshot = await getDoc(docUserRef);
+        if (!docUserSnapshot.exists()) return;
+
+        const userData = docUserSnapshot.data();
+        const companyId = userData.companyId;
+
+        const contactsRef = collection(firestore, `companies/${companyId}/contacts`);
+        const snapshot = await getCountFromServer(contactsRef);
+        setTotalContacts(snapshot.data().count);
+      } catch (error) {
+        console.error('Error fetching total contacts:', error);
+      }
+    };
+
+    fetchTotalContacts();
+  }, []);
+
   return (
     <div className="flex flex-col md:flex-row overflow-y-auto bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200" style={{ height: '100vh' }}>
       <audio ref={audioRef} src={noti} />
@@ -5145,7 +5379,7 @@ console.log(prompt);
               {userData?.company}
             </div>
             <div className="text-start text-lg font-medium text-gray-600 dark:text-gray-400">
-              Total Contacts: {initialContacts.length}
+              Total Contacts: {totalContacts}
             </div>
           </div>
           {userData?.phone !== undefined && (
@@ -5502,7 +5736,7 @@ console.log(prompt);
 <div className="flex flex-wrap gap-2">
   {['Mine', 'All', 'Unassigned',
     ...(isTagsExpanded ? [
-      'Group', 'Unread', 'Snooze', 'Stop Bot',
+      'Group', 'Unread', 'Snooze', 'Stop Bot', 'Resolved',
       ...(userData?.phone !== undefined && userData.phone !== -1 ? 
         [phoneNames[userData.phone] || `Phone ${userData.phone + 1}`] : 
         Object.values(phoneNames)
@@ -5531,6 +5765,7 @@ console.log(prompt);
         tagLower === 'mine' ? contactTags.includes(currentUserName.toLowerCase()) :
         tagLower === 'unassigned' ? !contactTags.some(t => employeeList.some(e => e.name.toLowerCase() === t)) :
         tagLower === 'snooze' ? contactTags.includes('snooze') :
+        tagLower === 'resolved' ? contactTags.includes('resolved') :
         tagLower === 'group' ? isGroup :
         tagLower === 'stop bot' ? contactTags.includes('stop bot') :
         phoneIndex !== -1 ? contact.phoneIndex === phoneIndex :
@@ -5869,33 +6104,52 @@ console.log(prompt);
                 </span>
               </Menu.Button>
               <Menu.Items className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 shadow-lg rounded-md p-2 z-10 max-h-60 overflow-y-auto">
-  <div className="mb-2">
-    <input
-      type="text"
-      placeholder="Search employees..."
-      value={employeeSearch}
-      onChange={(e) => setEmployeeSearch(e.target.value)}
-      className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-    />
-  </div>
-  {employeeList
-    .filter(employee => employee.name.toLowerCase().includes(employeeSearch.toLowerCase()))
-    .map((employee) => (
-      <Menu.Item key={employee.id}>
-        <button
-          className="flex items-center justify-between w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-          onClick={() => handleAddTagToSelectedContacts(employee.name, selectedContact)}
-        >
-          <span className="text-gray-800 dark:text-gray-200 truncate flex-grow mr-2" style={{ maxWidth: '70%' }}>
-            {employee.name}
-          </span>
-          <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-            Leads Quota: {employee.quotaLeads}
-          </span>
-        </button>
-      </Menu.Item>
-    ))}
-</Menu.Items>
+                <div className="mb-2">
+                  <input
+                    type="text"
+                    placeholder="Search employees..."
+                    value={employeeSearch}
+                    onChange={(e) => setEmployeeSearch(e.target.value)}
+                    className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                  />
+                </div>
+                {employeeList
+                  .filter(employee => {
+                    if (userRole === '4') {
+                      if (userData?.group) {
+                        return employee.role === '2' && 
+                              employee.group === userData.group && 
+                              employee.name.toLowerCase().includes(employeeSearch.toLowerCase());
+                      } else {
+                        return employee.role === '2' && 
+                              employee.name.toLowerCase().includes(employeeSearch.toLowerCase());
+                      }
+                    } else if (userRole === '1' || userRole === '5') {
+                      return employee.name.toLowerCase().includes(employeeSearch.toLowerCase());
+                    } else if (userRole === '2' || userRole === '3') {
+                      return employee.role === userRole && 
+                            employee.name.toLowerCase().includes(employeeSearch.toLowerCase());
+                    }
+                    return false;
+                  })
+                  .map((employee) => {
+                    return (
+                      <Menu.Item key={employee.id}>
+                        <button
+                          className="flex items-center justify-between w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                          onClick={() => handleAddTagToSelectedContacts(employee.name, selectedContact)}
+                        >
+                          <span className="text-gray-800 dark:text-gray-200 truncate flex-grow mr-2" style={{ maxWidth: '70%' }}>
+                            {employee.name}
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                            Leads Quota: {employee.quotaLeads}
+                          </span>
+                        </button>
+                      </Menu.Item>
+                    );
+                  })}
+              </Menu.Items>
             </Menu>
             <Menu as="div" className="relative inline-block text-left">
               <Menu.Button as={Button} className="p-2 !box m-0">
@@ -5944,43 +6198,52 @@ console.log(prompt);
                 </button>
               </Menu.Item>
               <Menu.Item>
-  <Menu as="div" className="relative inline-block text-left w-full">
-    <Menu.Button className="flex items-center w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
-      <Lucide icon="Users" className="w-4 h-4 mr-2 text-gray-800 dark:text-gray-200" />
-      <span className="text-gray-800 dark:text-gray-200">Assign Employee</span>
-    </Menu.Button>
-    <Menu.Items className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 shadow-lg rounded-md p-2 z-10">
-      <div className="mb-2">
-        <input
-          type="text"
-          placeholder="Search employees..."
-          value={employeeSearch}
-          onChange={(e) => setEmployeeSearch(e.target.value)}
-          className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-        />
-      </div>
-      {employeeList
-        .filter(employee => employee.name.toLowerCase().includes(employeeSearch.toLowerCase()))
-        .map((employee) => (
-          <Menu.Item key={employee.id}>
-            <button
-              className="flex items-center w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-              onClick={() => handleAddTagToSelectedContacts(employee.name, selectedContact)}
-            >
-              <span className="text-gray-800 dark:text-gray-200">{employee.name}</span>
-            </button>
-          </Menu.Item>
-        ))}
-    </Menu.Items>
-  </Menu>
-</Menu.Item>
+                <Menu as="div" className="relative inline-block text-left w-full">
+                  <Menu.Button className="flex items-center w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+                    <Lucide icon="Users" className="w-4 h-4 mr-2 text-gray-800 dark:text-gray-200" />
+                    <span className="text-gray-800 dark:text-gray-200">Assign Employee</span>
+                  </Menu.Button>
+                  <Menu.Items className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 shadow-lg rounded-md p-2 z-10 overflow-y-auto max-h-96">
+                    <div className="mb-2">
+                      <input
+                        type="text"
+                        placeholder="Search employees..."
+                        value={employeeSearch}
+                        onChange={(e) => setEmployeeSearch(e.target.value)}
+                        className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                      />
+                    </div>
+                    {employeeList
+                      .filter(employee => {
+                        if (userRole === '4' || userRole === '2') {
+                          const shouldInclude = employee.role === '2' && employee.name.toLowerCase().includes(employeeSearch.toLowerCase());
+                          return shouldInclude;
+                        }
+                        const shouldInclude = employee.name.toLowerCase().includes(employeeSearch.toLowerCase());
+                        return shouldInclude;
+                      })
+                      .map((employee) => {
+                        return (
+                          <Menu.Item key={employee.id}>
+                            <button
+                              className="flex items-center w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                              onClick={() => handleAddTagToSelectedContacts(employee.name, selectedContact)}
+                            >
+                              <span className="text-gray-800 dark:text-gray-200">{employee.name}</span>
+                            </button>
+                          </Menu.Item>
+                        );
+                      })}
+                  </Menu.Items>
+                </Menu>
+              </Menu.Item>
               <Menu.Item>
                 <Menu as="div" className="relative inline-block text-left w-full">
                   <Menu.Button className="flex items-center w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
                     <Lucide icon="Tag" className="w-4 h-4 mr-2 text-gray-800 dark:text-gray-200" />
                     <span className="text-gray-800 dark:text-gray-200">Add Tag</span>
                   </Menu.Button>
-                  <Menu.Items className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 shadow-lg rounded-md p-2 z-10">
+                  <Menu.Items className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 shadow-lg rounded-md p-2 z-10 max-h-60 overflow-y-auto">
                     {tagList.map((tag) => (
                       <Menu.Item key={tag.id}>
                         <button
@@ -7049,12 +7312,37 @@ console.log(prompt);
           <div className="p-4">
             <div className="grid grid-cols-2 gap-4">
               {[
-                { label: "First Name", key: "contactName" },
-                { label: "Last Name", key: "lastName" },
-                { label: "Email", key: "email" },
-                { label: "Company", key: "companyName" },
-                { label: "Address", key: "address1" },
-                { label: "Website", key: "website" }
+                  { label: "First Name", key: "contactName" },
+                  { label: "Last Name", key: "lastName" },
+                  { label: "Email", key: "email" },
+                  { label: "Phone", key: "phone" },
+                  { label: "Company", key: "companyName" },
+                  { label: "Address", key: "address1" },
+                  { label: "Website", key: "website" },
+                  ...(userData?.companyId === '095' ? [
+                    { label: "Country", key: "country" },
+                    { label: "Nationality", key: "nationality" },
+                    { label: "Highest Education", key: "highestEducation" },
+                    { label: "Program of Study", key: "programOfStudy" },
+                    { label: "Intake Preference", key: "intakePreference" },
+                    { label: "English Proficiency", key: "englishProficiency" },
+                    { label: "Passport Validity", key: "passport" },
+                  ] : []),
+                  ...((['079', '001'].includes(userData?.companyId ?? '')) ? [
+                    { label: "IC", key: "ic" },
+                    { label: "Points", key: "points" },
+                    { label: "Branch", key: "branch" },
+                    { label: "Expiry Date", key: "expiryDate" },
+                    { label: "Vehicle Number", key: "vehicleNumber" },
+                  ] : []),
+                  ...(userData?.companyId === '001' ? [
+                    { label: "Assistant ID", key: "assistantId" },
+                    { label: "Thread ID", key: "threadid" },
+                  ] : []),
+                  ...(selectedContact.customFields ? Object.entries(selectedContact.customFields).map(([key, value]) => (
+                    { label: key, key: `customFields.${key}`, isCustom: true }
+                  )) : []),
+                  
               ].map((item, index) => (
                 <div key={index} className="col-span-1">
                   <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">{item.label}</p>
@@ -7207,6 +7495,10 @@ console.log(prompt);
           onClick={({ props }) => props.isSnooze ? props.onUnsnooze(props.contact) : props.onSnooze(props.contact)}
         >
           Snooze/Unsnooze
+        </Item>
+        <Separator />
+        <Item onClick={({ props }) => props.isResolved ? props.onUnresolve(props.contact) : props.onResolve(props.contact)}>
+          Resolve/Unresolve
         </Item>
       </ContextMenu>
       {isReminderModalOpen && (

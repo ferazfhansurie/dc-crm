@@ -101,6 +101,7 @@ function Router() {
         { path: "/", element: <Chat /> },
         { path: "chat", element: <Chat /> },
         { path: "/dashboard", element: <DashboardOverview1 /> },
+        { path: "users-layout-2/quick-replies", element: <QuickReplies /> },
         { path: "dashboard-overview-3", element: <DashboardOverview3 /> },
         { path: "dashboard-overview-4", element: <DashboardOverview4 /> },
         { path: "profile", element: <ProfileOverview1 /> },

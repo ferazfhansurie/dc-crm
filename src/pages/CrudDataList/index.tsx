@@ -10,7 +10,7 @@ import Tippy from "@/components/Base/Tippy";
 import { Dialog, Menu } from "@/components/Base/Headless";
 import Table from "@/components/Base/Table";
 import { getAuth } from 'firebase/auth';
-import { getFirestore, collection, doc, getDoc, setDoc, getDocs, deleteDoc, updateDoc,addDoc, arrayUnion, arrayRemove, Timestamp, query, where, onSnapshot, orderBy, limit, serverTimestamp, writeBatch, increment } from 'firebase/firestore';
+import { getFirestore, collection, doc, getDoc, setDoc, getDocs, deleteDoc, updateDoc,addDoc, arrayUnion, arrayRemove, Timestamp, query, where, onSnapshot, orderBy, limit, serverTimestamp, writeBatch, increment, deleteField } from 'firebase/firestore';
 import { initializeApp } from "firebase/app";
 import axios from "axios";
 import { ToastContainer, toast } from 'react-toastify';
@@ -23,7 +23,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import LZString from 'lz-string';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { format, compareAsc } from 'date-fns';
+import { format, compareAsc, parseISO } from 'date-fns';
 import { saveAs } from 'file-saver';
 import Papa from 'papaparse';
 import ReactPaginate from 'react-paginate';
@@ -58,7 +58,6 @@ function Main() {
     contactName?: string | null;
     firstName?: string | null;
     country?: string | null;
-    customFields?: any[] | null;
     dateAdded?: string | null;
     dateOfBirth?: string | null;
     dateUpdated?: string | null;
@@ -84,7 +83,16 @@ function Main() {
     branch?:string | null;
     expiryDate?:string | null;
     vehicleNumber?:string | null;
-    ic?:string | null;
+    ic?: string | null;
+    createdAt?: string | null;
+    nationality?:string | null;
+    highestEducation?:string | null;
+    programOfStudy?:string | null;
+    intakePreference?:string | null;
+    englishProficiency?:string | null;
+    passport?:string | null;
+    customFields?: { [key: string]: string };
+
   }
   
   interface Employee {
@@ -219,7 +227,8 @@ function Main() {
   const [phoneIndex, setPhoneIndex] = useState<number>(0);
   const [phoneOptions, setPhoneOptions] = useState<number[]>([]);
   const [phoneNames, setPhoneNames] = useState<{ [key: number]: string }>({});
-
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [selectedPhoneIndex, setSelectedPhoneIndex] = useState<number | null>(null);
 
  
 
@@ -296,6 +305,7 @@ function Main() {
   };
   
   const fetchContacts = useCallback(async () => {
+    setLoading(true);
     try {
       const auth = getAuth();
       const firestore = getFirestore();
@@ -319,19 +329,51 @@ function Main() {
       const userName = userData.name;
   
       const contactsRef = collection(firestore, `companies/${companyId}/contacts`);
-      const q = query(contactsRef, orderBy('contactName'));
+      const q = query(contactsRef,);
   
       const querySnapshot = await getDocs(q);
       const fetchedContacts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Contact));
-
-      const filteredContacts = filterContactsByUserRole(fetchedContacts, userRole, userName);
+      console.log('Fetched contacts2:', fetchedContacts);
+      // Function to check if a chat_id is for an individual contact
+      const isIndividual = (chat_id: string | undefined) => {
+        return chat_id?.endsWith('@c.us') || false;
+      };
   
+      // Separate contacts into categories
+      const individuals = fetchedContacts.filter(contact => isIndividual(contact.chat_id || ''));
+      const groups = fetchedContacts.filter(contact => !isIndividual(contact.chat_id || ''));
+  
+      // Combine all contacts in the desired order
+      const allSortedContacts = [
+        ...individuals,
+        ...groups
+      ];
+// Helper function to get timestamp value
+const getTimestamp = (createdAt: any): number => {
+  if (!createdAt) return 0;
+  if (typeof createdAt === 'string') {
+    return new Date(createdAt).getTime();
+  }
+  if (createdAt.seconds) {
+    return createdAt.seconds * 1000 + (createdAt.nanoseconds || 0) / 1000000;
+  }
+  return 0;
+};
+
+// Sort contacts based on createdAt
+allSortedContacts.sort((a, b) => {
+  const dateA = getTimestamp(a.createdAt);
+  const dateB = getTimestamp(b.createdAt);
+  return dateB - dateA; // For descending order
+});
+      const filteredContacts = filterContactsByUserRole(allSortedContacts, userRole, userName);
+      
       setContacts(filteredContacts);
       setFilteredContacts(filteredContacts);
-      setLoading(false);
     } catch (error) {
       console.error('Error fetching contacts:', error);
       toast.error('Failed to fetch contacts');
+    } finally {
       setLoading(false);
     }
   }, []);
@@ -339,29 +381,6 @@ function Main() {
   useEffect(() => {
     fetchContacts();
   }, [fetchContacts]);
-
-  const sortedContacts = useMemo(() => {
-    return filteredContacts.sort((a, b) => {
-      // First, prioritize contacts with names
-      const aHasName = !!(a.contactName || a.phone);
-      const bHasName = !!(b.contactName || b.phone);
-      
-      if (aHasName && !bHasName) return -1;
-      if (!aHasName && bHasName) return 1;
-      
-      // If both have names or both don't have names, sort by dateAdded
-      const aDate = a.dateAdded ? new Date(a.dateAdded).getTime() : 0;
-      const bDate = b.dateAdded ? new Date(b.dateAdded).getTime() : 0;
-      
-      return bDate - aDate; // Sort in descending order (most recent first)
-    });
-  }, [filteredContacts]);
-
-  useEffect(() => {
-    if (initialContacts.length > 0) {
-      loadMoreContacts();
-    }
-  }, [initialContacts]);
 
 
   useEffect(() => {
@@ -1669,124 +1688,106 @@ const chatId = tempphone + "@c.us"
 
   const handleSaveContact = async () => {
     if (currentContact) {
-        try {
-            const user = auth.currentUser;
-            const docUserRef = doc(firestore, 'user', user?.email!);
-            const docUserSnapshot = await getDoc(docUserRef);
-            if (!docUserSnapshot.exists()) {
-                console.log('No such document for user!');
-                return;
-            }
-            const userData = docUserSnapshot.data();
-            const companyId = userData.companyId;
-            const contactsCollectionRef = collection(firestore, `companies/${companyId}/contacts`);
-
-            // Create an object with only the defined fields
-            const updateData: { [key: string]: any } = {
-                contactName: currentContact.contactName,
-                email: currentContact.email,
-                lastName: currentContact.lastName,
-                phone: currentContact.phone,
-                points: currentContact.points || 0,
-                ic: currentContact.ic
-            };
-
-            const fieldsToUpdate = [
-                'contactName', 'email', 'lastName', 'phone', 'address1', 'city', 
-                'state', 'postalCode', 'website', 'dnd', 'dndSettings', 'tags', 
-                'customFields', 'source', 'country', 'companyName', 'branch', 
-                'expiryDate', 'vehicleNumber', 'points', 'IC',
-            ];
-
-            fieldsToUpdate.forEach(field => {
-                if (currentContact[field as keyof Contact] !== undefined) {
-                    updateData[field] = currentContact[field as keyof Contact];
-                }
-            });
-
-            // Update contact in Firebase
-            const contactDocRef = doc(contactsCollectionRef, currentContact.phone!); // Get the document reference
-            await updateDoc(contactDocRef, updateData); // Use the document reference
-
-            // Update local state immediately after saving
-            setContacts(prevContacts => 
-                prevContacts.map(contact => 
-                    contact.phone === currentContact.phone ? { ...contact, ...updateData } : contact
-                )
-            );
-            setCurrentContact(prevContact => ({ ...prevContact, ...updateData })); // Update currentContact state
-
-            setEditContactModal(false);
-            setCurrentContact(null);
-            await fetchContacts();
-            toast.success("Contact updated successfully!");
-        } catch (error) {
-            console.error('Error saving contact:', error);
-            toast.error("Failed to update contact.");
-        }
-
-      const requiredFields = ['contactName', 'phone'];
-      const missingFields = requiredFields.filter(field => !currentContact[field as keyof Contact]);
-
-      if (missingFields.length > 0) {
-        toast.error(`Missing required fields: ${missingFields.join(', ')}`);
-        return;
-      }
-      //
       try {
-          const user = auth.currentUser;
-          const docUserRef = doc(firestore, 'user', user?.email!);
-          const docUserSnapshot = await getDoc(docUserRef);
-          if (!docUserSnapshot.exists()) {
-              console.log('No such document for user!');
-              return;
+        const user = auth.currentUser;
+        const docUserRef = doc(firestore, 'user', user?.email!);
+        const docUserSnapshot = await getDoc(docUserRef);
+        if (!docUserSnapshot.exists()) {
+          console.log('No such document for user!');
+          return;
+        }
+        const userData = docUserSnapshot.data();
+        const companyId = userData.companyId;
+        const contactsCollectionRef = collection(firestore, `companies/${companyId}/contacts`);
+  
+        // Create an object with all fields, including custom fields
+        const updateData: { [key: string]: any } = {};
+  
+        const fieldsToUpdate = [
+          'contactName', 'email', 'lastName', 'phone', 'address1', 'city', 
+          'state', 'postalCode', 'website', 'dnd', 'dndSettings', 'tags', 
+          'source', 'country', 'companyName', 'branch', 
+          'expiryDate', 'vehicleNumber', 'points', 'IC', 'assistantId', 'threadid',
+        ];
+  
+        fieldsToUpdate.forEach(field => {
+          if (currentContact[field as keyof Contact] !== undefined && currentContact[field as keyof Contact] !== null) {
+            updateData[field] = currentContact[field as keyof Contact];
           }
-          const userData = docUserSnapshot.data();
-          const companyId = userData.companyId;
-          const contactsCollectionRef = collection(firestore, `companies/${companyId}/contacts`);
-
-          // Create an object with only the defined fields
-          const updateData: { [key: string]: any } = {
-              contactName: currentContact.contactName,
-              phone: currentContact.phone,
-          };
-
-          const fieldsToUpdate = [
-              'contactName', 'email', 'lastName', 'phone', 'address1', 'city', 
-              'state', 'postalCode', 'website', 'dnd', 'dndSettings', 'tags', 
-              'customFields', 'source', 'country', 'companyName', 'branch', 
-              'expiryDate', 'vehicleNumber', 'points', 'IC','assistantId','threadid',
-          ];
-
-          fieldsToUpdate.forEach(field => {
-              if (currentContact[field as keyof Contact] !== undefined) {
-                  updateData[field] = currentContact[field as keyof Contact];
-              }
-          });
-
-          // Update contact in Firebase
-          const contactDocRef = doc(contactsCollectionRef, currentContact.phone!); // Get the document reference
-          await updateDoc(contactDocRef, updateData); // Use the document reference
-
-          // Update local state immediately after saving
-          setContacts(prevContacts => 
-              prevContacts.map(contact => 
-                  contact.phone === currentContact.phone ? { ...contact, ...updateData } : contact
-              )
-          );
-          setCurrentContact(prevContact => ({ ...prevContact, ...updateData })); // Update currentContact state
-
-          setEditContactModal(false);
-          setCurrentContact(null);
-          await fetchContacts();
-          toast.success("Contact updated successfully!");
+        });
+  
+        // Ensure customFields are included in the update if they exist
+        if (currentContact.customFields && Object.keys(currentContact.customFields).length > 0) {
+          updateData.customFields = currentContact.customFields;
+        }
+  
+        // Update contact in Firebase
+        const contactDocRef = doc(contactsCollectionRef, currentContact.phone!);
+        await updateDoc(contactDocRef, updateData);
+  
+        // Update local state immediately after saving
+        setContacts(prevContacts => 
+          prevContacts.map(contact => 
+            contact.phone === currentContact.phone ? { ...contact, ...updateData } : contact
+          )
+        );
+  
+        setEditContactModal(false);
+        setCurrentContact(null);
+        await fetchContacts();
+        toast.success("Contact updated successfully!");
       } catch (error) {
-          console.error('Error saving contact:', error);
-          toast.error("Failed to update contact.");
+        console.error('Error saving contact:', error);
+        toast.error("Failed to update contact.");
       }
     }
-};
+  };
+// Function to add a new custom field to all contacts
+const addCustomFieldToAllContacts = async (fieldName: string) => {
+  try {
+    const user = auth.currentUser;
+    if (!user) return;
 
+    const docUserRef = doc(firestore, 'user', user.email!);
+    const docUserSnapshot = await getDoc(docUserRef);
+    if (!docUserSnapshot.exists()) {
+      console.log('No such document for user!');
+      return;
+    }
+    const userData = docUserSnapshot.data();
+    const companyId = userData.companyId;
+
+    const contactsCollectionRef = collection(firestore, `companies/${companyId}/contacts`);
+    const contactsSnapshot = await getDocs(contactsCollectionRef);
+
+    const batch = writeBatch(firestore);
+
+    contactsSnapshot.forEach((doc) => {
+      const contactRef = doc.ref;
+      batch.update(contactRef, {
+        [`customFields.${fieldName}`]: ""
+      });
+    });
+
+    await batch.commit();
+
+    // Update local state
+    setContacts(prevContacts => 
+      prevContacts.map(contact => ({
+        ...contact,
+        customFields: {
+          ...contact.customFields,
+          [fieldName]: ""
+        }
+      }))
+    );
+
+    toast.success(`New custom field "${fieldName}" added to all contacts.`);
+  } catch (error) {
+    console.error('Error adding custom field to all contacts:', error);
+    toast.error('Failed to add custom field to all contacts.');
+  }
+};
 // Add this function to combine similar scheduled messages
 const combineScheduledMessages = (messages: ScheduledMessage[]): ScheduledMessage[] => {
   const combinedMessages: { [key: string]: ScheduledMessage } = {};
@@ -1826,7 +1827,7 @@ const clearAllFilters = () => {
 };
 
 const filteredContactsSearch = useMemo(() => {
-  return sortedContacts.filter((contact) => {
+  return contacts.filter((contact) => {
     const name = (contact.contactName || '').toLowerCase();
     const phone = (contact.phone || '').toLowerCase();
     const tags = (contact.tags || []).map(tag => tag.toLowerCase());
@@ -1843,7 +1844,7 @@ const filteredContactsSearch = useMemo(() => {
 
     return matchesSearch && matchesTagFilters && matchesUserFilters && notExcluded;
   });
-}, [sortedContacts, searchQuery, selectedTagFilters, selectedUserFilters, excludedTags]);
+}, [contacts, searchQuery, selectedTagFilters, selectedUserFilters, excludedTags]);
 
 const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
   setSearchQuery(e.target.value);
@@ -2305,7 +2306,51 @@ const sendBlastMessage = async () => {
   useEffect(() => {
     fetchScheduledMessages();
   }, []);
-
+  const deleteCustomFieldFromAllContacts = async (fieldName: string) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+  
+      const docUserRef = doc(firestore, 'user', user.email!);
+      const docUserSnapshot = await getDoc(docUserRef);
+      if (!docUserSnapshot.exists()) {
+        console.log('No such document for user!');
+        return;
+      }
+      const userData = docUserSnapshot.data();
+      const companyId = userData.companyId;
+  
+      const contactsCollectionRef = collection(firestore, `companies/${companyId}/contacts`);
+      const contactsSnapshot = await getDocs(contactsCollectionRef);
+  
+      const batch = writeBatch(firestore);
+  
+      contactsSnapshot.forEach((doc) => {
+        const contactRef = doc.ref;
+        batch.update(contactRef, {
+          [`customFields.${fieldName}`]: deleteField()
+        });
+      });
+  
+      await batch.commit();
+  
+      // Update local state
+      setContacts(prevContacts => 
+        prevContacts.map(contact => {
+          const { [fieldName]: _, ...restCustomFields } = contact.customFields || {};
+          return {
+            ...contact,
+            customFields: restCustomFields
+          };
+        })
+      );
+  
+      toast.success(`Custom field "${fieldName}" removed from all contacts.`);
+    } catch (error) {
+      console.error('Error removing custom field from all contacts:', error);
+      toast.error('Failed to remove custom field from all contacts.');
+    }
+  };
   const fetchScheduledMessages = async () => {
     try {
       const user = auth.currentUser;
@@ -2575,31 +2620,51 @@ Jane,Smith,60198765432,jane@example.com,XYZ Corp,456 Elm St,Branch B,2024-06-30,
                       <Lucide icon="Plus" className="w-5 h-5 mr-2" />
                       <span className="font-medium">Add Contact</span>
                     </button>
-                    <Menu>
-                      <Menu.Button as={Button} className={`flex items-center justify-start p-2 !box bg-white text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 ${userRole === "3" ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                    <Menu as="div" className="relative inline-block text-left">
+                      <Menu.Button as={Button} className="flex items-center justify-start p-2 !box bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
                         <Lucide icon="User" className="w-5 h-5 mr-2" />
                         <span>Assign User</span>
                       </Menu.Button>
-                      <Menu.Items className="w-full bg-white text-gray-800 dark:text-gray-200">
-                        {employeeList.map((employee) => (
-                          <Menu.Item key={employee.id}>
-                            <span
-                              className="flex items-center p-2"
-                              onClick={() => {
-                                if (userRole !== "3") {
-                                  selectedContacts.forEach(contact => {
-                                    handleAddTagToSelectedContacts(employee.name, contact);
-                                  });
-                                } else {
-                                  toast.error("You don't have permission to assign users to contacts.");
-                                }
-                              }}
-                            >
-                              <Lucide icon="User" className="w-4 h-4" />
-                              <span className="truncate">{employee.name}</span>
-                            </span>
-                          </Menu.Item>
-                        ))}
+                      <Menu.Items className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 shadow-lg rounded-md p-2 z-10 overflow-y-auto max-h-96">
+                        <div className="mb-2">
+                          <input
+                            type="text"
+                            placeholder="Search employees..."
+                            value={employeeSearch}
+                            onChange={(e) => setEmployeeSearch(e.target.value)}
+                            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                          />
+                        </div>
+                        {employeeList
+                          .filter(employee => {
+                            if (userRole === '4' || userRole === '2') {
+                              return employee.role === '2' && employee.name.toLowerCase().includes(employeeSearch.toLowerCase());
+                            }
+                            return employee.name.toLowerCase().includes(employeeSearch.toLowerCase());
+                          })
+                          .map((employee) => (
+                            <Menu.Item key={employee.id}>
+                              {({ active }) => (
+                                <button
+                                  className={`${
+                                    active ? 'bg-gray-100 dark:bg-gray-700' : ''
+                                  } group flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 transition-colors duration-200`}
+                                  onClick={() => {
+                                    if (userRole !== "3") {
+                                      selectedContacts.forEach(contact => {
+                                        handleAddTagToSelectedContacts(employee.name, contact);
+                                      });
+                                    } else {
+                                      toast.error("You don't have permission to assign users to contacts.");
+                                    }
+                                  }}
+                                >
+                                  <Lucide icon="User" className="mr-3 h-5 w-5" />
+                                  <span className="truncate">{employee.name}</span>
+                                </button>
+                              )}
+                            </Menu.Item>
+                          ))}
                       </Menu.Items>
                     </Menu>
                     <Menu>
@@ -3576,172 +3641,295 @@ Jane,Smith,60198765432,jane@example.com,XYZ Corp,456 Elm St,Branch B,2024-06-30,
         </Dialog>
       
         <Dialog open={editContactModal} onClose={() => setEditContactModal(false)}>
-          <div className="fixed inset-0 flex items-center justify-center p-4 bg-black bg-opacity-50">
-            <Dialog.Panel className="w-full max-w-md p-6 bg-white dark:bg-gray-800 rounded-md mt-10 text-gray-900 dark:text-white">
-              <div className="flex items-center p-4 border-b border-gray-200 dark:border-gray-700">
-                <div className="block w-12 h-12 overflow-hidden rounded-full shadow-lg bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-700 dark:text-white mr-4">
-                  {currentContact?.profilePicUrl ? (
-                    <img 
-                      src={currentContact.profilePicUrl} 
-                      alt={currentContact.contactName || "Profile"} 
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-xl">
-                      {currentContact?.contactName ? currentContact.contactName.charAt(0).toUpperCase() : ""}
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <div className="font-semibold text-gray-900 dark:text-white text-lg capitalize">{currentContact?.contactName} {currentContact?.lastName}</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">{currentContact?.phone}</div>
-                </div>
-              </div>
-              <div className="mt-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name</label>
-                  <input
-                    type="text"
-                    className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
-                    value={currentContact?.contactName || ''}
-                    onChange={(e) => setCurrentContact({ ...currentContact, contactName: e.target.value } as Contact)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name</label>
-                  <input
-                    type="text"
-                    className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
-                    value={currentContact?.lastName || ''}
-                    onChange={(e) => setCurrentContact({ ...currentContact, lastName: e.target.value } as Contact)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">IC</label>
-                  <input
-                    type="text"
-                    className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
-                    value={currentContact?.ic || ''}
-                    onChange={(e) => setCurrentContact({ ...currentContact, ic: e.target.value } as Contact)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Points</label>
-                  <input
-                    type="number"
-                    className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
-                    value={currentContact?.points || 0}
-                    onChange={(e) => setCurrentContact({ ...currentContact, points: parseInt(e.target.value) || 0 } as Contact)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
-                  <input
-                    type="text"
-                    className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
-                    value={currentContact?.email || ''}
-                    onChange={(e) => setCurrentContact({ ...currentContact, email: e.target.value } as Contact)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
-                  <input
-                    type="text"
-                    className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
-                    value={currentContact?.phone || ''}
-                    onChange={(e) => setCurrentContact({ ...currentContact, phone: e.target.value } as Contact)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Address</label>
-                  <input
-                    type="text"
-                    className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
-                    value={currentContact?.address1 || ''}
-                    onChange={(e) => setCurrentContact({ ...currentContact, address1: e.target.value } as Contact)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Company</label>
-                  <input
-                    type="text"
-                    className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
-                    value={currentContact?.companyName || ''}
-                    onChange={(e) => setCurrentContact({ ...currentContact, companyName: e.target.value } as Contact)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Branch</label>
-                  <input
-                    type="text"
-                    className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
-                    value={currentContact?.branch || ''}
-                    onChange={(e) => setCurrentContact({ ...currentContact, branch: e.target.value } as Contact)}
-                  />
-                </div>
-                {companyId === '079' || companyId === '001' && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Expiry Date</label>
-                      <input
-                        type="date"
-                        className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"  
-                        value={currentContact?.expiryDate || ''}
-                        onChange={(e) => setCurrentContact({ ...currentContact, expiryDate: e.target.value } as Contact)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Vehicle Number</label>
-                      <input
-                        type="text" 
-                        className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
-                        value={currentContact?.vehicleNumber || ''}
-                        onChange={(e) => setCurrentContact({ ...currentContact, vehicleNumber: e.target.value } as Contact)}
-                      />
-                    </div>
-                
-                  </>
-                )}  
-                {companyId === '001' && (
-  <div>
-    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Assistant ID</label>
-    <input
-      type="text"
-      className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
-      value={currentContact?.assistantId || ''}
-      onChange={(e) => setCurrentContact({ ...currentContact, assistantId: e.target.value } as Contact)}
-    />
-  </div>
-)}
-         {companyId === '001' && (
-  <div>
-    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Thread ID</label>
-    <input
-      type="text"
-      className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
-      value={currentContact?.threadid || ''}
-      onChange={(e) => setCurrentContact({ ...currentContact, threadid: e.target.value } as Contact)}
-    />
-  </div>
-)}
-              </div>
-              <div className="flex justify-end mt-6">
-                <button
-                  className="px-4 py-2 mr-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
-                  onClick={() => setEditContactModal(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
-                  onClick={handleSaveContact}
-                >
-                  Save
-                </button>
-              </div>
-            </Dialog.Panel>
+  <div className="fixed inset-0 flex items-center justify-center p-4 bg-black bg-opacity-50">
+    <Dialog.Panel className="w-full max-w-md p-6 bg-white dark:bg-gray-800 rounded-md mt-10 text-gray-900 dark:text-white overflow-y-auto max-h-[90vh]">
+      <div className="flex items-center p-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="block w-12 h-12 overflow-hidden rounded-full shadow-lg bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-700 dark:text-white mr-4">
+          {currentContact?.profilePicUrl ? (
+            <img 
+              src={currentContact.profilePicUrl} 
+              alt={currentContact.contactName || "Profile"} 
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <span className="text-xl">
+              {currentContact?.contactName ? currentContact.contactName.charAt(0).toUpperCase() : ""}
+            </span>
+          )}
+        </div>
+        <div>
+          <div className="font-semibold text-gray-900 dark:text-white text-lg capitalize">{currentContact?.contactName} {currentContact?.lastName}</div>
+          <div className="text-sm text-gray-500 dark:text-gray-400">{currentContact?.phone}</div>
+        </div>
+      </div>
+      <div className="mt-6 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name</label>
+          <input
+            type="text"
+            className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+            value={currentContact?.contactName || ''}
+            onChange={(e) => setCurrentContact({ ...currentContact, contactName: e.target.value } as Contact)}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name</label>
+          <input
+            type="text"
+            className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+            value={currentContact?.lastName || ''}
+            onChange={(e) => setCurrentContact({ ...currentContact, lastName: e.target.value } as Contact)}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+          <input
+            type="text"
+            className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+            value={currentContact?.email || ''}
+            onChange={(e) => setCurrentContact({ ...currentContact, email: e.target.value } as Contact)}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
+          <input
+            type="text"
+            className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+            value={currentContact?.phone || ''}
+            onChange={(e) => setCurrentContact({ ...currentContact, phone: e.target.value } as Contact)}
+          />
+        </div>
+        {companyId === '095' && (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Country</label>
+              <input
+                type="text"
+                className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+                value={currentContact?.country || ''}
+                onChange={(e) => setCurrentContact({ ...currentContact, country: e.target.value } as Contact)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nationality</label>
+              <input
+                type="text"
+                className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+                value={currentContact?.nationality || ''}
+                onChange={(e) => setCurrentContact({ ...currentContact, nationality: e.target.value } as Contact)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Highest educational qualification</label>
+              <input
+                type="text"
+                className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+                value={currentContact?.highestEducation || ''}
+                onChange={(e) => setCurrentContact({ ...currentContact, highestEducation: e.target.value } as Contact)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Program Of Study</label>
+              <input
+                type="text"
+                className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+                value={currentContact?.programOfStudy || ''}
+                onChange={(e) => setCurrentContact({ ...currentContact, programOfStudy: e.target.value } as Contact)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Intake Preference</label>
+              <input
+                type="text"
+                className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+                value={currentContact?.intakePreference || ''}
+                onChange={(e) => setCurrentContact({ ...currentContact, intakePreference: e.target.value } as Contact)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">English Proficiency</label>
+              <input
+                type="text"
+                className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+                value={currentContact?.englishProficiency || ''}
+                onChange={(e) => setCurrentContact({ ...currentContact, englishProficiency: e.target.value } as Contact)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Validity of Passport</label>
+              <input
+                type="text"
+                className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+                value={currentContact?.passport || ''}
+                onChange={(e) => setCurrentContact({ ...currentContact, passport: e.target.value } as Contact)}
+              />
+            </div>
+          </>
+        )}
+        {(companyId === '079' || companyId === '001') && (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">IC</label>
+              <input
+                type="text"
+                className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+                value={currentContact?.ic || ''}
+                onChange={(e) => setCurrentContact({ ...currentContact, ic: e.target.value } as Contact)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Points</label>
+              <input
+                type="number"
+                className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+                value={currentContact?.points || 0}
+                onChange={(e) => setCurrentContact({ ...currentContact, points: parseInt(e.target.value) || 0 } as Contact)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Address</label>
+              <input
+                type="text"
+                className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+                value={currentContact?.address1 || ''}
+                onChange={(e) => setCurrentContact({ ...currentContact, address1: e.target.value } as Contact)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Company</label>
+              <input
+                type="text"
+                className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+                value={currentContact?.companyName || ''}
+                onChange={(e) => setCurrentContact({ ...currentContact, companyName: e.target.value } as Contact)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Branch</label>
+              <input
+                type="text"
+                className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+                value={currentContact?.branch || ''}
+                onChange={(e) => setCurrentContact({ ...currentContact, branch: e.target.value } as Contact)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Expiry Date</label>
+              <input
+                type="date"
+                className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"  
+                value={currentContact?.expiryDate || ''}
+                onChange={(e) => setCurrentContact({ ...currentContact, expiryDate: e.target.value } as Contact)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Vehicle Number</label>
+              <input
+                type="text" 
+                className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+                value={currentContact?.vehicleNumber || ''}
+                onChange={(e) => setCurrentContact({ ...currentContact, vehicleNumber: e.target.value } as Contact)}
+              />
+            </div>
+          </>
+        )}  
+        {companyId === '001' && (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Assistant ID</label>
+              <input
+                type="text"
+                className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+                value={currentContact?.assistantId || ''}
+                onChange={(e) => setCurrentContact({ ...currentContact, assistantId: e.target.value } as Contact)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Thread ID</label>
+              <input
+                type="text"
+                className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+                value={currentContact?.threadid || ''}
+                onChange={(e) => setCurrentContact({ ...currentContact, threadid: e.target.value } as Contact)}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Custom Fields */}
+        {currentContact?.customFields && Object.entries(currentContact.customFields).map(([key, value]) => (
+          <div key={key}>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{key}</label>
+            <div className="flex">
+              <input
+                type="text"
+                className="block w-full mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-gray-900 dark:text-white"
+                value={value}
+                onChange={(e) => setCurrentContact({
+                  ...currentContact,
+                  customFields: {
+                    ...currentContact.customFields,
+                    [key]: e.target.value
+                  }
+                } as Contact)}
+              />
+             <button
+  className="ml-2 px-2 py-1 text-sm text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+  onClick={() => {
+    if (window.confirm(`Are you sure you want to delete the custom field "${key}" from all contacts?`)) {
+      deleteCustomFieldFromAllContacts(key);
+      const newCustomFields = { ...currentContact.customFields };
+      delete newCustomFields[key];
+      setCurrentContact({
+        ...currentContact,
+        customFields: newCustomFields
+      } as Contact);
+    }
+  }}
+>
+  <Lucide icon="Trash2" className="w-4 h-4" />
+</button>
+            </div>
           </div>
-        </Dialog>
+        ))}
+
+        {/* Add New Field Button */}
+        <button
+          className="px-4 py-2 text-sm font-medium text-indigo-600 border border-indigo-600 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900"
+          onClick={() => {
+            const fieldName = prompt("Enter the name of the new field:");
+            if (fieldName) {
+              addCustomFieldToAllContacts(fieldName);
+              setCurrentContact(prevContact => ({
+                ...prevContact!,
+                customFields: {
+                  ...prevContact?.customFields,
+                  [fieldName]: ""
+                }
+              }));
+            }
+          }}
+        >
+          Add New Field
+        </button>
+      </div>
+      <div className="flex justify-end mt-6">
+        <button
+          className="px-4 py-2 mr-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
+          onClick={() => setEditContactModal(false)}
+        >
+          Cancel
+        </button>
+        <button
+          className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+          onClick={handleSaveContact}
+        >
+          Save
+        </button>
+      </div>
+    </Dialog.Panel>
+  </div>
+</Dialog>
      
         <Dialog open={blastMessageModal} onClose={() => setBlastMessageModal(false)}>
           <div className="fixed inset-0 flex items-center justify-center p-4 bg-black bg-opacity-50">
