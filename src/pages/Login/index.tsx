@@ -1,9 +1,4 @@
-<<<<<<< HEAD
 import logoUrl from "@/assets/images/dc-login-logo.png";
-=======
-import logoUrl from "@/assets/images/logo.png";
-import logoUrl2 from "@/assets/images/logo3.png";
->>>>>>> 130fa6377572bb6aec551e242061d19e16ded04c
 import illustrationUrl from "@/assets/images/illustration.svg";
 import { FormInput, FormCheck } from "@/components/Base/Form";
 import Button from "@/components/Base/Button";
@@ -73,8 +68,6 @@ const firebaseConfig = {
       }
     };
   
-<<<<<<< HEAD
-=======
     const handleStartFreeTrial = () => {
       navigate('/register');
     };
@@ -112,7 +105,6 @@ const firebaseConfig = {
       }
     };
 
->>>>>>> 130fa6377572bb6aec551e242061d19e16ded04c
     return (
       <>
         <div
@@ -129,7 +121,7 @@ const firebaseConfig = {
                   <img
                     alt="Juta Software Logo"
                     className="w-[80%] -mt-16 -ml-64"
-                    src={logoUrl2}
+                    src={logoUrl}
                   />
                 </div>
               </div>
