@@ -137,6 +137,25 @@ function Main() {
     count?: number;
     v2?:boolean;
     whapiToken?:string;
+    processedMessages?: {
+      chatId: string;
+      message: string;
+      contactData?: {
+        contactName: string;
+        firstName: string;
+        lastName: string;
+        email: string;
+        phone: string;
+        vehicleNumber: string;
+        branch: string;
+        expiryDate: string;
+        ic: string;
+      };
+    }[];
+    templateData?: {
+      hasPlaceholders: boolean;
+      placeholdersUsed: string[];
+    };
   }
   
   const [deleteConfirmationModal, setDeleteConfirmationModal] = useState(false);
@@ -303,7 +322,53 @@ function Main() {
         return [];
     }
   };
+  const handleRemoveTagsFromContact = async (contact: Contact, tagsToRemove: string[]) => {
+    if (userRole === "3") {
+      toast.error("You don't have permission to remove tags.");
+      return;
+    }
   
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        console.error('No authenticated user');
+        return;
+      }
+  
+      const docUserRef = doc(firestore, 'user', user.email!);
+      const docUserSnapshot = await getDoc(docUserRef);
+      if (!docUserSnapshot.exists()) return;
+  
+      const userData = docUserSnapshot.data();
+      const companyId = userData.companyId;
+  
+      // Include empty tags in the tagsToRemove array
+      const allTagsToRemove = [...tagsToRemove, ""];
+  
+      const response = await axios.post('https://mighty-dane-newly.ngrok-free.app/api/contacts/remove-tags', {
+        companyId,
+        contactPhone: contact.phone,
+        tagsToRemove: allTagsToRemove
+      });
+  
+      if (response.data.success) {
+        // Update local state
+        setContacts(prevContacts =>
+          prevContacts.map(c =>
+            c.id === contact.id
+              ? { ...c, tags: response.data.updatedTags }
+              : c
+          )
+        );
+  
+        toast.success('Tags removed successfully!');
+        await fetchContacts();
+      }
+    } catch (error) {
+      console.error('Error removing tags:', error);
+      toast.error('Failed to remove tags');
+    }
+  };
   const fetchContacts = useCallback(async () => {
     setLoading(true);
     try {
@@ -962,8 +1027,11 @@ const handleConfirmDeleteTag = async () => {
         tags = response.data.tags;
       }
 
-      // Filter out tags that match with employeeList
-      const filteredTags = tags.filter((tag: Tag) => !employeeList.includes(tag.name));
+      const normalizedEmployeeNames = employeeList.map(name => name.toLowerCase());
+
+      const filteredTags = tags.filter((tag: Tag) => 
+        !normalizedEmployeeNames.includes(tag.name.toLowerCase())
+      );
 
       setTagList(filteredTags);
       setLoading(false);
@@ -972,6 +1040,11 @@ const handleConfirmDeleteTag = async () => {
       setLoading(false);
     }
   };
+  useEffect(() => {
+    // Ensure employee names are properly stored when fetched
+    const normalizedEmployeeNames = employeeList.map(employee => employee.name.toLowerCase());
+    setEmployeeNames(normalizedEmployeeNames);
+  }, [employeeList]);
   async function fetchCompanyData() {
     const user = auth.currentUser;
     try {
@@ -1105,6 +1178,51 @@ const handleConfirmDeleteTag = async () => {
       }
       const userData = docUserSnapshot.data();
       const companyId = userData.companyId;
+
+      // Special handling for company '0123'
+    if (companyId === '0123') {
+      // Check if the new tag is an employee name
+      const isNewTagEmployee = employeeList.some(emp => emp.name === tagName);
+      
+      if (isNewTagEmployee) {
+        const contactRef = doc(firestore, 'companies', companyId, 'contacts', contact.id!);
+        const contactDoc = await getDoc(contactRef);
+
+        if (!contactDoc.exists()) {
+          console.error(`Contact document does not exist: ${contact.id}`);
+          toast.error(`Failed to add tag: Contact not found`);
+          return;
+        }
+
+        const currentTags = contactDoc.data().tags || [];
+        // Find and remove any existing employee tags
+        const updatedTags = currentTags.filter((tag: string) => !employeeList.some(emp => emp.name === tag));
+        
+        // Add the new employee tag
+        updatedTags.push(tagName);
+
+        // Update Firestore with the new tags
+        await updateDoc(contactRef, {
+          tags: updatedTags
+        });
+
+        // Update local state
+        setContacts(prevContacts =>
+          prevContacts.map(c =>
+            c.id === contact.id
+              ? { ...c, tags: updatedTags }
+              : c
+          )
+        );
+
+        console.log(`Employee tag updated to ${tagName} for contact ${contact.id}`);
+        toast.success(`Contact reassigned to ${tagName}`);
+
+        // Send assignment notification for the new employee
+        await sendAssignmentNotification(tagName, contact);
+        return;
+      }
+    }
   
       console.log(`Adding tag: ${tagName} to contact: ${contact.id}`);
   
@@ -2178,10 +2296,24 @@ const sendBlastMessage = async () => {
         const batchContacts = validContacts.slice(i, i + batchSize);
   
         for (const contact of batchContacts) {
-          // Format phone number (remove any non-digit characters and ensure it starts with country code)
-          const phoneNumber = contact.phone.replace(/\D/g, '');
-          if (!phoneNumber.match(/^\d{10,15}$/)) {
-            console.warn('Invalid phone number:', contact.phone);
+           // Format phone number (remove any non-digit characters)
+          let phoneNumber = contact.phone.replace(/\D/g, '');
+          
+          // Add proper prefix based on the starting digits
+          if (phoneNumber.startsWith('60')) {
+            phoneNumber = '+' + phoneNumber;
+          } else if (phoneNumber.startsWith('0')) {
+            phoneNumber = '+6' + phoneNumber;
+          } else if (phoneNumber.startsWith('1')) {
+            phoneNumber = '+60' + phoneNumber;
+          } else {
+            console.warn('Invalid phone number format:', contact.phone);
+            continue;
+          }
+
+          // Validate final phone number format
+          if (!phoneNumber.match(/^\+60\d{9,10}$/)) {
+            console.warn('Invalid Malaysian phone number:', phoneNumber);
             continue;
           }
   
@@ -2502,13 +2634,12 @@ const sendBlastMessage = async () => {
       const userData = docUserSnapshot.data();
       const companyId = userData.companyId;
 
-      // Upload new media file if selected
+      // Upload new media/document files (existing code)
       let newMediaUrl = currentScheduledMessage.mediaUrl;
       if (editMediaFile) {
         newMediaUrl = await uploadFile(editMediaFile);
       }
 
-      // Upload new document file if selected
       let newDocumentUrl = currentScheduledMessage.documentUrl;
       let newFileName = currentScheduledMessage.fileName;
       if (editDocumentFile) {
@@ -2516,11 +2647,19 @@ const sendBlastMessage = async () => {
         newFileName = editDocumentFile.name;
       }
 
-      const updatedMessages = currentScheduledMessage.chatIds.map(chatId => {
-        const contact = contacts.find(c => c.phone === chatId.split('@')[0]);
-        let personalizedMessage = blastMessage;
-        if (contact) {
-          personalizedMessage = personalizedMessage
+      // Process messages for each contact
+      const processedMessages = await Promise.all(
+        currentScheduledMessage.chatIds.map(async (chatId) => {
+          const phoneNumber = chatId.split('@')[0];
+          const contact = contacts.find(c => c.phone?.replace(/\D/g, '') === phoneNumber);
+          
+          if (!contact) {
+            console.warn(`No contact found for chatId: ${chatId}`);
+            return { chatId, message: blastMessage }; // Return unprocessed message as fallback
+          }
+  
+          // Process message with contact data using the NEW blast message
+          let processedMessage = blastMessage
             .replace(/@{contactName}/g, contact.contactName || '')
             .replace(/@{firstName}/g, contact.contactName?.split(' ')[0] || '')
             .replace(/@{lastName}/g, contact.lastName || '')
@@ -2530,39 +2669,39 @@ const sendBlastMessage = async () => {
             .replace(/@{branch}/g, contact.branch || '')
             .replace(/@{expiryDate}/g, contact.expiryDate || '')
             .replace(/@{ic}/g, contact.ic || '');
-        }
-        return {
-          chatId,
-          message: personalizedMessage
-        };
-      });
+  
+          return {
+            chatId,
+            message: processedMessage
+          };
+        })
+      );
 
       // Prepare the updated message data
       const updatedMessageData = {
         ...currentScheduledMessage,
-        chatIds: currentScheduledMessage.chatIds,
-      message: blastMessage,
-      messages: currentScheduledMessage.chatIds.map(chatId => ({
-        chatId,
-        message: blastMessage.replace(/@{contactName}/g, '') // You might want to replace this with actual contact names if available
-      })),
-      batchQuantity: currentScheduledMessage.batchQuantity || 10,
-      companyId: companyId,
-      createdAt: currentScheduledMessage.createdAt || Timestamp.now(),
-      documentUrl: newDocumentUrl,
-      fileName: newFileName,
-      mediaUrl: newMediaUrl,
-      mimeType: editMediaFile ? editMediaFile.type : (editDocumentFile ? editDocumentFile.type : null),
-      repeatInterval: currentScheduledMessage.repeatInterval || 0,
-      repeatUnit: currentScheduledMessage.repeatUnit || 'days',
-      scheduledTime: currentScheduledMessage.scheduledTime,
-      status: currentScheduledMessage.status || 'scheduled',
-      v2: currentScheduledMessage.v2 || false,
-      whapiToken: currentScheduledMessage.whapiToken || null,
+        message: blastMessage, // Store the new template
+        messages: processedMessages, // Store the newly processed messages
+        templateData: {
+          hasPlaceholders: blastMessage.includes('@{'),
+          placeholdersUsed: [...blastMessage.matchAll(/@{([^}]+)}/g)].map(match => match[1])
+        },
+        batchQuantity: currentScheduledMessage.batchQuantity || 10,
+        companyId,
+        createdAt: currentScheduledMessage.createdAt || Timestamp.now(),
+        documentUrl: newDocumentUrl,
+        fileName: newFileName,
+        mediaUrl: newMediaUrl,
+        mimeType: editMediaFile ? editMediaFile.type : (editDocumentFile ? editDocumentFile.type : null),
+        repeatInterval: currentScheduledMessage.repeatInterval || 0,
+        repeatUnit: currentScheduledMessage.repeatUnit || 'days',
+        scheduledTime: currentScheduledMessage.scheduledTime,
+        status: 'scheduled',
+        v2: currentScheduledMessage.v2 || false,
+        whapiToken: currentScheduledMessage.whapiToken || null,
       };
 
-      console.log('Request URL:', `https://mighty-dane-newly.ngrok-free.app/api/schedule-message/${companyId}/${currentScheduledMessage.id}`);
-      console.log('Request data:', JSON.stringify(updatedMessageData, null, 2));
+      console.log('Updating scheduled message with data:', updatedMessageData);
 
       // Send PUT request to update the scheduled message
       const response = await axios.put(
@@ -2571,13 +2710,20 @@ const sendBlastMessage = async () => {
       );
 
       if (response.status === 200) {
-        // Update the local state
-        setScheduledMessages(scheduledMessages.map(msg => 
-          msg.id === currentScheduledMessage.id 
-            ? { ...updatedMessageData, mimeType: updatedMessageData.mimeType || undefined } as ScheduledMessage
-            : msg
-        ));
-  
+        // Update local state
+        setScheduledMessages(prev => 
+          prev.map(msg => 
+            msg.id === currentScheduledMessage.id 
+              ? { 
+                  ...msg, 
+                  ...updatedMessageData, 
+                  message: blastMessage, // Use the edited message content
+                  mimeType: updatedMessageData.mimeType || undefined 
+                } as ScheduledMessage
+              : msg
+          )
+        );
+
         setEditScheduledMessageModal(false);
         setEditMediaFile(null);
         setEditDocumentFile(null);
@@ -2588,10 +2734,40 @@ const sendBlastMessage = async () => {
       } else {
         throw new Error("Failed to update scheduled message");
       }
+
     } catch (error) {
       console.error("Error updating scheduled message:", error);
       toast.error("Failed to update scheduled message.");
     }
+  };
+
+  // Add this function to process messages when they're displayed
+  const processScheduledMessage = (message: ScheduledMessage) => {
+    if (!message.templateData?.hasPlaceholders) {
+      return message.message;
+    }
+
+    // If the message has processed messages, use those
+    if (message.processedMessages && message.processedMessages.length > 0) {
+      // Return a summary or the first processed message
+      return `Template: ${message.message}\nExample: ${message.processedMessages[0].message}`;
+    }
+
+    return message.message;
+  };
+
+  // Update the display of scheduled messages to use the processed version
+  const renderScheduledMessage = (message: ScheduledMessage) => {
+    return (
+      <p className="text-gray-800 dark:text-gray-200 mb-2 font-medium text-md line-clamp-2">
+        {processScheduledMessage(message)}
+        {message.templateData?.hasPlaceholders && (
+          <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+            (Uses placeholders)
+          </span>
+        )}
+      </p>
+    );
   };
 
   // Add this function to format the date
@@ -2623,7 +2799,8 @@ const sendBlastMessage = async () => {
           <span
             key={index}
             className={`px-2 py-1 text-xs font-semibold rounded-full ${
-              employeeNames.includes(tag.toLowerCase())
+              // Make case-insensitive comparison
+              employeeNames.some(name => name.toLowerCase() === tag.toLowerCase())
                 ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200'
                 : 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-200'
             }`}
@@ -2766,6 +2943,43 @@ Jane,Smith,60198765432,jane@example.com,XYZ Corp,456 Elm St,Branch B,2024-06-30,
                       </Menu.Items>
                     </Menu>
                     <Menu>
+    {showAddUserButton && (
+      <Menu.Button as={Button} className="flex items-center justify-start p-2 !box bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+        <Lucide icon="Tags" className="w-5 h-5 mr-2" />
+        <span>Remove Tag</span>
+      </Menu.Button>
+    )}
+    <Menu.Items className="w-full bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-md mt-1 shadow-lg">
+      <div className="p-2">
+        <button 
+          className="flex items-center p-2 font-medium hover:bg-gray-100 dark:hover:bg-gray-700 w-full rounded-md text-red-500"
+          onClick={() => {
+            selectedContacts.forEach(contact => {
+              handleRemoveTagsFromContact(contact, contact.tags || []);
+            });
+          }}
+        >
+          <Lucide icon="XCircle" className="w-4 h-4 mr-2" />
+          Remove All Tags
+        </button>
+      </div>
+      {tagList.map((tag) => (
+        <div key={tag.id} className="flex items-center justify-between w-full hover:bg-gray-100 dark:hover:bg-gray-700 p-1 rounded-md">
+          <button
+            className="flex-grow p-2 text-sm text-left"
+            onClick={() => {
+              selectedContacts.forEach(contact => {
+                handleRemoveTagsFromContact(contact, [tag.name]);
+              });
+            }}
+          >
+            {tag.name}
+          </button>
+        </div>
+      ))}
+    </Menu.Items>
+  </Menu>
+                    <Menu>
                       <Menu.Button as={Button} className="flex items-center justify-start p-2 !box bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
                         <Lucide icon="Filter" className="w-5 h-5 mr-2" />
                         <span>Filter Tags</span>
@@ -2803,7 +3017,7 @@ Jane,Smith,60198765432,jane@example.com,XYZ Corp,456 Elm St,Branch B,2024-06-30,
                               Users
                             </Tab>
                           </Tab.List>
-                          <Tab.Panels className="mt-2">
+                          <Tab.Panels className="mt-2 max-h-[300px] overflow-y-auto">
                             <Tab.Panel>
                               {tagList.map((tag) => (
                                 <div key={tag.id} className={`flex items-center justify-between m-2 p-2 text-sm w-full rounded-md ${selectedTagFilters.includes(tag.name) ? 'bg-primary dark:bg-primary text-white' : ''}`}>
@@ -3214,7 +3428,7 @@ Jane,Smith,60198765432,jane@example.com,XYZ Corp,456 Elm St,Branch B,2024-06-30,
                       {showPlaceholders && (
                         <div className="mt-2 space-y-1">
                           <p className="text-sm text-gray-600 dark:text-gray-400">Click to insert:</p>
-                          {['contactName', 'firstName', 'lastName', 'email', 'phone'].map(field => (
+                          {['contactName', 'firstName', 'lastName', 'email', 'phone', 'vehicleNumber', 'branch', 'expiryDate', 'ic'].map(field => (
                             <button
                               key={field}
                               type="button"
@@ -3546,7 +3760,7 @@ Jane,Smith,60198765432,jane@example.com,XYZ Corp,456 Elm St,Branch B,2024-06-30,
                                         ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200'
                                         : 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-200'
                                     }`}>
-                                      {tag}
+                                      {tag.charAt(0).toUpperCase() + tag.slice(1)}
                                       <button
                                         className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white hover:text-red-500 hidden group-hover:block"
                                         onClick={(e) => {

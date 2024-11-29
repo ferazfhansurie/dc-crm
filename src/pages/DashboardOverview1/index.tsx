@@ -23,18 +23,18 @@ import { initializeApp } from "firebase/app";
 import { DocumentData, DocumentReference, getDoc,where, query, limit,getDocs, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { getFirestore, collection, setDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { onMessage } from "firebase/messaging";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import LoadingIcon from "@/components/Base/LoadingIcon";
 import { Bar, Doughnut, Line } from "react-chartjs-2";
-import { Chart as ChartJS, ChartData, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement } from 'chart.js';
+import { Chart as ChartJS, ChartData, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, BarController } from 'chart.js';
 import { BarChart } from "lucide-react";
 import { useContacts } from "@/contact";
 import { User, ChevronRight } from 'lucide-react';
-import { format, subDays, subMonths, startOfDay, endOfDay, eachHourOfInterval, eachDayOfInterval } from 'date-fns';
+import { format, subDays, subMonths, startOfDay, endOfDay, eachHourOfInterval, eachDayOfInterval,  parse,  } from 'date-fns';
 
 
 // Register ChartJS components
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, BarController);
 
 const firebaseConfig = {
   apiKey: "AIzaSyCc0oSHlqlX7fLeqqonODsOIC3XA8NI7hc",
@@ -868,125 +868,154 @@ setEngagementScore(Number(newEngagementScore.toFixed(2)));
   // Modify the handleEmployeeSelect function
   const handleEmployeeSelect = async (employee: Employee) => {
     console.log("Employee selected:", employee);
-    const fullEmployeeData = await fetchEmployeeData(employee.id);
-    if (fullEmployeeData) {
-      setSelectedEmployee(fullEmployeeData);
+    setSelectedEmployee(employee);
+    fetchEmployeeStats(employee.id);
+  };
+
+  // Add new state for tag filter
+  const [selectedTag, setSelectedTag] = useState<string>('all');
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+
+  // Add function to fetch available tags
+  const fetchAvailableTags = async () => {
+    if (!companyId) return;
+    
+    try {
+      const contactsRef = collection(firestore, `companies/${companyId}/contacts`);
+      const contactsSnapshot = await getDocs(contactsRef);
+      
+      const tagsSet = new Set<string>();
+      contactsSnapshot.forEach((doc) => {
+        const contactData = doc.data();
+        if (contactData.tags && Array.isArray(contactData.tags)) {
+          contactData.tags.forEach((tag: string) => tagsSet.add(tag));
+        }
+      });
+      
+      setAvailableTags(Array.from(tagsSet).sort());
+    } catch (error) {
+      console.error('Error fetching tags:', error);
     }
   };
 
+  // Modify the existing fetchContactsOverTime function
   const fetchContactsOverTime = async (filter: 'today' | '7days' | '1month' | '3months' | 'all') => {
     if (!companyId) {
-        console.error('CompanyId is not set. Unable to fetch contacts data.');
-        return;
+      console.error('CompanyId is not set. Unable to fetch contacts data.');
+      return;
     }
-
-    const now = new Date();
-    let startDate: Date;
-
-    let interval: 'hour' | 'day' | 'month';
-
 
     try {
-        const contactsRef = collection(firestore, `companies/${companyId}/contacts`);
-        const contactsSnapshot = await getDocs(contactsRef);
-        
-        let firstContactDate = now;
-        const contactsData: { [date: string]: number } = {};
-        
-        contactsSnapshot.forEach((doc) => {
-          const contactData = doc.data();
-          const dateAdded = contactData.dateAdded ? new Date(contactData.dateAdded) : null;
-  
-          if (dateAdded) {
-            if (dateAdded < firstContactDate) {
-              firstContactDate = dateAdded;
-            }
-          }
-        });
-  
-        switch (filter) {
-          case 'today':
-            startDate = startOfDay(now);
-            interval = 'hour';
-            break;
-          case '7days':
-          case '1month':
-            startDate = filter === '7days' ? subDays(now, 7) : subDays(now, 30);
-            interval = 'day';
-            break;
-          case '3months':
-            startDate = subMonths(now, 3);
-            interval = 'month';
-            break;
-          default: // 'all'
-            startDate = firstContactDate;
-            interval = 'month';
-            break;
-        }
-  
+      const contactsRef = collection(firestore, `companies/${companyId}/contacts`);
+      const contactsSnapshot = await getDocs(contactsRef);
+      
+      const now = new Date();
+      let startDate: Date;
 
-        contactsSnapshot.forEach((doc) => {
-          const contactData = doc.data();
-          const dateAdded = contactData.dateAdded ? new Date(contactData.dateAdded) : null;
-  
+      // Set the start date based on the filter
+      switch (filter) {
+        case 'today':
+          startDate = startOfDay(now);
+          break;
+        case '7days':
+          startDate = subDays(now, 7);
+          break;
+        case '1month':
+          startDate = subDays(now, 30);
+          break;
+        case '3months':
+          startDate = subMonths(now, 3);
+          break;
+        default: // 'all'
+          startDate = subMonths(now, 12);
+          break;
+      }
 
-          if (dateAdded && dateAdded >= startDate && dateAdded <= now) {
-            const dateKey = interval === 'hour' 
-              ? format(dateAdded, 'yyyy-MM-dd HH:00')
-              : format(dateAdded, 'yyyy-MM-dd');
-              contactsData[dateKey] = (contactsData[dateKey] || 0) + 1;
-            }
-          });
-            
+      const contactCounts: { [key: string]: number } = {};
 
-          let timePoints: Date[];
-          if (interval === 'hour') {
-            timePoints = eachHourOfInterval({ start: startOfDay(now), end: endOfDay(now) });
-          } else {
-            timePoints = eachDayOfInterval({ start: startDate, end: now });
-          }
-
-          const sortedData = timePoints.map(date => {
-            const dateKey = interval === 'hour'
-              ? format(date, 'yyyy-MM-dd HH:00')
-              : format(date, 'yyyy-MM-dd');
-            return { 
-              date: interval === 'hour' ? format(date, 'HH:mm') : format(date, 'MMM dd'),
-              count: contactsData[dateKey] || 0 
-            };
-          });    
-
-        setContactsOverTime(sortedData);
-    } catch (error) {
-        console.error('Error fetching contacts over time data:', error);
-    }
-};
-
-// Helper function to get the earliest contact added date
-const getEarliestContactDate = async () => {
-    const contactsRef = collection(firestore, `companies/${companyId}/contacts`);
-    const contactsSnapshot = await getDocs(contactsRef);
-    let earliestDate: Date | null = null;
-
-    contactsSnapshot.forEach((doc) => {
+      // Count contacts by date, considering the tag filter
+      contactsSnapshot.forEach((doc) => {
         const contactData = doc.data();
-        const dateAdded = contactData.dateAdded ? new Date(contactData.dateAdded) : null;
+        
+        if (doc.id.startsWith('+') && contactData.createdAt) {
+          // Check if the contact has the selected tag (if a tag is selected)
+          if (selectedTag !== 'all' && (!contactData.tags || !contactData.tags.includes(selectedTag))) {
+            return;
+          }
 
-        if (dateAdded) {
-            if (!earliestDate || dateAdded < earliestDate) {
-                earliestDate = dateAdded;
+          const createdAt = contactData.createdAt.toDate ? 
+            contactData.createdAt.toDate() : 
+            new Date(contactData.createdAt);
+          
+          if (createdAt >= startDate) {
+            let dateKey;
+            if (filter === 'today') {
+              dateKey = format(createdAt, 'HH:00');
+            } else if (filter === 'all') {
+              // For "all time" view, group by month
+              dateKey = format(createdAt, 'yyyy-MM');
+            } else {
+              dateKey = format(createdAt, 'yyyy-MM-dd');
             }
+            
+            contactCounts[dateKey] = (contactCounts[dateKey] || 0) + 1;
+          }
         }
-    });
+      });
 
-    return earliestDate;
-};
+      let timePoints: Date[];
+      if (filter === 'today') {
+        timePoints = eachHourOfInterval({ start: startDate, end: now });
+      } else if (filter === 'all') {
+        // For "all time" view, create array of months
+        timePoints = [];
+        let currentDate = startDate;
+        while (currentDate <= now) {
+          timePoints.push(currentDate);
+          currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+        }
+      } else {
+        timePoints = eachDayOfInterval({ start: startDate, end: now });
+      }
 
+      let runningTotal = 0;
+      const sortedData = timePoints.map(date => {
+        const dateKey = filter === 'today'
+          ? format(date, 'HH:00')
+          : filter === 'all'
+            ? format(date, 'yyyy-MM')
+            : format(date, 'yyyy-MM-dd');
+        
+        runningTotal += contactCounts[dateKey] || 0;
+        
+        return {
+          date: filter === 'today'
+            ? format(date, 'HH:mm')
+            : filter === 'all'
+              ? format(date, 'MMM yyyy')
+              : format(date, 'MMM dd'),
+          count: runningTotal
+        };
+      });
+
+      setContactsOverTime(sortedData);
+
+    } catch (error) {
+      console.error('Error fetching contacts over time data:', error);
+    }
+  };
+
+  // Add useEffect to fetch tags when component mounts
+  useEffect(() => {
+    fetchAvailableTags();
+  }, [companyId]);
+
+  // Modify the existing useEffect to include selectedTag dependency
   useEffect(() => {
     if (companyId) {
       fetchContactsOverTime(contactsTimeFilter);
     }
-  }, [companyId, contactsTimeFilter]);
+  }, [companyId, contactsTimeFilter, selectedTag]); // Add selectedTag as dependency
 
   const totalContactsChartData = useMemo(() => {
     return {
@@ -994,9 +1023,9 @@ const getEarliestContactDate = async () => {
       datasets: [{
         label: 'Total Contacts',
         data: contactsOverTime.map(d => d.count),
-        borderColor: 'rgb(75, 192, 192)',
-        tension: 0.1,
-        fill: false
+        backgroundColor: 'rgba(75, 192, 192, 0.6)',
+        borderColor: 'rgba(75, 192, 192, 1)',
+        borderWidth: 1
       }]
     };
   }, [contactsOverTime]);
@@ -1022,12 +1051,17 @@ const getEarliestContactDate = async () => {
         x: {
           title: {
             display: true,
-            text: contactsTimeFilter === 'today' ? 'Hour' : 'Date',
+            text: contactsTimeFilter === 'today' ? 'Hour' : 
+                  contactsTimeFilter === 'all' ? 'Month' : 'Date',
             color: 'rgb(75, 85, 99)',
           },
           ticks: {
             color: 'rgb(107, 114, 128)',
-            maxTicksLimit: contactsTimeFilter === 'today' ? 24 : 10, // Show all hours for 'today', limit to 10 for other filters
+            maxTicksLimit: contactsTimeFilter === 'today' ? 24 : 
+                          contactsTimeFilter === 'all' ? undefined : 10,
+            autoSkip: true,
+            maxRotation: 45,
+            minRotation: 45
           },
         },
       },
@@ -1041,8 +1075,43 @@ const getEarliestContactDate = async () => {
           color: 'rgb(31, 41, 55)',
         },
       },
+      barPercentage: 0.9,
+      categoryPercentage: 0.9,
+      onClick: (event: any, elements: any[]) => {
+        if (elements.length > 0) {
+          const index = elements[0].index;
+          const label = contactsOverTime[index].date;
+          setSelectedPeriodLabel(label);
+          
+          // Calculate period start and end based on the filter
+          let periodStart: Date;
+          let periodEnd: Date;
+          
+          if (contactsTimeFilter === 'today') {
+            // For hourly view
+            const [hours] = label.split(':');
+            periodStart = new Date();
+            periodStart.setHours(parseInt(hours), 0, 0, 0);
+            periodEnd = new Date(periodStart);
+            periodEnd.setHours(periodStart.getHours() + 1);
+          } else if (contactsTimeFilter === 'all') {
+            // For monthly view
+            const [month, year] = label.split(' ');
+            periodStart = new Date(parseInt(year), new Date(Date.parse(`${month} 1, ${year}`)).getMonth(), 1);
+            periodEnd = new Date(periodStart);
+            periodEnd.setMonth(periodEnd.getMonth() + 1);
+          } else {
+            // For daily view
+            periodStart = parse(label, 'MMM dd', new Date());
+            periodEnd = new Date(periodStart);
+            periodEnd.setDate(periodEnd.getDate() + 1);
+          }
+          
+          fetchContactsForPeriod(periodStart, periodEnd);
+        }
+      },
     } as const;
-  }, [contactsOverTime, contactsTimeFilter]);
+  }, [contactsOverTime, contactsTimeFilter, selectedTag]);
 
   const [closedContactsByEmployee, setClosedContactsByEmployee] = useState<{ [key: string]: number }>({});
 
@@ -1129,6 +1198,321 @@ const getEarliestContactDate = async () => {
     } as const;
   }, []);
 
+  // Add these new state variables near the top of your component
+  const [blastMessageData, setBlastMessageData] = useState<{
+    labels: string[];
+    datasets: {
+      label: string;
+      data: number[];
+      backgroundColor: string;
+    }[];
+  }>({
+    labels: [],
+    datasets: []
+  });
+
+  // Add this new function to fetch blast message data
+  const fetchBlastMessageData = async () => {
+    try {
+      const auth = getAuth(app);
+      const user = auth.currentUser;
+      if (!user) {
+        console.error('User not authenticated');
+        return;
+      }
+
+      const docUserRef = doc(firestore, 'user', user.email!);
+      const docUserSnapshot = await getDoc(docUserRef);
+      if (!docUserSnapshot.exists()) {
+        console.error('User document does not exist');
+        return;
+      }
+
+      const dataUser = docUserSnapshot.data();
+      const companyId = dataUser.companyId;
+
+      // Fetch scheduled messages collection
+      const scheduledMessagesRef = collection(firestore, 'companies', companyId, 'scheduledMessages');
+      const scheduledMessagesSnapshot = await getDocs(scheduledMessagesRef);
+
+      const monthlyData: { [key: string]: { scheduled: number; completed: number; failed: number } } = {};
+
+      scheduledMessagesSnapshot.forEach(doc => {
+        const messageData = doc.data();
+        const scheduledTime = messageData.scheduledTime?.toDate() || new Date(messageData.scheduledTime);
+        const monthKey = format(scheduledTime, 'MMM yyyy');
+        const status = messageData.status;
+
+        if (!monthlyData[monthKey]) {
+          monthlyData[monthKey] = { scheduled: 0, completed: 0, failed: 0 };
+        }
+
+        // Count messages based on their status
+        if (status === 'completed') {
+          monthlyData[monthKey].completed++;
+        } else if (status === 'failed') {
+          monthlyData[monthKey].failed++;
+        }
+        monthlyData[monthKey].scheduled++; // Count all messages as scheduled
+      });
+
+      const labels = Object.keys(monthlyData).sort((a, b) => {
+        return new Date(a).getTime() - new Date(b).getTime();
+      });
+      const scheduledData = labels.map(key => monthlyData[key].scheduled);
+      const completedData = labels.map(key => monthlyData[key].completed);
+      const failedData = labels.map(key => monthlyData[key].failed);
+
+      setBlastMessageData({
+        labels,
+        datasets: [
+          {
+            label: 'Scheduled',
+            data: scheduledData,
+            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+          },
+          {
+            label: 'Completed',
+            data: completedData,
+            backgroundColor: 'rgba(75, 192, 192, 0.6)',
+          },
+          {
+            label: 'Failed',
+            data: failedData,
+            backgroundColor: 'rgba(255, 99, 132, 0.6)',
+          },
+        ],
+      });
+
+    } catch (error) {
+      console.error('Error fetching scheduled messages data:', error);
+    }
+  };
+
+  // Add useEffect to fetch blast message data
+  useEffect(() => {
+    fetchBlastMessageData();
+  }, []);
+
+  // Add this new interface
+  interface EmployeeStats {
+    conversationsAssigned: number;
+    outgoingMessagesSent: number;
+    averageResponseTime: number;
+    closedContacts: number;
+  }
+
+  // Add this new state
+  const [employeeStats, setEmployeeStats] = useState<EmployeeStats | null>(null);
+
+  // Add this new function
+  const fetchEmployeeStats = async (employeeId: string) => {
+    try {
+      console.log('Fetching stats for employee:', employeeId);
+      // Update the URL to match your actual API endpoint
+      const response = await axios.get(`https://mighty-dane-newly.ngrok-free.app/api/stats/${companyId}?employeeId=${employeeId}`);
+      console.log('Received employee stats:', response.data);
+      setEmployeeStats(response.data);
+    } catch (error) {
+      console.error('Error fetching employee stats:', error);
+      // Add user-friendly error handling
+      setEmployeeStats(null);
+      // Optionally show an error message to the user
+      // setError('Failed to load employee performance metrics');
+    }
+  };
+
+  // Update useEffect to fetch stats for current user by default
+  useEffect(() => {
+    if (currentUser) {
+      fetchEmployeeStats(currentUser.id);
+      setSelectedEmployee(currentUser);
+    }
+  }, [currentUser]); // Dependency on currentUser
+
+  // Add this new type near your other interfaces
+  interface PerformanceMetricsData {
+    labels: string[];
+    datasets: {
+      label: string;
+      data: number[];
+      borderColor: string;
+      backgroundColor: string;
+      fill: boolean;
+    }[];
+  }
+
+  // Inside your Main component, add this new function
+  const getPerformanceMetricsData = (stats: EmployeeStats | null): PerformanceMetricsData => {
+    return {
+      labels: ['Response Time (min)', 'Closed Contacts', 'Conversations', 'Messages Sent'],
+      datasets: [
+        {
+          label: 'Performance Metrics',
+          data: [
+            stats?.averageResponseTime ? Number((stats.averageResponseTime / 60).toFixed(1)) : 0,
+            stats?.closedContacts || 0,
+            stats?.conversationsAssigned || 0,
+            stats?.outgoingMessagesSent || 0
+          ],
+          borderColor: 'rgb(147, 51, 234)', // purple for response time
+          backgroundColor: 'rgba(147, 51, 234, 0.2)',
+          fill: true
+        }
+      ]
+    };
+  };
+
+  // Add new interfaces and states
+  interface Contact {
+    id: string;
+    contactName: string;
+    email: string | null;
+    phone: string | null;
+    dateAdded: string;
+    tags: string[];
+    // Add other contact fields as needed
+  }
+
+  // Add these new states
+  const [selectedPeriodContacts, setSelectedPeriodContacts] = useState<Contact[]>([]);
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+  const [selectedPeriodLabel, setSelectedPeriodLabel] = useState<string>('');
+
+  // Add the function to fetch contacts for a specific period
+  const fetchContactsForPeriod = async (periodStart: Date, periodEnd: Date) => {
+    try {
+      const contactsRef = collection(firestore, `companies/${companyId}/contacts`);
+      const contactsSnapshot = await getDocs(contactsRef);
+      
+      const periodContacts: Contact[] = [];
+      
+      contactsSnapshot.forEach((doc) => {
+        const contactData = doc.data();
+        
+        if (doc.id.startsWith('+') && contactData.createdAt) {
+          const createdAt = contactData.createdAt.toDate ? 
+            contactData.createdAt.toDate() : 
+            new Date(contactData.createdAt);
+          
+          if (createdAt >= periodStart && createdAt < periodEnd) {
+            if (selectedTag === 'all' || (contactData.tags && contactData.tags.includes(selectedTag))) {
+              periodContacts.push({
+                id: doc.id,
+                additionalEmails: contactData.additionalEmails || [],
+                address1: contactData.address1 || null,
+                assignedTo: contactData.assignedTo || null,
+                businessId: contactData.businessId || null,
+                city: contactData.city || null,
+                companyName: contactData.companyName || null,
+                contactName: contactData.contactName || '',
+                country: contactData.country || '',
+                customFields: contactData.customFields || [],
+                dateAdded: format(createdAt, 'MMM dd, yyyy HH:mm'),
+                dateOfBirth: contactData.dateOfBirth || null,
+                dateUpdated: contactData.dateUpdated || '',
+                dnd: contactData.dnd || false,
+                dndSettings: contactData.dndSettings || {},
+                email: contactData.email || null,
+                firstName: contactData.firstName || '',
+                followers: contactData.followers || [],
+                lastName: contactData.lastName || '',
+                locationId: contactData.locationId || '',
+                phone: contactData.phone || null,
+                postalCode: contactData.postalCode || null,
+                source: contactData.source || null,
+                state: contactData.state || null,
+                tags: contactData.tags || [],
+                type: contactData.type || '',
+                website: contactData.website || null
+              });
+            }
+          }
+        }
+      });
+      
+      // Sort contacts by date added
+      periodContacts.sort((a, b) => 
+        new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime()
+      );
+      
+      setSelectedPeriodContacts(periodContacts);
+      setIsContactModalOpen(true);
+    } catch (error) {
+      console.error('Error fetching contacts for period:', error);
+    }
+  };
+
+  // Add the ContactsModal component
+  const ContactsModal = ({ 
+    isOpen, 
+    onClose, 
+    contacts, 
+    periodLabel 
+  }: { 
+    isOpen: boolean; 
+    onClose: () => void; 
+    contacts: Contact[]; 
+    periodLabel: string; 
+  }) => {
+    if (!isOpen) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl max-h-[80vh] overflow-hidden">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+            <h2 className="text-xl font-semibold">
+              Contacts for {periodLabel} ({contacts.length} contacts)
+            </h2>
+            <button
+              onClick={onClose}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              <Lucide icon="X" className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="p-4 overflow-auto max-h-[calc(80vh-8rem)]">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b dark:border-gray-700">
+                  <th className="text-left p-2">Name</th>
+                  <th className="text-left p-2">Email</th>
+                  <th className="text-left p-2">Phone</th>
+                  <th className="text-left p-2">Company</th>
+                  <th className="text-left p-2">Date Added</th>
+                  <th className="text-left p-2">Tags</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contacts.map((contact) => (
+                  <tr key={contact.id} className="border-b dark:border-gray-700">
+                    <td className="p-2">{`${contact.firstName} ${contact.lastName}`}</td>
+                    <td className="p-2">{contact.email || '-'}</td>
+                    <td className="p-2">{contact.phone || '-'}</td>
+                    <td className="p-2">{contact.companyName || '-'}</td>
+                    <td className="p-2">{contact.dateAdded}</td>
+                    <td className="p-2">
+                      <div className="flex flex-wrap gap-1">
+                        {contact.tags.map((tag, index) => (
+                          <span 
+                            key={index}
+                            className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const dashboardCards = [
     {
       id: 'kpi',
@@ -1165,7 +1549,33 @@ const getEarliestContactDate = async () => {
       title: 'Contacts Over Time',
       content: totalContactsChartData,
       filter: contactsTimeFilter,
-      setFilter: setContactsTimeFilter
+      setFilter: setContactsTimeFilter,
+      // Add the tag filter UI here
+      filterControls: (
+        <div className="flex gap-2">
+          <FormSelect
+            className="w-40"
+            value={contactsTimeFilter}
+            onChange={(e) => setContactsTimeFilter(e.target.value as 'today' | '7days' | '1month' | '3months' | 'all')}
+          >
+            <option value="today">Today</option>
+            <option value="7days">Last 7 Days</option>
+            <option value="1month">Last Month</option>
+            <option value="3months">Last 3 Months</option>
+            <option value="all">All Time</option>
+          </FormSelect>
+          <FormSelect
+            className="w-40"
+            value={selectedTag}
+            onChange={(e) => setSelectedTag(e.target.value)}
+          >
+            <option value="all">All Tags</option>
+            {availableTags.map((tag) => (
+              <option key={tag} value={tag}>{tag}</option>
+            ))}
+          </FormSelect>
+        </div>
+      )
     },
     {
       id: 'employee-assignments',
@@ -1183,13 +1593,13 @@ const getEarliestContactDate = async () => {
       }
     },
     {
-      id: 'monthly-spend',
-      title: 'Monthly Spend',
+      id: 'blast-messages',
+      title: 'Scheduled Messages Analytics',
       content: (
         <div className="h-full flex flex-col">
-          {monthlySpendData.labels.length > 0 ? (
+          {blastMessageData.labels.length > 0 ? (
             <Bar 
-              data={monthlySpendData} 
+              data={blastMessageData} 
               options={{ 
                 responsive: true, 
                 maintainAspectRatio: false,
@@ -1198,7 +1608,7 @@ const getEarliestContactDate = async () => {
                     beginAtZero: true,
                     title: {
                       display: true,
-                      text: 'Price (MYR)',
+                      text: 'Number of Messages',
                     },
                   },
                   x: {
@@ -1208,31 +1618,115 @@ const getEarliestContactDate = async () => {
                     },
                   },
                 },
+                plugins: {
+                  title: {
+                    display: true,
+                    text: 'Monthly Scheduled Message Statistics',
+                  },
+                  tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                  },
+                },
               }} 
             />
           ) : (
-            <p className="text-center text-gray-600 dark:text-gray-400">No data available</p>
+            <p className="text-center text-gray-600 dark:text-gray-400">No scheduled message data available</p>
           )}
-         <div className="mt-4">
-      {monthlySpendData.labels.length > 0 && (
-        <>
-          <p className="text-sm text-gray-600 dark:text-gray-400">This Month's Tokens:</p>
-          <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-            {Math.round(monthlySpendData.datasets[0].data[monthlySpendData.datasets[0].data.length - 1] / 0.003 * 1000).toLocaleString()}
-          </p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">This Month's Price:</p>
-          <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-            ${monthlySpendData.datasets[0].data[monthlySpendData.datasets[0].data.length - 1].toFixed(2)}
-          </p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Calculation:</p>
-          <p className="text-md text-gray-700 dark:text-gray-300">
-            ({Math.round(monthlySpendData.datasets[0].data[monthlySpendData.datasets[0].data.length - 1] / 0.003 * 1000).toLocaleString()} tokens / 1000) * $0.003 per 1k tokens
-          </p>
-        </>
-      )}
-    </div>
+          <div className="mt-4">
+            {blastMessageData.labels.length > 0 && (
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Total Scheduled:</p>
+                  <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                    {blastMessageData.datasets[0].data.reduce((a, b) => a + b, 0).toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Total Completed:</p>
+                  <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                    {blastMessageData.datasets[1].data.reduce((a, b) => a + b, 0).toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Total Failed:</p>
+                  <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                    {blastMessageData.datasets[2].data.reduce((a, b) => a + b, 0).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )
+    },
+    {
+      id: 'performance-metrics',
+      title: 'Employee Performance Metrics',
+      content: (
+        <div className="h-full">
+          {employeeStats ? (
+            <Bar
+              data={getPerformanceMetricsData(employeeStats)}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y', // This makes it a horizontal bar chart
+                scales: {
+                  x: {
+                    beginAtZero: true,
+                    grid: {
+                      color: 'rgba(107, 114, 128, 0.1)'
+                    },
+                    ticks: {
+                      color: 'rgb(107, 114, 128)'
+                    }
+                  },
+                  y: {
+                    grid: {
+                      display: false
+                    },
+                    ticks: {
+                      color: 'rgb(107, 114, 128)'
+                    }
+                  }
+                },
+                plugins: {
+                  legend: {
+                    display: false
+                  },
+                  // title: {
+                  //   display: true,
+                  //   text: 'Employee Performance Metrics',
+                  //   color: 'rgb(31, 41, 55)',
+                  //   font: {
+                  //     size: 16
+                  //   }
+                  // },
+                  tooltip: {
+                    callbacks: {
+                      label: function(context) {
+                        const label = context.dataset.label || '';
+                        const value = context.parsed.x;
+                        const metric = context.label;
+                        
+                        if (metric === 'Response Time (min)') {
+                          return `${label}: ${value} minutes`;
+                        }
+                        return `${label}: ${value}`;
+                      }
+                    }
+                  }
+                }
+              }}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              No performance data available
+            </div>
+          )}
+        </div>
+      ),
     }
     // Add more cards here as needed
   ];
@@ -1247,22 +1741,12 @@ const getEarliestContactDate = async () => {
               className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden flex flex-col h-full"
             >
               <div className="p-6 flex-grow flex flex-col">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200">{card.title}</h3>
-                  {card.id === 'contacts-over-time' && (
-                    <FormSelect
-                      className="w-40"
-                      value={card.filter}
-                      onChange={(e) => card.setFilter?.(e.target.value as 'today' | '7days' | '1month' | '3months' | 'all')}
-                    >
-                      <option value="today">Today</option>
-                      <option value="7days">Last 7 Days</option>
-                      <option value="1month">Last Month</option>
-                      <option value="3months">Last 3 Months</option>
-                      <option value="all">All Time</option>
-                    </FormSelect>
-                  )}
-                </div>
+                {card.id === 'contacts-over-time' && (
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200">{card.title}</h3>
+                    {card.filterControls}
+                  </div>
+                )}
                 <div className="flex-grow">
                   {card.id === 'kpi' || card.id === 'leads' || card.id === 'engagement-metrics' ? (
                     <div className="grid grid-cols-2 gap-4">
@@ -1278,7 +1762,7 @@ const getEarliestContactDate = async () => {
                   ) : card.id === 'contacts-over-time' ? (
                     <div className="h-full">
                       {('datasets' in card.content) && (
-                        <Line data={card.content} options={totalContactsChartOptions} />
+                        <Bar data={card.content} options={totalContactsChartOptions} />
                       )}
                     </div>
                   ) : card.id === 'employee-assignments' ? (
@@ -1302,15 +1786,19 @@ const getEarliestContactDate = async () => {
                         )}
                       </div>
                     </div>
-                  ) :  card.id === 'monthly-spend' ? (
+                  ) : card.id === 'blast-messages' ? (
                     <div>
                     <div className="mb-4">
-                      {/* You can add any controls or filters here if needed */}
+                    <Link to="blast-history">
+                      <Button variant="primary" className="mr-2 shadow-md">
+                          Blast History
+                      </Button>
+                    </Link>
                     </div>
                     <div className="h-64">
-                      {monthlySpendData.labels.length > 0 ? (
+                      {blastMessageData.labels.length > 0 ? (
                         <Bar 
-                          data={monthlySpendData} 
+                          data={blastMessageData} 
                           options={{ 
                             responsive: true, 
                             maintainAspectRatio: false,
@@ -1319,7 +1807,7 @@ const getEarliestContactDate = async () => {
                                 beginAtZero: true,
                                 title: {
                                   display: true,
-                                  text: 'Price (MYR)',
+                                  text: 'Number of Messages',
                                 },
                               },
                               x: {
@@ -1329,31 +1817,110 @@ const getEarliestContactDate = async () => {
                                 },
                               },
                             },
+                            plugins: {
+                              title: {
+                                display: true,
+                                text: 'Monthly Scheduled Message Statistics',
+                              },
+                              tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                              },
+                            },
                           }} 
                         />
                       ) : (
-                        <div className="text-center text-gray-600 dark:text-gray-400">No monthly spend data available</div>
+                        <div className="text-center text-gray-600 dark:text-gray-400">No scheduled message data available</div>
                       )}
                     </div>
                     <div className="mt-4">
-      {monthlySpendData.labels.length > 0 && (
-        <>
-          <p className="text-sm text-gray-600 dark:text-gray-400">This Month's Tokens:</p>
-          <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-            {Math.round(monthlySpendData.datasets[0].data[monthlySpendData.datasets[0].data.length - 1] / 0.003 * 1000).toLocaleString()}
-          </p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">This Month's Price:</p>
-          <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-            RM {monthlySpendData.datasets[0].data[monthlySpendData.datasets[0].data.length - 1].toFixed(2)}
-          </p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Calculation:</p>
-          <p className="text-md text-gray-700 dark:text-gray-300">
-            ({Math.round(monthlySpendData.datasets[0].data[monthlySpendData.datasets[0].data.length - 1] / 0.003 * 1000).toLocaleString()} tokens / 1000) * $0.003 per 1k tokens
-          </p>
-        </>
-      )}
-    </div>
+                      {blastMessageData.labels.length > 0 && (
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Total Scheduled:</p>
+                            <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                              {blastMessageData.datasets[0].data.reduce((a, b) => a + b, 0).toLocaleString()}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Total Completed:</p>
+                            <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                              {blastMessageData.datasets[1].data.reduce((a, b) => a + b, 0).toLocaleString()}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Total Failed:</p>
+                            <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                              {blastMessageData.datasets[2].data.reduce((a, b) => a + b, 0).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
+                  ) : card.id === 'performance-metrics' ? (
+                    <div className="h-full">
+                      {employeeStats ? (
+                        <Bar
+                          data={getPerformanceMetricsData(employeeStats)}
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            indexAxis: 'y', // This makes it a horizontal bar chart
+                            scales: {
+                              x: {
+                                beginAtZero: true,
+                                grid: {
+                                  color: 'rgba(107, 114, 128, 0.1)'
+                                },
+                                ticks: {
+                                  color: 'rgb(107, 114, 128)'
+                                }
+                              },
+                              y: {
+                                grid: {
+                                  display: false
+                                },
+                                ticks: {
+                                  color: 'rgb(107, 114, 128)'
+                                }
+                              }
+                            },
+                            plugins: {
+                              legend: {
+                                display: false
+                              },
+                              // title: {
+                              //   display: true,
+                              //   text: 'Employee Performance Metrics',
+                              //   color: 'rgb(31, 41, 55)',
+                              //   font: {
+                              //     size: 16
+                              //   }
+                              // },
+                              tooltip: {
+                                callbacks: {
+                                  label: function(context) {
+                                    const label = context.dataset.label || '';
+                                    const value = context.parsed.x;
+                                    const metric = context.label;
+                                    
+                                    if (metric === 'Response Time (min)') {
+                                      return `${label}: ${value} minutes`;
+                                    }
+                                    return `${label}: ${value}`;
+                                  }
+                                }
+                              }
+                            }
+                          }}
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-gray-500">
+                          No performance data available
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div className="text-center text-gray-600 dark:text-gray-400">No data available</div>
                   )}
@@ -1363,6 +1930,13 @@ const getEarliestContactDate = async () => {
           ))}
         </div>
       </div>
+      
+      <ContactsModal
+        isOpen={isContactModalOpen}
+        onClose={() => setIsContactModalOpen(false)}
+        contacts={selectedPeriodContacts}
+        periodLabel={selectedPeriodLabel}
+      />
     </div>
   );
 }

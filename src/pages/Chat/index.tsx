@@ -78,6 +78,7 @@ interface Contact {
   profilePicUrl?:string;
   phoneIndex?:number |null;
   points?:number |null;
+  phoneIndexes?:number[] |null;
 }
 interface GhlConfig {
   ghl_id: string;
@@ -544,6 +545,9 @@ function Main() {
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false);
   const [globalSearchPage, setGlobalSearchPage] = useState(1);
   const [totalGlobalSearchPages, setTotalGlobalSearchPages] = useState(1);
+  const [messageUsage, setMessageUsage] = useState<number>(0);
+  const [companyPlan, setCompanyPlan] = useState<string>('');
+
 
   useEffect(() => {
     if (contextContacts.length > 0) {
@@ -594,18 +598,7 @@ function Main() {
   }, [contacts, searchQuery, activeTags, currentUserName, employeeList, phoneNames]);
 
   // Initial chat selection from URL
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const chatIdFromUrl = params.get('chatId');
-    
-    if (chatIdFromUrl && contacts.length > 0) {
-      const fullChatId = `${chatIdFromUrl}@c.us`;
-      const contact = contacts.find(c => c.chat_id === fullChatId);
-      if (contact && contact.id) {
-        selectChat(fullChatId, contact.id, contact);
-      }
-    }
-  }, [location.search, contacts]);
+
 
   // Update this useEffect
   useEffect(() => {
@@ -1822,6 +1815,22 @@ async function fetchConfigFromDatabase() {
       console.error('Company data is missing');
       return;
     }
+    setCompanyPlan(data.plan || '');
+     // Add message usage tracking for enterprise plan
+     if (data.plan === 'enterprise') {
+      const currentDate = new Date();
+      const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+      
+      const usageRef = doc(firestore, `companies/${companyId}/usage/${monthKey}`);
+      const usageSnapshot = await getDoc(usageRef);
+      
+      if (usageSnapshot.exists()) {
+        const totalMessages = usageSnapshot.data().total_messages || 0;
+        setMessageUsage(totalMessages);
+      } else {
+        setMessageUsage(0);
+      }
+    }
     setPhoneCount(data.phoneCount);
     if(data.phoneCount >=2){
       setMessageMode('phone1');
@@ -1985,15 +1994,29 @@ async function fetchConfigFromDatabase() {
   }, [contacts, userRole, userData?.name]);
 
   const getTimestamp = (timestamp: any): number => {
+    // If timestamp is missing, return 0 to put it at the bottom
+    if (!timestamp) return 0;
+  
+    // If timestamp is already a number
     if (typeof timestamp === 'number') {
+      // Convert to milliseconds if needed (check if it's in seconds)
       return timestamp < 10000000000 ? timestamp * 1000 : timestamp;
-    } else if (typeof timestamp === 'object' && timestamp.seconds) {
-      return timestamp.seconds * 1000;
-    } else if (typeof timestamp === 'string') {
-      return new Date(timestamp).getTime();
-    } else {
-      return 0;
     }
+  
+    // If timestamp is a Firestore timestamp
+    if (timestamp?.seconds) {
+      return timestamp.seconds * 1000;
+    }
+  
+    // If timestamp is an ISO string or other date format
+    if (typeof timestamp === 'string') {
+      const parsed = Date.parse(timestamp);
+      return isNaN(parsed) ? 0 : parsed;
+    }
+  
+    // Default case - invalid timestamp
+    console.warn('Invalid timestamp format:', timestamp);
+    return 0;
   };
 
 const fetchContactsBackground = async (whapiToken: string, locationId: string, ghlToken: string, user_name: string, role: string, userEmail: string | null | undefined) => {
@@ -2058,14 +2081,73 @@ const fetchContactsBackground = async (whapiToken: string, locationId: string, g
 
     await Promise.all(updatePromises);
 
-    // Sort contacts by pinned status and last_message timestamp
+    console.log('Before sorting - First 5 contacts:', allContacts.slice(0, 5).map(c => ({
+      id: c.chat_id,
+      unread: c.unreadCount,
+      timestamp: c.last_message?.timestamp,
+      pinned: c.pinned
+    })));
+
     allContacts.sort((a, b) => {
+      // First priority: pinned status
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
       
-      const timestampA = getTimestamp(a.last_message?.timestamp || a.last_message?.createdAt);
-      const timestampB = getTimestamp(b.last_message?.timestamp || b.last_message?.createdAt);
+      // Second priority: unread messages
+      if (a.unreadCount && !b.unreadCount) return -1;
+      if (!a.unreadCount && b.unreadCount) return 1;
+      
+      // Get timestamps with validation
+      let timestampA = a.last_message?.timestamp;
+      let timestampB = b.last_message?.timestamp;
+
+      // Convert string timestamps to numbers if needed
+      if (typeof timestampA === 'string') timestampA = parseInt(timestampA, 10);
+      if (typeof timestampB === 'string') timestampB = parseInt(timestampB, 10);
+
+      // Ensure timestamps are in seconds
+      if (timestampA && timestampA > 9999999999) timestampA = Math.floor(timestampA / 1000);
+      if (timestampB && timestampB > 9999999999) timestampB = Math.floor(timestampB / 1000);
+
+      // If either timestamp is invalid, use 0
+      timestampA = timestampA || 0;
+      timestampB = timestampB || 0;
+
+      // Sort descending (newest first)
       return timestampB - timestampA;
+    });
+
+    // Add debugging after sorting
+    console.log('After sorting - First 5 contacts:', allContacts.slice(0, 5).map(c => ({
+      id: c.chat_id,
+      unread: c.unreadCount,
+      timestamp: c.last_message?.timestamp,
+      pinned: c.pinned
+    })));
+
+    // Before setting contacts, ensure all timestamps are in the correct format
+    allContacts = allContacts.map(contact => {
+      if (!contact.last_message) return contact;
+
+      let timestamp = contact.last_message.timestamp;
+      
+      // Convert string timestamps to numbers
+      if (typeof timestamp === 'string') {
+        timestamp = parseInt(timestamp, 10);
+      }
+
+      // Ensure timestamp is in seconds
+      if (timestamp && timestamp > 9999999999) {
+        timestamp = Math.floor(timestamp / 1000);
+      }
+
+      return {
+        ...contact,
+        last_message: {
+          ...contact.last_message,
+          timestamp
+        }
+      };
     });
 
     console.log('Active tag:', activeTags[0]);
@@ -2088,6 +2170,8 @@ const fetchContactsBackground = async (whapiToken: string, locationId: string, g
     console.error('Error fetching contacts:', error);
   }
 };
+
+
 
 useEffect(() => {
   const fetchUserRole = async () => {
@@ -2692,23 +2776,8 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
     }
     const dataUser = docUserSnapshot.data();
     companyId = dataUser.companyId;
-    let phoneIndex;
-    if (dataUser?.phone !== undefined) {
-        if (dataUser.phone === 0) {
-            // Handle case for phone index 0
-            phoneIndex = 0;
-        } else if (dataUser.phone === -1) {
-            // Handle case for phone index -1
-            phoneIndex = 0;
-        } else {
-            // Handle other cases
-            console.log(`User phone index is: ${dataUser.phone}`);
-            phoneIndex = dataUser.phone;
-        }
-    } else {
-        console.error('User phone is not defined');
-        phoneIndex = 0; // Default value if phone is not defined
-    }
+  // Use contact's phoneIndex instead of user's phone
+  let phoneIndex = selectedContact?.phoneIndex ?? 0;
     
     const userName = dataUser.name || dataUser.email || ''; // Get the user's name
     const docRef = doc(firestore, 'companies', companyId);
@@ -2737,14 +2806,14 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
             userName: userName
           }),
         });
-  
-   
-  
+    
         if (!response.ok) {
           throw new Error('Failed to send message');
         }
         const now = new Date();
         const data = await response.json();
+        console.log('response:', data);
+        
         // Update the local state
         setContacts(prevContacts => 
           prevContacts.map(contact => 
@@ -2753,20 +2822,72 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
               : contact
           )
         );
-        const contactRef = doc(firestore, `companies/${companyId}/contacts`, selectedContact.id);
-        const updatedLastMessage: Message = {
-          text: { body: newMessage },
-          chat_id: selectedContact.chat_id || '',
-          timestamp:  Math.floor(now.getTime() / 1000),
-          id: selectedContact.last_message?.id || `temp_${now.getTime()}`,
-          from_me: true,
-          type: 'text',
-          phoneIndex: phoneIndex,
-        };
-        
-        await updateDoc(contactRef, {
-          last_message: updatedLastMessage
-        });
+    
+        // Add "stop bot" tag for companyId 0123
+        if (companyId === '0123' && selectedContact?.id) {
+          const contactRef = doc(firestore, `companies/${companyId}/contacts`, selectedContact.id);
+          
+          // Get current contact data
+          const contactSnapshot = await getDoc(contactRef);
+          if (contactSnapshot.exists()) {
+            const currentTags = contactSnapshot.data().tags || [];
+            
+            // Only add "stop bot" if it's not already present
+            if (!currentTags.includes('stop bot')) {
+              await updateDoc(contactRef, {
+                tags: arrayUnion('stop bot'),
+                last_message: {
+                  text: { body: newMessage },
+                  chat_id: selectedContact.chat_id || '',
+                  timestamp: Math.floor(Date.now() / 1000),
+                  id: selectedContact.last_message?.id || `temp_${now.getTime()}`,
+                  from_me: true,
+                  type: 'text',
+                  phoneIndex: phoneIndex,
+                }
+              });
+              
+              // Update local state to reflect the new tag
+              setContacts(prevContacts =>
+                prevContacts.map(contact =>
+                  contact.id === selectedContact.id
+                    ? { ...contact, tags: [...(contact.tags || []), 'stop bot'] }
+                    : contact
+                )
+              );
+            } else {
+              // If "stop bot" tag already exists, just update the last message
+              await updateDoc(contactRef, {
+                last_message: {
+                  text: { body: newMessage },
+                  chat_id: selectedContact.chat_id || '',
+                  timestamp: Math.floor(Date.now() / 1000),
+                  id: selectedContact.last_message?.id || `temp_${now.getTime()}`,
+                  from_me: true,
+                  type: 'text',
+                  phoneIndex: phoneIndex,
+                }
+              });
+            }
+          }
+        } else {
+          // Original update for non-0123 companies
+          const contactRef = doc(firestore, `companies/${companyId}/contacts`, selectedContact.id);
+          const updatedLastMessage: Message = {
+            text: { body: newMessage },
+            chat_id: selectedContact.chat_id || '',
+            timestamp: Math.floor(Date.now() / 1000),
+            id: selectedContact.last_message?.id || `temp_${now.getTime()}`,
+            from_me: true,
+            type: 'text',
+            phoneIndex: phoneIndex,
+          };
+          
+          await updateDoc(contactRef, {
+            last_message: updatedLastMessage
+          });
+        }
+    
         console.log('Message sent successfully:', data);
         fetchMessagesBackground(selectedChatId!, data2.apiToken);
       } catch (error) {
@@ -3180,100 +3301,174 @@ const pauseFiveDaysFollowUp = (contact: Contact) => {
   handleBinaTag('pauseFollowUp', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
 };
 
+const handleAddTagToSelectedContacts = async (tagName: string, contact: Contact) => {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      console.error('No authenticated user');
+      return;
+    }
 
+    const docUserRef = doc(firestore, 'user', user.email!);
+    const docUserSnapshot = await getDoc(docUserRef);
+    if (!docUserSnapshot.exists()) {
+      console.error('No such document for user!');
+      return;
+    }
+    const userData = docUserSnapshot.data();
+    const companyId = userData.companyId;
 
-  const handleAddTagToSelectedContacts = async (tagName: string, contact: Contact) => {
-    try {
-      const user = auth.currentUser;
-      if (!user) {
-        console.error('No authenticated user');
-        return;
-      }
-  
-      const docUserRef = doc(firestore, 'user', user.email!);
-      const docUserSnapshot = await getDoc(docUserRef);
-      if (!docUserSnapshot.exists()) {
-        console.error('No such document for user!');
-        return;
-      }
-      const userData = docUserSnapshot.data();
-      const companyId = userData.companyId;
-  
-      console.log(`Adding tag: ${tagName} to contact: ${contact.id}`);
-  
-      // Update contact's tags
-      const contactRef = doc(firestore, 'companies', companyId, 'contacts', contact.id!);
-      const contactDoc = await getDoc(contactRef);
-  
-      if (!contactDoc.exists()) {
-        console.error(`Contact document does not exist: ${contact.id}`);
-        toast.error(`Failed to add tag: Contact not found`);
-        return;
-      }
+    // Special handling for company '0123'
+    if (companyId === '0123') {
+      // Check if the new tag is an employee name
+      const isNewTagEmployee = employeeList.some(emp => emp.name === tagName);
+      
+      if (isNewTagEmployee) {
+        const contactRef = doc(firestore, 'companies', companyId, 'contacts', contact.id!);
+        const contactDoc = await getDoc(contactRef);
 
-      const currentTags = contactDoc.data().tags || [];
+        if (!contactDoc.exists()) {
+          console.error(`Contact document does not exist: ${contact.id}`);
+          toast.error(`Failed to add tag: Contact not found`);
+          return;
+        }
 
-      if (!currentTags.includes(tagName)) {
+        const currentTags = contactDoc.data().tags || [];
+        // Find and remove any existing employee tags
+        const updatedTags = currentTags.filter((tag: string) => !employeeList.some(emp => emp.name === tag));
+        
+        // Add the new employee tag
+        updatedTags.push(tagName);
+
+        // Update Firestore with the new tags
         await updateDoc(contactRef, {
-          tags: arrayUnion(tagName)
+          tags: updatedTags
         });
-  
+
         // Update local state
         setContacts(prevContacts =>
           prevContacts.map(c =>
             c.id === contact.id
-              ? { ...c, tags: [...(c.tags || []), tagName] }
+              ? { ...c, tags: updatedTags }
               : c
           )
         );
 
-  
-        console.log(`Tag ${tagName} added to contact ${contact.id}`);
-        toast.success(`Tag "${tagName}" added to contact`);
+        console.log(`Employee tag updated to ${tagName} for contact ${contact.id}`);
+        toast.success(`Contact reassigned to ${tagName}`);
 
-        // Handle specific tags
-        if (tagName === 'Before Quote Follow Up') {
-          addTagBeforeQuote(contact);
-        } else if (tagName === 'Before Quote Follow Up EN') {
-          addTagBeforeQuoteEnglish(contact);
-        } else if (tagName === 'Before Quote Follow Up BM') {
-          addTagBeforeQuoteMalay(contact);
-        } else if (tagName === 'Before Quote Follow Up CN') {
-          addTagBeforeQuoteChinese(contact);
-        } else if (tagName === 'After Quote Follow Up') {
-          addTagAfterQuote(contact);
-        } else if (tagName === 'After Quote Follow Up EN') {
-          addTagAfterQuoteEnglish(contact);
-        } else if (tagName === 'After Quote Follow Up CN') {
-          addTagAfterQuoteChinese(contact);
-        } else if (tagName === 'After Quote Follow Up BM') {
-          addTagAfterQuoteMalay(contact);
-        } else if (tagName === '5 Days Follow Up EN') {
-          fiveDaysFollowUpEnglish(contact);
-        } else if (tagName === '5 Days Follow Up CN') {
-          fiveDaysFollowUpChinese(contact);
-        } else if (tagName === '5 Days Follow Up BM') {
-          fiveDaysFollowUpMalay(contact);
-        } else if (tagName === 'Pause Follow Up') {
-          pauseFiveDaysFollowUp(contact);
-        } else {
-          // Check if the tag is an employee's name and send assignment notification
-          const employee = employeeList.find(emp => emp.name === tagName);
-          if (employee) {
-            await sendAssignmentNotification(tagName, contact);
-          }
-        }
-
-      } else {
-        console.log(`Tag ${tagName} already exists for contact ${contact.id}`);
-        toast.info(`Tag "${tagName}" already exists for this contact`);
+        // Send assignment notification for the new employee
+        await sendAssignmentNotification(tagName, contact);
+        return;
       }
-  
-    } catch (error) {
-      console.error('Error adding tag to contact:', error);
-      toast.error('Failed to add tag to contact');
     }
-  };
+
+    // Check if tag is a trigger tag by looking up follow-up templates
+    const templatesRef = collection(firestore, 'companies', companyId, 'followUpTemplates');
+    const templatesSnapshot = await getDocs(templatesRef);
+    
+    let matchingTemplate: any = null;
+    templatesSnapshot.forEach(doc => {
+      const template = doc.data();
+      if (template.triggerTags?.includes(tagName) && template.status === 'active') {
+        matchingTemplate = { 
+          id: doc.id, 
+          ...template 
+        };
+      }
+    });
+
+    // Update contact's tags
+    const contactRef = doc(firestore, 'companies', companyId, 'contacts', contact.id!);
+    const contactDoc = await getDoc(contactRef);
+
+    if (!contactDoc.exists()) {
+      console.error(`Contact document does not exist: ${contact.id}`);
+      toast.error(`Failed to add tag: Contact not found`);
+      return;
+    }
+
+    const currentTags = contactDoc.data().tags || [];
+
+    if (!currentTags.includes(tagName)) {
+      await updateDoc(contactRef, {
+        tags: arrayUnion(tagName)
+      });
+
+      // Update local state
+      setContacts(prevContacts =>
+        prevContacts.map(c =>
+          c.id === contact.id
+            ? { ...c, tags: [...(c.tags || []), tagName] }
+            : c
+        )
+      );
+
+      console.log(`Tag ${tagName} added to contact ${contact.id}`);
+      toast.success(`Tag "${tagName}" added to contact`);
+
+      // If this is a trigger tag, call the follow-up API
+      if (matchingTemplate) {
+        try {
+          const response = await fetch('https://mighty-dane-newly.ngrok-free.app/api/tag/followup', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              requestType: 'startTemplate',
+              phone: contact.phone,
+              first_name: contact.contactName || contact.firstName || contact.phone,
+              phoneIndex: contact.phoneIndex || 0,
+              templateId: matchingTemplate.id,
+              idSubstring: companyId
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`Follow-up API error: ${response.statusText}`);
+          }
+
+          console.log('Follow-up template started successfully');
+          toast.success('Follow-up sequence started');
+        } catch (error) {
+          console.error('Error starting follow-up sequence:', error);
+          toast.error('Failed to start follow-up sequence');
+        }
+      }
+
+      // Handle specific tags
+      if (tagName === 'Before Quote Follow Up') {
+        addTagBeforeQuote(contact);
+      } else if (tagName === 'Before Quote Follow Up EN') {
+        addTagBeforeQuoteEnglish(contact);
+      } else if (tagName === 'Before Quote Follow Up BM') {
+        addTagBeforeQuoteMalay(contact);
+      } else if (tagName === 'Before Quote Follow Up CN') {
+        addTagBeforeQuoteChinese(contact);
+      } else if (tagName === 'Pause Follow Up') {
+        pauseFiveDaysFollowUp(contact);
+      } else {
+        // Check if the tag is an employee's name and send assignment notification
+        const employee = employeeList.find(emp => emp.name === tagName);
+        if (employee) {
+          await sendAssignmentNotification(tagName, contact);
+        }
+      }
+
+    } else {
+      console.log(`Tag ${tagName} already exists for contact ${contact.id}`);
+      toast.info(`Tag "${tagName}" already exists for this contact`);
+    }
+
+  } catch (error) {
+    console.error('Error adding tag to contact:', error);
+    toast.error('Failed to add tag to contact');
+  }
+};
+
+
+  
 
 // Add this function to handle adding notifications
 const addNotificationToUser = async (companyId: string, employeeName: string, notificationData: any) => {
@@ -3407,7 +3602,7 @@ const sendAssignmentNotification = async (assignedEmployeeName: string, contact:
 
     // Send notification to assigned employee
     if (assignedEmployee.phoneNumber) {
-      let employeeMessage = `Hello ${assignedEmployee.name}, a new contact has been assigned to you:\n\nName: ${contact.contactName || contact.firstName || 'N/A'}\nPhone: ${contact.phone}\n\nPlease follow up with them as soon as possible.`;
+      let employeeMessage = `Hello ${assignedEmployee.name}, a new contact has been assigned to you:\n\nName: ${contact.contactName || contact.firstName || 'N/A'}\nPhone: ${contact.phone}\n\nKindly login to https://web.jutasoftware.co/login \n\nThank you.\n\nJuta Teknologi`;
       if(companyId == '042'){
         employeeMessage = `Hi ${assignedEmployee.employeeId || assignedEmployee.phoneNumber} ${assignedEmployee.name}.\n\nAnda telah diberi satu prospek baharu\n\nSila masuk ke https://zahintravel.chat/login untuk melihat perbualan di antara Zahin Travel dan prospek.\n\nTerima kasih.\n\nIkhlas,\nZahin Travel Sdn. Bhd. (1276808-W)\nNo. Lesen Pelancongan: KPK/LN 9159\nNo. MATTA: MA6018\n\n#zahintravel - Nikmati setiap detik..\n#diyakini\n#responsif\n#budibahasa`;
       }
@@ -3733,20 +3928,28 @@ const sortContacts = (contacts: Contact[]) => {
     userPhoneIndex = 0;
   }
   console.log("userPhoneIndex", userPhoneIndex);
+  
   // Filter by user's selected phone first
   if (userPhoneIndex !== -1) {
-    fil = fil.filter(contact => contact.phoneIndex === userPhoneIndex);
+    fil = fil.filter(contact => 
+      contact.phoneIndexes 
+        ? contact.phoneIndexes.includes(userPhoneIndex)
+        : contact.phoneIndex === userPhoneIndex
+    );
   }
-
+  
   // Check if the active tag matches any of the phone names
   const phoneIndex = Object.entries(phoneNames).findIndex(([_, name]) => 
     name.toLowerCase() === activeTag
   );
-
+  
   if (phoneIndex !== -1) {
-    fil = fil.filter(contact => contact.phoneIndex === phoneIndex);
+    fil = fil.filter(contact => 
+      contact.phoneIndexes 
+        ? contact.phoneIndexes.includes(phoneIndex)
+        : contact.phoneIndex === phoneIndex
+    );
   }
-
   // Apply search filter
   if (searchQuery.trim() !== '') {
     fil = fil.filter((contact) =>
@@ -3958,7 +4161,11 @@ const sortContacts = (contacts: Contact[]) => {
     if (userData?.phone !== undefined && userData.phone !== -1) {
       const userPhoneIndex = parseInt(userData.phone, 10);
       setMessageMode(`phone${userPhoneIndex + 1}`);
-      filteredContacts = filteredContacts.filter(contact => contact.phoneIndex === userPhoneIndex);
+      filteredContacts = filteredContacts.filter(contact => 
+        contact.phoneIndexes 
+          ? contact.phoneIndexes.includes(userPhoneIndex)
+          : contact.phoneIndex === userPhoneIndex
+      );
       console.log('After phone filter:', filteredContacts.length);
     }
   
@@ -4417,7 +4624,6 @@ const sortContacts = (contacts: Contact[]) => {
     return downloadURL;
   };
   
-  
   const sendImageMessage = async (chatId: string, imageUrl: string, caption?: string) => {
     try {
       console.log(`Sending image message. ChatId: ${chatId}`);
@@ -4431,10 +4637,13 @@ const sortContacts = (contacts: Contact[]) => {
   
       const userData = docUserSnapshot.data();
       const companyId = userData.companyId;
-      const phoneIndex = userData.phone || 0; // Use the same approach as in sendMessage
-      const userName = userData.name || userData.email || '';
       
-      console.log(`Using phoneIndex: ${phoneIndex}`);
+      // Use selectedContact's phoneIndex
+      if (!selectedContact) throw new Error('No contact selected');
+      const phoneIndex = selectedContact.phoneIndex ?? 0;
+      console.log(`Using contact's phoneIndex: ${phoneIndex}`);
+      
+      const userName = userData.name || userData.email || '';
   
       const docRef = doc(firestore, 'companies', companyId);
       const docSnapshot = await getDoc(docRef);
@@ -4473,7 +4682,6 @@ const sortContacts = (contacts: Contact[]) => {
       throw error;
     }
   };
-  
   const sendDocumentMessage = async (chatId: string, documentUrl: string, mimeType: string, fileName: string, caption?: string) => {
     try {
       console.log(`Sending document message. ChatId: ${chatId}`);
@@ -4487,10 +4695,13 @@ const sortContacts = (contacts: Contact[]) => {
   
       const userData = docUserSnapshot.data();
       const companyId = userData.companyId;
-      const phoneIndex = userData.phone || 0; // Use the same approach as in sendMessage
-      const userName = userData.name || userData.email || '';
       
-      console.log(`Using phoneIndex: ${phoneIndex}`);
+      // Use selectedContact's phoneIndex
+      if (!selectedContact) throw new Error('No contact selected');
+      const phoneIndex = selectedContact.phoneIndex ?? 0;
+      console.log(`Using contact's phoneIndex: ${phoneIndex}`);
+      
+      const userName = userData.name || userData.email || '';
   
       const docRef = doc(firestore, 'companies', companyId);
       const docSnapshot = await getDoc(docRef);
@@ -4686,7 +4897,7 @@ const sortContacts = (contacts: Contact[]) => {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
-
+  
   const handleRemoveTag = async (contactId: string, tagName: string) => {
     try {
       const user = auth.currentUser;
@@ -4699,6 +4910,21 @@ const sortContacts = (contacts: Contact[]) => {
       const userData = docUserSnapshot.data();
       const companyId = userData.companyId;
   
+      // Check if tag is a trigger tag
+      const templatesRef = collection(firestore, 'companies', companyId, 'followUpTemplates');
+      const templatesSnapshot = await getDocs(templatesRef);
+      
+      let matchingTemplate: any = null;
+      templatesSnapshot.forEach(doc => {
+        const template = doc.data();
+        if (template.triggerTags?.includes(tagName) && template.status === 'active') {
+          matchingTemplate = { 
+            id: doc.id, 
+            ...template 
+          };
+        }
+      });
+  
       // Update Firestore
       const contactRef = doc(firestore, 'companies', companyId, 'contacts', contactId);
       const contactSnapshot = await getDoc(contactRef);
@@ -4706,6 +4932,36 @@ const sortContacts = (contacts: Contact[]) => {
       await updateDoc(contactRef, {
         tags: arrayRemove(tagName)
       });
+  
+      // If this was a trigger tag, call the follow-up API to remove the template
+      if (matchingTemplate) {
+        try {
+          const response = await fetch('https://mighty-dane-newly.ngrok-free.app/api/tag/followup', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              requestType: 'removeTemplate',
+              phone: contact.phone,
+              first_name: contact.contactName || contact.firstName || contact.phone,
+              phoneIndex: contact.phoneIndex || 0,
+              templateId: matchingTemplate.id,
+              idSubstring: companyId
+            }),
+          });
+  
+          if (!response.ok) {
+            throw new Error(`Follow-up API error: ${response.statusText}`);
+          }
+  
+          console.log('Follow-up template removed successfully');
+          toast.success('Follow-up sequence stopped');
+        } catch (error) {
+          console.error('Error stopping follow-up sequence:', error);
+          toast.error('Failed to stop follow-up sequence');
+        }
+      }
   
       // Check if the removed tag is an employee name
       const isEmployeeTag = employeeList.some(employee => employee.name.toLowerCase() === tagName.toLowerCase());
@@ -4749,29 +5005,15 @@ const sortContacts = (contacts: Contact[]) => {
       } else if (tagName === 'Before Quote Follow Up BM') {
         removeTagBeforeQuote(contact);
       } else if (tagName === 'Before Quote Follow Up CN') {
-        removeTagBeforeQuote(contact);
-      } else if (tagName === 'After Quote Follow Up') {
-        removeTagAfterQuote(contact);
-      } else if (tagName === 'After Quote Follow Up EN') {
-        removeTagAfterQuote(contact);
-      } else if (tagName === 'After Quote Follow Up CN') {
-        removeTagAfterQuote(contact);
-      } else if (tagName === 'After Quote Follow Up BM') {
-        removeTagAfterQuote(contact);
-      } else if (tagName === '5 Days Follow Up EN') {
-        removeTag5Days(contact);
-      } else if (tagName === '5 Days Follow Up CN') {
-        removeTag5Days(contact);
-      } else if (tagName === '5 Days Follow Up BM') {
-        removeTag5Days(contact);
+        removeTagBeforeQuote(contact); 
       } else if (tagName === 'Pause Follow Up') {
         removeTagPause(contact);
       } else if (tagName === 'Edward Follow Up') {
         removeTagEdward(contact);
       }
+  
       // Update state
       setContacts(prevContacts => {
-        // For all roles, just update the tags
         return prevContacts.map(contact =>
           contact.id === contactId
             ? { ...contact, tags: contact.tags!.filter(tag => tag !== tagName), assignedTo: undefined }
@@ -4795,6 +5037,7 @@ const sortContacts = (contacts: Contact[]) => {
       toast.error('Failed to remove tag.');
     }
   };
+
 
   const adjustHeight = (textarea: HTMLTextAreaElement, reset = false) => {
     if (reset) {
@@ -4827,36 +5070,47 @@ const sortContacts = (contacts: Contact[]) => {
   
   const handleEditMessage = async () => {
     if (!editedMessageText.trim() || !editingMessage) return;
-    
+
     try {
+      const messageTimestamp = new Date(editingMessage.timestamp).getTime();
+      const currentTime = new Date().getTime();
+      const diffInMinutes = (currentTime - messageTimestamp) / (1000 * 60);
+
+      if (diffInMinutes > 15) {
+        toast.error('Message cannot be edited as it has been more than 15 minutes since it was sent.');
+        return;
+      }
+
       const user = auth.currentUser;
       if (!user) throw new Error('No authenticated user');
-  
+
       const docUserRef = doc(firestore, 'user', user.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) throw new Error('No such document for user');
-  
+
       const userData = docUserSnapshot.data();
       const companyId = userData.companyId;
       const chatId = editingMessage.id.split('_')[1];
-      console.log('editing this chat id', chatId)
+      console.log('editing this chat id', chatId);
       const response = await axios.put(
         `https://mighty-dane-newly.ngrok-free.app/api/v2/messages/${companyId}/${chatId}/${editingMessage.id}`,
-        { newMessage: editedMessageText }
+        { newMessage: editedMessageText,
+          phoneIndex: userData.phoneIndex || 0
+         }
       );
-  
+
       if (response.data.success) {
         toast.success('Message edited successfully');
-        
+
         // Update the message locally
-        setMessages(prevMessages => 
-          prevMessages.map(msg => 
-            msg.id === editingMessage.id 
+        setMessages(prevMessages =>
+          prevMessages.map(msg =>
+            msg.id === editingMessage.id
               ? { ...msg, text: { ...msg.text, body: editedMessageText }, edited: true }
               : msg
           )
         );
-  
+
         setEditingMessage(null);
         setEditedMessageText("");
       } else {
@@ -4996,15 +5250,10 @@ const sortContacts = (contacts: Contact[]) => {
     checkBotsStatus();
   }, [contacts]);
 
-
- 
-
-
-  const toggleBot = async () => {
-    if (userRole === "3") {
-      toast.error("You don't have permission to control the bot.");
-      return;
-    }
+  const [companyStopBot, setCompanyStopBot] = useState(false);
+// Update the useEffect that fetches company stop bot status
+useEffect(() => {
+  const fetchCompanyStopBot = async () => {
     try {
       const user = auth.currentUser;
       if (!user) return;
@@ -5015,19 +5264,71 @@ const sortContacts = (contacts: Contact[]) => {
 
       const userData = docUserSnapshot.data();
       const companyId = userData.companyId;
+      const currentPhoneIndex = userData.phone || 0;
 
       const companyRef = doc(firestore, 'companies', companyId);
-      await updateDoc(companyRef, {
-        stopbot: !stopbot
-      });
-      setStopbot(!stopbot);
-      toast.success(`Bot ${stopbot ? 'activated' : 'deactivated'} successfully!`);
+      const companySnapshot = await getDoc(companyRef);
+      if (!companySnapshot.exists()) return;
+
+      const companyData = companySnapshot.data();
+      const stopbots = companyData.stopbots || {};
+      setCompanyStopBot(stopbots[currentPhoneIndex] || false);
     } catch (error) {
-      console.error('Error toggling bot:', error);
-      toast.error('Failed to toggle bot status.');
+      console.error('Error fetching company stopbot status:', error);
     }
   };
 
+  fetchCompanyStopBot();
+}, [userData?.phone]); // Add userData?.phone as dependency
+
+const toggleBot = async () => {
+  try {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const docUserRef = doc(firestore, 'user', user.email!);
+    const docUserSnapshot = await getDoc(docUserRef);
+    if (!docUserSnapshot.exists()) return;
+
+    const userData = docUserSnapshot.data();
+    const companyId = userData.companyId;
+    const currentPhoneIndex = userData.phone || 0;
+
+    const companyRef = doc(firestore, 'companies', companyId);
+    const companySnapshot = await getDoc(companyRef);
+    if (!companySnapshot.exists()) return;
+
+    const companyData = companySnapshot.data();
+    
+    // Initialize or get existing stopbots object
+    const currentStopbots = companyData.stopbots || {};
+    
+    if (currentStopbots[currentPhoneIndex]) {
+      // If bot is currently stopped (true), remove the entry to enable it
+      const { [currentPhoneIndex]: _, ...newStopbots } = currentStopbots;
+      await updateDoc(companyRef, {
+        stopbots: newStopbots
+      });
+      setCompanyStopBot(false);
+      toast.success(`Bot for ${phoneNames[currentPhoneIndex]} enabled successfully`);
+    } else {
+      // If bot is currently running (no entry or false), add entry with true to disable it
+      const newStopbots = {
+        ...currentStopbots,
+        [currentPhoneIndex]: true
+      };
+      await updateDoc(companyRef, {
+        stopbots: newStopbots
+      });
+      setCompanyStopBot(true);
+      toast.success(`Bot for ${phoneNames[currentPhoneIndex]} disabled successfully`);
+    }
+
+  } catch (error) {
+    console.error('Error toggling bot status:', error);
+    toast.error('Failed to toggle bot status');
+  }
+};
 
   const { show } = useContextMenu({
     id: 'contact-context-menu',
@@ -5639,6 +5940,28 @@ console.log(prompt);
           )}
   
         </div>
+        {companyPlan === 'enterprise' && (
+  <div className="px-4 py-2">
+    <div className="flex items-center justify-between mb-1">
+      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+        Monthly Message Usage
+      </span>
+      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+        {messageUsage}/500
+      </span>
+    </div>
+    <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+      <div 
+        className={`h-2.5 rounded-full ${
+          messageUsage > 450 ? 'bg-red-600' : 
+          messageUsage > 350 ? 'bg-yellow-400' : 
+          'bg-green-600'
+        }`}
+        style={{ width: `${Math.min((messageUsage / 500) * 100, 100)}%` }}
+      ></div>
+    </div>
+  </div>
+)}
         <div className="sticky top-20 bg-gray-100 dark:bg-gray-900 p-2">
           <div className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-900">
             {notifications.length > 0 && <NotificationPopup notifications={notifications} />}
@@ -5956,6 +6279,7 @@ console.log(prompt);
 </Dialog>
 
     <div className="flex justify-end space-x-2 w-full mr-2">
+      
     {(
       // Replace or update the existing search input section
       <div className="relative flex-grow">
@@ -6040,15 +6364,15 @@ console.log(prompt);
     {isAssistantAvailable && (
       <button 
         className={`flex items-center justify-start p-2 !box ${
-          stopbot ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
+          companyStopBot ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
         } ${userRole === "3" ? 'opacity-50 cursor-not-allowed' : ''}`} 
         onClick={toggleBot}
         disabled={userRole === "3"}
       >
         <Lucide 
-          icon={stopbot ? 'PowerOff' : 'Power'} 
+          icon={companyStopBot ? 'PowerOff' : 'Power'} 
           className={`w-5 h-5 ${
-            stopbot ? 'text-red-500' : 'text-green-500'
+            companyStopBot ? 'text-red-500' : 'text-green-500'
           }`}
         />                
       </button>
@@ -6293,9 +6617,9 @@ console.log(prompt);
                     </svg>
                   )}
                   </button>
-                    {uniqueTags.length > 0 && (
+                    {uniqueTags.filter(tag => tag.toLowerCase() !== 'stop bot').length > 0 && (
                       <Tippy
-                        content={uniqueTags.join(', ')}
+                        content={uniqueTags.filter(tag => tag.toLowerCase() !== 'stop bot').map(tag => tag.charAt(0).toUpperCase() + tag.slice(1)).join(', ')}
                         options={{ 
                           interactive: true,
                           appendTo: () => document.body
@@ -6303,7 +6627,7 @@ console.log(prompt);
                       >
                         <span className="bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-200 text-xs font-semibold mr-1 px-2.5 py-0.5 rounded-full cursor-pointer">
                           <Lucide icon="Tag" className="w-4 h-4 inline-block" />
-                          <span className="ml-1">{uniqueTags.length}</span>
+                          <span className="ml-1">{uniqueTags.filter(tag => tag.toLowerCase() !== 'stop bot').length}</span>
                         </span>
                       </Tippy>
                     )}
@@ -6320,7 +6644,7 @@ console.log(prompt);
                       >
                         <span className="bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200 text-xs font-semibold mr-1 px-2.5 py-0.5 rounded-full cursor-pointer">
                           <Lucide icon="Users" className="w-4 h-4 inline-block" />
-                          <span className="ml-1 text-xxs">
+                          <span className="ml-1 text-xxs capitalize">
                             {employeeTags.length === 1 
                               ? (employeeList.find(e => e.name.toLowerCase() === employeeTags[0].toLowerCase())?.employeeId || 
                                  (employeeTags[0].length > 8 ? employeeTags[0].slice(0, 6) : employeeTags[0]))
@@ -6735,7 +7059,7 @@ console.log(prompt);
                       onMouseEnter={() => setHoveredMessageId(message.id)}
                       onMouseLeave={() => setHoveredMessageId(null)}
                     >
-                      {hoveredMessageId === message.id && (
+                      {/* {hoveredMessageId === message.id && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -6746,7 +7070,7 @@ console.log(prompt);
                         >
                           <Lucide icon="Smile" className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                         </button>
-                      )}
+                      )} */}
                       {message.isPrivateNote && (
                         <div className="flex items-center mb-1">
                           <Lock size={16} className="mr-1" />
@@ -6766,15 +7090,37 @@ console.log(prompt);
                           className="p-2 mb-2 rounded bg-gray-200 dark:bg-gray-800 cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-700"
                           onClick={() => {
                             const quotedMessageId = message.text?.context?.quoted_message_id;
+                            const quotedContent = message.text?.context?.quoted_content?.body;
+
+                            // First try by ID if available
                             if (quotedMessageId) {
                               scrollToMessage(quotedMessageId);
-                              // Optionally add visual feedback
                               const element = messageListRef.current?.querySelector(`[data-message-id="${quotedMessageId}"]`);
                               if (element) {
                                 element.classList.add('highlight-message');
                                 setTimeout(() => {
                                   element.classList.remove('highlight-message');
                                 }, 2000);
+                                return;
+                              }
+                            }
+
+                            // If ID not found or no match, search by content
+                            if (quotedContent) {
+                              const matchingMessage = messages.find(msg => 
+                                msg.type === 'text' && 
+                                msg.text?.body === quotedContent
+                              );
+
+                              if (matchingMessage) {
+                                scrollToMessage(matchingMessage.id);
+                                const element = messageListRef.current?.querySelector(`[data-message-id="${matchingMessage.id}"]`);
+                                if (element) {
+                                  element.classList.add('highlight-message');
+                                  setTimeout(() => {
+                                    element.classList.remove('highlight-message');
+                                  }, 2000);
+                                }
                               }
                             }
                           }}
@@ -7454,7 +7800,9 @@ console.log(prompt);
                           if (reply.image) {
                             const imageFile = new File([reply.image], "image.png", { type: "image/png" });
                             const imageUrl = URL.createObjectURL(imageFile);
-                            setPastedImageUrl(imageUrl);
+                            console.log("reply image:", JSON.stringify(reply, null, 2));
+                            setPastedImageUrl(reply.image);
+                            setDocumentCaption(reply.text);
                             setImageModalOpen2(true);
                           }
                           if (reply.document) {
@@ -7571,8 +7919,8 @@ console.log(prompt);
   ) : (
     <div className="hidden md:flex flex-col w-full h-full bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 items-center justify-center">
       <div className="flex flex-col items-center justify-center p-8 rounded-lg shadow-lg bg-gray-100 dark:bg-gray-700">
-        <Lucide icon="MessageSquare" className="w-16 h-16 text-blue-500 dark:text-blue-400 mb-4" />
-        <p className="text-gray-700 dark:text-gray-300 text-lg text-center mb-6">Select a chat to start messaging</p>
+        <Lucide icon="MessageSquare" className="w-16 h-16 text-black dark:text-white mb-4" />
+        <p className="text-black dark:text-white text-lg text-center mb-6">Select a chat to start messaging</p>
         <button
           onClick={openNewChatModal}
           className="bg-primary hover:bg-primary-dark text-white font-bold py-2 px-4 rounded transition duration-200"
@@ -7662,6 +8010,7 @@ console.log(prompt);
     </span>
   )}
 </div>
+
           <div className="flex flex-col">
             {isEditing ? (
               <div className="flex items-center">
@@ -7733,8 +8082,49 @@ console.log(prompt);
               )}
             </div>
           </div>
+          
           <div className="p-4">
+              {/* Phone Index Selector */}
+              <div className="mb-4 flex justify-between items-center">
+    <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">Active Phone:</p>
+    <select
+      value={selectedContact.phoneIndex ?? 0}
+      onChange={async (e) => {
+        const newPhoneIndex = parseInt(e.target.value);
+        // Update local state
+        setSelectedContact({ ...selectedContact, phoneIndex: newPhoneIndex });
+        const user = auth.currentUser;
+        const docUserRef = doc(firestore, 'user', user?.email!);
+        const docUserSnapshot = await getDoc(docUserRef);
+        if (!docUserSnapshot.exists()) {
+          console.log('No such document for user!');
+          return;
+        }
+        const userData = docUserSnapshot.data();
+        const companyId = userData.companyId;
+        // Update Firestore
+        try {
+          const contactRef = doc(firestore, `companies/${companyId}/contacts`, selectedContact.id);
+          await updateDoc(contactRef, { phoneIndex: newPhoneIndex });
+          toast.success('Phone updated successfully');
+        } catch (error) {
+          console.error('Error updating phone:', error);
+          toast.error('Failed to update phone');
+          // Revert local state on error
+          setSelectedContact({ ...selectedContact });
+        }
+      }}
+      className="px-2 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 ml-4 w-32"
+    >
+      {Object.entries(phoneNames).map(([index, name]) => (
+        <option key={index} value={index}>
+          {name}
+        </option>
+      ))}
+    </select>
+  </div>
             <div className="grid grid-cols-2 gap-4">
+
               {[
                   { label: "First Name", key: "contactName" },
                   { label: "Last Name", key: "lastName" },
@@ -7817,7 +8207,10 @@ console.log(prompt);
               {selectedContact && selectedContact.tags && selectedContact.tags.length > 0 ? (
                 <>
                   {selectedContact.tags
-                    .filter((tag: string) => !employeeList.some(employee => employee.name.toLowerCase() === tag.toLowerCase()))
+                    .filter((tag: string) => 
+                      tag.toLowerCase() !== 'stop bot' && 
+                      !employeeList.some(employee => employee.name.toLowerCase() === tag.toLowerCase())
+                    )
                     .map((tag: string, index: number) => (
                       <div key={index} className="inline-flex items-center bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200 text-sm font-semibold px-3 py-1 rounded-full border border-blue-400 dark:border-blue-600">
                         <span>{tag}</span>
@@ -7896,7 +8289,7 @@ console.log(prompt);
   initialCaption={documentCaption}
 />
       <ImageModal isOpen={isImageModalOpen} onClose={closeImageModal} imageUrl={modalImageUrl} />
-      <ImageModal2 isOpen={isImageModalOpen2} onClose={() => setImageModalOpen2(false)} imageUrl={pastedImageUrl} onSend={sendImage} />
+      <ImageModal2 isOpen={isImageModalOpen2} onClose={() => setImageModalOpen2(false)} imageUrl={pastedImageUrl} onSend={sendImage}  initialCaption={documentCaption} />
 
       <ToastContainer
         position="top-right"
@@ -7979,16 +8372,22 @@ interface ImageModalProps2 {
   onClose: () => void;
   imageUrl: string;
   onSend: (url: string | null, caption: string) => void;
+  initialCaption?: string; // Add this line
 }
 
-const ImageModal2: React.FC<ImageModalProps2> = ({ isOpen, onClose, imageUrl, onSend }) => {
-  const [caption, setCaption] = useState('');
+const ImageModal2: React.FC<ImageModalProps2> = ({ isOpen, onClose, imageUrl, onSend, initialCaption }) => {
+  const [caption, setCaption] = useState(initialCaption); // Initialize with initialCaption
+
+  useEffect(() => {
+    // Update caption when initialCaption changes
+    setCaption(initialCaption || "" );
+  }, [initialCaption]);
 
 
   const handleSendClick = () => {
     setCaption('');
-    onSend(imageUrl, caption);
-   onClose(); // Close the modal after sending
+    onSend(imageUrl, caption || ''); // Provide empty string fallback for caption
+    onClose(); // Close the modal after sending
   };
 
   if (!isOpen) return null;
