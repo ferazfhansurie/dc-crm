@@ -164,13 +164,22 @@ const firebaseConfig = {
                     </Button>
                   </div>
                   <div className="mt-5 text-center intro-x xl:mt-8 xl:text-left">
-               
+                  <div className="mt-5 text-center intro-x xl:mt-8 xl:text-left">
+                  <Button
+                      variant="secondary"
+                      className="w-full px-4 py-3 align-top xl:mr-3"
+                      onClick={handleStartFreeTrial}
+                    >
+                      Start Free Trial
+                    </Button>
+                    
+                  </div>
                     
                   </div>
                   <div className="mt-4 text-center intro-x">
                     <button 
                       onClick={() => setShowResetModal(true)} 
-                      className="text-primary hover:underline"
+                      className="text-white hover:underline"
                     >
                       Forgot Password?
                     </button>
