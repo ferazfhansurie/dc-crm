@@ -40,11 +40,6 @@ function Main() {
 
   const handleRegister = async () => {
     try {
-      // Validate plan selection
-      if (!selectedPlan) {
-        toast.error("Please select a plan to continue");
-        return;
-      }
 
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
@@ -61,7 +56,6 @@ function Main() {
       await setDoc(doc(firestore, "companies", newCompanyId), {
         id: newCompanyId,
         name: companyName,
-        plan: selectedPlan,
         whapiToken: "", // Initialize with any default values you need
         trialStartDate: trialStartDate,
         trialEndDate: trialEndDate,
@@ -76,7 +70,6 @@ function Main() {
         role: "1",
         companyId: newCompanyId,
         phoneNumber: phoneNumber,
-        plan: selectedPlan,
         trialStartDate: trialStartDate,
         trialEndDate: trialEndDate,
       });
@@ -141,8 +134,8 @@ function Main() {
             <div className="flex-col hidden min-h-screen xl:flex">
             <div className="my-auto flex flex-col items-center w-full">
                   <img
-                    alt="Juta Software Logo"
-                    className="w-[80%] -mt-16 -ml-64"
+                    alt="Omniyal Logo"
+                    className="w-[50%] -mt-16 -ml-64"
                     src={logoUrl}
                   />
                 </div>
