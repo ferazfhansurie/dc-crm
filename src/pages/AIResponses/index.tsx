@@ -88,7 +88,8 @@ function AIResponses() {
                 const data = doc.data();
                 const baseResponse = {
                     id: doc.id,
-                    keywords: data.keyword ? [data.keyword] : (data.keywords || []),
+                    keywords: Array.isArray(data.keywords) ? data.keywords : 
+                        (data.keyword ? [data.keyword] : []),
                     description: data.description || '',
                     createdAt: data.createdAt?.toDate() || new Date(),
                     status: data.status || 'active',
@@ -119,12 +120,12 @@ function AIResponses() {
                             documentUrls: data.documentUrls || [],
                             documentNames: data.documentNames || []
                         } as AIDocumentResponse;
-                        case 'Assign':
-                            return {
-                                ...baseResponse,
-                                type: 'Assign',
-                                assignedEmployees: data.assignedEmployees || []
-                            } as AIAssignResponse;
+                    case 'Assign':
+                        return {
+                            ...baseResponse,
+                            type: 'Assign',
+                            assignedEmployees: data.assignedEmployees || []
+                        } as AIAssignResponse;
                 }
             });
 
@@ -869,7 +870,11 @@ function AIResponses() {
                                                     <div className="flex justify-between items-center mb-4">
                                                         <div>
                                                             <div className="font-medium text-base">
-                                                                Keywords: {response.keywords?.join(', ') || 'No keywords'}
+                                                                Keywords: {response.keywords?.map((keyword, index) => (
+                                                                    <span key={index} className="inline-block bg-slate-100 dark:bg-darkmode-400 rounded px-2 py-1 mr-2 mb-1">
+                                                                        {keyword}
+                                                                    </span>
+                                                                )) || 'No keywords'}
                                                             </div>
                                                             <div className="text-slate-500">
                                                                 Status: {response.status}
