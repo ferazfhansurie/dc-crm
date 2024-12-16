@@ -37,12 +37,12 @@ function Main() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [registerResult, setRegisterResult] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<'blaster' | 'enterprise' | null>(null);
-  const navigate = useNavigate();
-
   const [verificationCode, setVerificationCode] = useState("");
   const [isVerificationSent, setIsVerificationSent] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
   const [verificationStep, setVerificationStep] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const navigate = useNavigate();
+
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (cooldown > 0) {
@@ -57,95 +57,102 @@ function Main() {
     return Math.floor(100000 + Math.random() * 900000).toString();
   };
 
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    if (/^\d*$/.test(value)) {
-      setPhoneNumber(value);
+  const formatPhoneNumber = (number: string) => {
+    // Remove any non-digit characters
+    let cleaned = number.replace(/\D/g, '');
+    
+    // If number starts with '0', replace it with '60'
+    if (cleaned.startsWith('0')) {
+      cleaned = '60' + cleaned.substring(1);
+    }
+    // If number starts with '+60', remove the '+'
+    else if (cleaned.startsWith('60')) {
+      cleaned = cleaned;
+    }
+    // If number doesn't start with '60', add it
+    else {
+      cleaned = '60' + cleaned;
+    }
+    
+    // Add '+' for Firebase storage, but not for the WhatsApp API
+    return '+' + cleaned;
+  };
+
+  const sendVerificationCode = async () => {
+    try {
+      // Validate phone number
+      if (phoneNumber.length < 10) {
+        toast.error("Please enter a valid phone number");
+        return;
+      }
+      // Double check if phone number is still available
+      const isRegistered = await isPhoneNumberRegistered(phoneNumber);
+      if (isRegistered) {
+        toast.error("This phone number is already registered");
+        return;
+      }
+      const formattedPhone = formatPhoneNumber(phoneNumber).substring(1) + '@c.us'; // Remove '+' for WhatsApp
+      const code = generateVerificationCode();
+      localStorage.setItem('verificationCode', code);
+      
+      const response = await fetch(`https://mighty-dane-newly.ngrok-free.app/api/v2/messages/text/001/${formattedPhone}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `Your verification code is: ${code}`,
+          phoneIndex: 0,
+          userName: "System"
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send verification code');
+      }
+
+      setIsVerificationSent(true);
+      setVerificationStep(true);
+      setCooldown(10);
+      toast.success("Verification code sent!");
+    } catch (error) {
+      toast.error("Failed to send verification code");
+      console.error(error);
     }
   };
 
-// Add new function to check if phone number is already registered
-const isPhoneNumberRegistered = async (phoneNumber: string) => {
-  try {
-    const formattedPhone = formatPhoneNumber(phoneNumber);
-    const usersRef = collection(firestore, "user");
-    // Check both phone and phoneNumber fields
-    const q1 = query(usersRef, where("phone", "==", formattedPhone));
-    const q2 = query(usersRef, where("phoneNumber", "==", formattedPhone));
-    
-    const [snapshot1, snapshot2] = await Promise.all([
-      getDocs(q1),
-      getDocs(q2)
-    ]);
-    
-    return !snapshot1.empty || !snapshot2.empty;
-  } catch (error) {
-    console.error("Error checking phone number:", error);
-    throw error;
-  }
-};
-
-// Update formatPhoneNumber function
-const formatPhoneNumber = (number: string) => {
-  let cleaned = number.replace(/\D/g, '');
-  
-  if (cleaned.startsWith('0')) {
-    cleaned = '60' + cleaned.substring(1);
-  } else if (cleaned.startsWith('60')) {
-    cleaned = cleaned;
-  } else {
-    cleaned = '60' + cleaned;
-  }
-  
-  // Add '+' for Firebase storage, but not for the WhatsApp API
-  return '+' + cleaned;
-};
-
-// Update sendVerificationCode function
-const sendVerificationCode = async () => {
-  try {
-    if (phoneNumber.length < 10) {
-      toast.error("Please enter a valid phone number");
-      return;
+  const isPhoneNumberRegistered = async (phoneNumber: string) => {
+    try {
+      const formattedPhone = formatPhoneNumber(phoneNumber);
+      const usersRef = collection(firestore, "user");
+      // Check both phone and phoneNumber fields
+      const q1 = query(usersRef, where("phone", "==", formattedPhone));
+      const q2 = query(usersRef, where("phoneNumber", "==", formattedPhone));
+      
+      const [snapshot1, snapshot2] = await Promise.all([
+        getDocs(q1),
+        getDocs(q2)
+      ]);
+      
+      return !snapshot1.empty || !snapshot2.empty;
+    } catch (error) {
+      console.error("Error checking phone number:", error);
+      throw error;
     }
-    // Double check if phone number is still available
-    const isRegistered = await isPhoneNumberRegistered(phoneNumber);
-    if (isRegistered) {
-      toast.error("This phone number is already registered");
-      return;
-    }
-    const formattedPhone = formatPhoneNumber(phoneNumber).substring(1) + '@c.us'; // Remove '+' for WhatsApp
-    const code = generateVerificationCode();
-    localStorage.setItem('verificationCode', code);
-    
-    const response = await fetch(`https://mighty-dane-newly.ngrok-free.app/api/v2/messages/text/063/${formattedPhone}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: `Your verification code is: ${code}`,
-        phoneIndex: 0,
-        userName: "System"
-      }),
-    });
+  };
 
-    if (!response.ok) {
-      throw new Error('Failed to send verification code');
-    }
-
-    setIsVerificationSent(true);
-    setVerificationStep(true);
-    setCooldown(10);
-    toast.success("Verification code sent!");
-  } catch (error) {
-    toast.error("Failed to send verification code");
-    console.error(error);
-  }
-};
   const handleRegister = async () => {
     try {
+      // Verify the code before proceeding
       const storedCode = localStorage.getItem('verificationCode');
       if (verificationCode !== storedCode) {
         toast.error("Invalid verification code");
+        return;
+      }
+
+
+
+      // Validate plan selection
+      if (!selectedPlan) {
+        toast.error("Please select a plan to continue");
         return;
       }
 
@@ -179,6 +186,7 @@ const sendVerificationCode = async () => {
         companyId: newCompanyId,
         phone: formatPhoneNumber(phoneNumber),
         phoneNumber: formatPhoneNumber(phoneNumber),
+        plan: selectedPlan,
         trialStartDate: trialStartDate,
         trialEndDate: trialEndDate,
       });
@@ -224,6 +232,14 @@ const sendVerificationCode = async () => {
   const handleKeyDown = (event: { key: string; }) => {
     if (event.key === "Enter") {
       handleRegister();
+    }
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Only allow digits
+    if (/^\d*$/.test(value)) {
+      setPhoneNumber(value);
     }
   };
 
