@@ -1,16 +1,17 @@
 import ThemeSwitcher from "@/components/ThemeSwitcher";
-import logoUrl from "@/assets/images/dc-login-logo.png";
+import logoUrl from "@/assets/images/logo.png";
 import { FormInput } from "@/components/Base/Form";
 import Button from "@/components/Base/Button";
 import clsx from "clsx";
 import { Link, useNavigate } from "react-router-dom";
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
-import { getFirestore, doc, setDoc, collection, getDocs, addDoc, query, where } from "firebase/firestore";
+import { getFirestore, doc, setDoc, collection, getDocs, addDoc, query, where, getDoc } from "firebase/firestore";
 import { useState, useEffect } from "react";
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import axios from "axios";
+import { getCountries, getCountryCallingCode, parsePhoneNumber, AsYouType, CountryCode } from 'libphonenumber-js'
 
 // Firebase configuration
 const firebaseConfig = {
@@ -28,7 +29,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const firestore = getFirestore(app);
 
-
 function Main() {
   const [name, setName] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -42,6 +42,7 @@ function Main() {
   const [verificationStep, setVerificationStep] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const navigate = useNavigate();
+  const [selectedCountry, setSelectedCountry] = useState<CountryCode>('MY');
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -58,24 +59,15 @@ function Main() {
   };
 
   const formatPhoneNumber = (number: string) => {
-    // Remove any non-digit characters
-    let cleaned = number.replace(/\D/g, '');
-    
-    // If number starts with '0', replace it with '60'
-    if (cleaned.startsWith('0')) {
-      cleaned = '60' + cleaned.substring(1);
+    try {
+      const phoneNumber = parsePhoneNumber(number, selectedCountry);
+      return phoneNumber ? phoneNumber.format('E.164') : number;
+    } catch (error) {
+      // If parsing fails, return the original format with country code
+      const countryCode = getCountryCallingCode(selectedCountry);
+      const cleaned = number.replace(/[^\d]/g, '');
+      return `+${countryCode}${cleaned}`;
     }
-    // If number starts with '+60', remove the '+'
-    else if (cleaned.startsWith('60')) {
-      cleaned = cleaned;
-    }
-    // If number doesn't start with '60', add it
-    else {
-      cleaned = '60' + cleaned;
-    }
-    
-    // Add '+' for Firebase storage, but not for the WhatsApp API
-    return '+' + cleaned;
   };
 
   const sendVerificationCode = async () => {
@@ -94,8 +86,27 @@ function Main() {
       const formattedPhone = formatPhoneNumber(phoneNumber).substring(1) + '@c.us'; // Remove '+' for WhatsApp
       const code = generateVerificationCode();
       localStorage.setItem('verificationCode', code);
-      
-      const response = await fetch(`https://mighty-dane-newly.ngrok-free.app/api/v2/messages/text/063/${formattedPhone}`, {
+      const user = getAuth().currentUser;
+      if (!user) {
+        console.error("User not authenticated");
+      }
+      const docUserRef = doc(firestore, 'user', user?.email!);
+      const docUserSnapshot = await getDoc(docUserRef);
+      if (!docUserSnapshot.exists()) {
+        console.log('No such document!');
+        return;
+      }
+      const dataUser = docUserSnapshot.data();
+      const companyId = dataUser.companyId;
+      const docRef = doc(firestore, 'companies', companyId);
+      const docSnapshot = await getDoc(docRef);
+      if (!docSnapshot.exists()) {
+        console.log('No such document!');
+        return;
+      }
+      const data2 = docSnapshot.data();
+      const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+      const response = await fetch(`${baseUrl}/api/v2/messages/text/001/${formattedPhone}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -141,20 +152,6 @@ function Main() {
 
   const handleRegister = async () => {
     try {
-      // Verify the code before proceeding
-      const storedCode = localStorage.getItem('verificationCode');
-      if (verificationCode !== storedCode) {
-        toast.error("Invalid verification code");
-        return;
-      }
-
-
-
-      // Validate plan selection
-      if (!selectedPlan) {
-        toast.error("Please select a plan to continue");
-        return;
-      }
 
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
@@ -200,8 +197,27 @@ function Main() {
 
 
       });
-
-      const response2 = await axios.post(`https://mighty-dane-newly.ngrok-free.app/api/channel/create/${newCompanyId}`);
+   
+      if (!user) {
+        console.error("User not authenticated");
+      }
+      const docUserRef = doc(firestore, 'user', user?.email!);
+      const docUserSnapshot = await getDoc(docUserRef);
+      if (!docUserSnapshot.exists()) {
+        console.log('No such document!');
+        return;
+      }
+      const dataUser = docUserSnapshot.data();
+      const companyId = dataUser.companyId;
+      const docRef = doc(firestore, 'companies', companyId);
+      const docSnapshot = await getDoc(docRef);
+      if (!docSnapshot.exists()) {
+        console.log('No such document!');
+        return;
+      }
+      const data2 = docSnapshot.data();
+      const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+      const response2 = await axios.post(`${baseUrl}/api/channel/create/${newCompanyId}`);
 
       console.log(response2);
 
@@ -236,11 +252,9 @@ function Main() {
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    // Only allow digits
-    if (/^\d*$/.test(value)) {
-      setPhoneNumber(value);
-    }
+    const formatter = new AsYouType(selectedCountry);
+    const formatted = formatter.input(e.target.value);
+    setPhoneNumber(formatted);
   };
 
   return (
@@ -259,8 +273,8 @@ function Main() {
             <div className="flex-col hidden min-h-screen xl:flex">
             <div className="my-auto flex flex-col items-center w-full">
                   <img
-                    alt="Omniyal Logo"
-                    className="w-[50%] -mt-16 -ml-64"
+                    alt="Juta Software Logo"
+                    className="w-[80%] -mt-16 -ml-64"
                     src={logoUrl}
                   />
                 </div>
@@ -292,42 +306,27 @@ function Main() {
                     onChange={(e) => setCompanyName(e.target.value)}
                     onKeyDown={handleKeyDown}
                   />
-                  <FormInput
-                    type="tel"
-                    className="block px-4 py-3 mt-4 intro-x min-w-full xl:min-w-[350px]"
-                    placeholder="Phone Number (e.g., 0123456789)"
-                    value={phoneNumber}
-                    onChange={handlePhoneChange}
-                    onKeyDown={handleKeyDown}
-                  />
-                  {!isVerificationSent ? (
-                    <Button
-                      variant="primary"
-                      className="w-full px-4 py-3 mt-4 align-top xl:w-32 xl:mr-3"
-                      onClick={sendVerificationCode}
+                  <div className="flex gap-2">
+                    <select
+                      className="block px-4 py-3 mt-4 intro-x bg-white border rounded dark:bg-darkmode-600 dark:border-darkmode-400"
+                      value={selectedCountry}
+                      onChange={(e) => setSelectedCountry(e.target.value as CountryCode)}
                     >
-                      Verify Phone
-                    </Button>
-                  ) : (
-                    <div className="mt-4">
-                      <FormInput
-                        type="text"
-                        className="block px-4 py-3 intro-x min-w-full xl:min-w-[350px]"
-                        placeholder="Enter 6-digit verification code"
-                        value={verificationCode}
-                        onChange={(e) => setVerificationCode(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                      />
-                      <Button
-                        variant="secondary"
-                        className="mt-2 w-full xl:w-auto"
-                        onClick={sendVerificationCode}
-                        disabled={cooldown > 0}
-                      >
-                        {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend Code'}
-                      </Button>
-                    </div>
-                  )}
+                      {getCountries().map((country) => (
+                        <option key={country} value={country}>
+                          {new Intl.DisplayNames(['en'], { type: 'region' }).of(country)} (+{getCountryCallingCode(country)})
+                        </option>
+                      ))}
+                    </select>
+                    <FormInput
+                      type="tel"
+                      className="block px-4 py-3 mt-4 intro-x min-w-full xl:min-w-[350px]"
+                      placeholder={`Phone Number (e.g., 123456789)`}
+                      value={phoneNumber}
+                      onChange={handlePhoneChange}
+                      onKeyDown={handleKeyDown}
+                    />
+                  </div>
                   <FormInput
                     type="text"
                     className="block px-4 py-3 mt-4 intro-x min-w-full xl:min-w-[350px]"
@@ -346,7 +345,6 @@ function Main() {
                     onKeyDown={handleKeyDown}
                   />
                 
-               
                 </div>
                 <div className="mt-5 text-center intro-x xl:mt-8 xl:text-left">
                   <Button
@@ -354,7 +352,7 @@ function Main() {
                     className="w-full px-4 py-3 align-top xl:w-32 xl:mr-3"
                     onClick={handleRegister}
                   >
-                    Start Free Trial
+                    Register
                   </Button>
                   <Link to="/login">
                     <Button
