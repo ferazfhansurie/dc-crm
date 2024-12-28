@@ -844,7 +844,7 @@ useEffect(() => {
                   )}
                   {(isLoading || !processingComplete || isFetchingChats) && (
                   <div className="mt-4 flex flex-col items-center">
-                    <img alt="Logo" className="w-32 h-32 animate-spin mx-auto" src={logoUrl} style={{ animation: 'spin 3s linear infinite' }} />
+               
                     <p className="mt-2 text-gray-600 dark:text-gray-400">
                       {isQRLoading ? "Please wait while QR code is loading..." : "Please wait while QR Code is loading..."}
                     </p>
