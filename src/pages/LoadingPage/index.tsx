@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import logoUrl from "@/assets/images/dc-login-logo.png";
+import logoUrl from "@/assets/images/logo.png";
 import { useNavigate, useLocation } from "react-router-dom";
 import LoadingIcon from "@/components/Base/LoadingIcon";
 import { useConfig } from '../../config';
@@ -84,16 +84,25 @@ function LoadingPage() {
   const [loadingPhase, setLoadingPhase] = useState<string>('initializing');
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [trialExpired, setTrialExpired] = useState(false);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   
   const fetchQRCode = async () => {
-    const auth = getAuth(app);
+    if (!isAuthReady) {
+      return;
+    }
+
     const user = auth.currentUser;
     let v2;
     setIsLoading(true);
     setIsQRLoading(true);
     setError(null);
     try {
-      const docUserRef = doc(firestore, 'user', user?.email!);
+      if (!user?.email) {
+        navigate('/login');
+        return;
+      }
+
+      const docUserRef = doc(firestore, 'user', user.email);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
         throw new Error("User document does not exist");
@@ -110,7 +119,8 @@ function LoadingPage() {
       }
 
       const companyData = docSnapshot.data();
-      
+      const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+      console.log('baseUrl: '+baseUrl);
       if (companyData.trialEndDate) {
         const trialEnd = companyData.trialEndDate.toDate();
         const now = new Date();
@@ -134,65 +144,76 @@ function LoadingPage() {
         }
         return;
       }
- 
-      if (companyData.trialEndDate) {
-        const trialEnd = companyData.trialEndDate.toDate();
-        const now = new Date();
-        if (now > trialEnd) {
-          setTrialExpired(true);
-        
-          return;
-        }
-      }
+
       // Only proceed with QR code and bot status if v2 exists
-      const botStatusResponse = await axios.get(`https://mighty-dane-newly.ngrok-free.app/api/bot-status/${companyId}`);
+      const headers = companyData.apiUrl 
+        ? {
+            'Authorization': `Bearer ${await user?.getIdToken()}`
+          }
+        : {
+            'Authorization': `Bearer ${await user?.getIdToken()}`,
+            'Content-Type': 'application/json'
+          };
+
+      const botStatusResponse = await axios.get(
+        `${baseUrl}/api/bot-status/${companyId}`,
+        {
+          headers,
+          withCredentials: companyData.apiUrl ? true : false
+        }
+      );
 
       console.log(botStatusResponse.data);
       if (botStatusResponse.status !== 200) {
         throw new Error(`Unexpected response status: ${botStatusResponse.status}`);
       }
       let phoneCount = companyData.phoneCount ?? null;
-      if(phoneCount === null || phoneCount === 1){
+      console.log('Phone count:', phoneCount);
+      
+      if (phoneCount === null || phoneCount === 1) {
         const { status, qrCode } = botStatusResponse.data;
-        console.log(botStatusResponse.data); 
-        console.log('phonecount is 0'); 
+        console.log('Single bot status response:', botStatusResponse.data);
         setBotStatus(status);
         if (status === 'qr') {
           setQrCodeImage(qrCode);
-          console.log({companyId});
         } else if (status === 'authenticated' || status === 'ready') {
-          console.log("Bot authenticated, preparing to fetch contacts");
+          console.log('Single bot is authenticated/ready, navigating to chat');
           setShouldFetchContacts(true);
+          navigate('/chat');
+          return;
         }
       } else {
-        console.log(botStatusResponse.data);
+        console.log('Multiple phones configuration:', botStatusResponse.data);
+        // Check if response is an array
+        const statusArray = Array.isArray(botStatusResponse.data) 
+          ? botStatusResponse.data 
+          : [botStatusResponse.data];
+
         let anyAuthenticated = false;
-        for (let i = 0; i < botStatusResponse.data.length; i++) {
-          const status = botStatusResponse.data[i].status;
-          console.log(`Phone ${i + 1} status:`, status);
-          if (status === 'authenticated' || status === 'ready') {
+        for (const bot of statusArray) {
+          console.log('Checking bot status:', bot.status);
+          if (bot.status === 'authenticated' || bot.status === 'ready') {
             anyAuthenticated = true;
+            setBotStatus(bot.status);
             break;
           }
         }
+
         if (anyAuthenticated) {
-          console.log("At least one bot authenticated, preparing to fetch contacts");
+          console.log('At least one bot is authenticated/ready, navigating to chat');
           setShouldFetchContacts(true);
+          navigate('/chat');
+          return;
         } else {
           console.log("No bots are authenticated yet");
-          for (let i = 0; i < botStatusResponse.data.length; i++) {
-            const status = botStatusResponse.data[i].status;
-            setBotStatus(status);
-            console.log(`Phone ${i + 1} status:`, status);
-            if (status === 'qr') {
-              const { status, qrCode } = botStatusResponse.data[i];
-              if (status === 'qr') {
-                setQrCodeImage(qrCode);
-              }
+          // Find first bot with QR code
+          for (const bot of statusArray) {
+            if (bot.status === 'qr' && bot.qrCode) {
+              setBotStatus('qr');
+              setQrCodeImage(bot.qrCode);
               break;
             }
           }
-          
         }
       }
    
@@ -203,7 +224,7 @@ function LoadingPage() {
         if (error.code === 'ERR_NETWORK') {
           setError('Network error. Please check your internet connection and try again.');
         } else {
-          setError(error.response?.data || 'Failed to fetch QR code. Please try again.');
+          setError(error.response?.data?.message || 'Failed to fetch QR code. Please try again.');
         }
       } else if (error instanceof Error) {
         setError(error.message);
@@ -222,16 +243,27 @@ function LoadingPage() {
   };
 
   useEffect(() => {
-    fetchQRCode();
-  }, []);
+    if (isAuthReady) {
+      fetchQRCode();
+    }
+  }, [isAuthReady]);
 
   useEffect(() => {
     const initWebSocket = async (retries = 3) => {
+      if (!isAuthReady) {
+        return; // Don't proceed if auth isn't ready
+      }
+
       if (!wsConnected) {
         try {
-          const auth = getAuth(app);
           const user = auth.currentUser;
-          const docUserRef = doc(firestore, 'user', user?.email!);
+          
+          if (!user?.email) {
+            navigate('/login');
+            return;
+          }
+
+          const docUserRef = doc(firestore, 'user', user.email);
           const docUserSnapshot = await getDoc(docUserRef);
           
           if (!docUserSnapshot.exists()) {
@@ -258,14 +290,16 @@ function LoadingPage() {
             console.log('WebSocket message received:', data);
       
             if (data.type === 'auth_status') {
-              console.log(`Bot status: ${data.status}`);
+              console.log(`Bot status update: ${data.status}`);
               setBotStatus(data.status);
+              
               if (data.status === 'qr') {
                 setQrCodeImage(data.qrCode);
-        
               } else if (data.status === 'authenticated' || data.status === 'ready') {
+                console.log('Bot authenticated/ready via WebSocket, navigating to chat');
+                setShouldFetchContacts(true);
                 navigate('/chat');
-                
+                return;
               }
             } else if (data.type === 'progress') {
               setBotStatus(data.status);
@@ -276,11 +310,9 @@ function LoadingPage() {
               if (data.action === 'done_process') {
                 setBotStatus(data.status);
                 setProcessingComplete(true);
+                navigate('/chat');
+                return;
               }
-            }
-            if(data.status === 'authenticated' || data.status === 'ready'){
-              setBotStatus(data.status);
-              navigate('/chat');
             }
           };
           
@@ -295,13 +327,24 @@ function LoadingPage() {
           };
         } catch (error) {
           console.error('Error initializing WebSocket:', error);
-          setError('Failed to initialize WebSocket. Please try again.');
+          if (error instanceof Error) {
+            setError(error.message);
+          } else {
+            setError('Failed to initialize WebSocket. Please try again.');
+          }
+          
+          if (retries > 0) {
+            console.log(`Retrying WebSocket connection... (${retries} attempts left)`);
+            setTimeout(() => initWebSocket(retries - 1), 2000);
+          }
         }
       }
     };
 
-    initWebSocket();
-  }, []);
+    if (isAuthReady) {
+      initWebSocket();
+    }
+  }, [isAuthReady]);
 
   // New useEffect for WebSocket cleanup
   useEffect(() => {
@@ -316,10 +359,10 @@ function LoadingPage() {
   useEffect(() => {
     console.log("useEffect triggered. shouldFetchContacts:", shouldFetchContacts, "isLoading:", isLoading);
     if (shouldFetchContacts && !isLoading) {
-      console.log("Conditions met, calling fetchContacts");
+      console.log("Conditions met for navigation, navigating to chat");
       navigate('/chat');
     }
-  }, [shouldFetchContacts, isLoading]);
+  }, [shouldFetchContacts, isLoading, navigate]);
 
   useEffect(() => {
     console.log("Contact state changed. contactsFetched:", contactsFetched, "fetchedChats:", fetchedChats, "totalChats:", totalChats, "contacts length:", contacts.length);
@@ -399,7 +442,6 @@ function LoadingPage() {
           : new Date(0);
       return dateB.getTime() - dateA.getTime();
     });
-
     // Cache the contacts
     setLoadingPhase('caching');
     localStorage.setItem('contacts', LZString.compress(JSON.stringify(allContacts)));
@@ -408,6 +450,10 @@ function LoadingPage() {
 
     setContacts(allContacts);
     setContactsFetched(true);
+
+    // Cache messages for first 100 contacts
+    await fetchAndCacheMessages(allContacts, companyId, user);
+    
     setLoadingPhase('complete');
 
     // After contacts are loaded, fetch chats
@@ -430,6 +476,7 @@ const getLoadingMessage = () => {
     case 'caching': return 'Caching data...';
     case 'complete': return 'Loading complete!';
     case 'error': return 'Error loading contacts';
+    case 'caching_messages': return 'Caching recent messages...';
     default: return 'Loading...';
   }
 };
@@ -523,9 +570,43 @@ useEffect(() => {
     setIsPairingCodeLoading(true);
     setError(null);
     try {
-      const response = await axios.post(`https://mighty-dane-newly.ngrok-free.app/api/request-pairing-code/${companyId}`, {
-        phoneNumber
-      });
+      const user = getAuth().currentUser;
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
+      const docUserRef = doc(firestore, 'user', user?.email!);
+      const docUserSnapshot = await getDoc(docUserRef);
+      if (!docUserSnapshot.exists()) {
+        console.log('No such document!');
+        return;
+      }
+      const dataUser = docUserSnapshot.data();
+      const companyId = dataUser.companyId;
+      const docRef = doc(firestore, 'companies', companyId);
+      const docSnapshot = await getDoc(docRef);
+      if (!docSnapshot.exists()) {
+        console.log('No such document!');
+        return;
+      }
+      const data2 = docSnapshot.data();
+      const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+      const headers = data2.apiUrl 
+        ? {
+            'Authorization': `Bearer ${await user.getIdToken()}`
+          }
+        : {
+            'Authorization': `Bearer ${await user.getIdToken()}`,
+            'Content-Type': 'application/json'
+          };
+
+      const response = await axios.post(
+        `${baseUrl}/api/request-pairing-code/${companyId}`,
+        { phoneNumber },
+        { 
+          headers,
+          withCredentials: false
+        }
+      );
       setPairingCode(response.data.pairingCode);
     } catch (error) {
       console.error('Error requesting pairing code:', error);
@@ -535,158 +616,271 @@ useEffect(() => {
     }
   };
 
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setIsAuthReady(true);
+      if (!user) {
+        navigate('/login');
+      }
+    });
+
+    return () => unsubscribe();
+  }, [auth, navigate]);
+
+  useEffect(() => {
+    if (botStatus === 'ready' || botStatus === 'authenticated') {
+      console.log('Bot status changed to ready/authenticated, navigating to chat');
+      setShouldFetchContacts(true);
+      navigate('/chat');
+    }
+  }, [botStatus, navigate]);
+
+  const fetchAndCacheMessages = async (contacts: Contact[], companyId: string, user: any) => {
+    setLoadingPhase('caching_messages');
+    console.log('Starting message caching process...');
+    try {
+      // Sort contacts by last message timestamp and take the 100 most recent
+      const mostRecentContacts = contacts
+        .sort((a, b) => {
+          const getTimestamp = (contact: Contact) => {
+            if (!contact.last_message) return 0;
+            return contact.last_message.createdAt
+              ? new Date(contact.last_message.createdAt).getTime()
+              : contact.last_message.timestamp
+                ? contact.last_message.timestamp * 1000
+                : 0;
+          };
+          return getTimestamp(b) - getTimestamp(a);
+        })
+        .slice(0, 100);
+
+      console.log(`Processing ${mostRecentContacts.length} most recent contacts`);
+      let processedContacts = 0;
+      
+      // Get company config for API URL
+      const docRef = doc(firestore, 'companies', companyId);
+      const docSnapshot = await getDoc(docRef);
+      if (!docSnapshot.exists()) {
+        throw new Error("Company document does not exist");
+      }
+      const companyData = docSnapshot.data();
+      const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+
+      console.log('Starting parallel message fetching...');
+      // Fetch messages in parallel with rate limiting
+      const messagePromises = mostRecentContacts.map(async (contact) => {
+        if (!contact.chat_id) {
+          console.log(`Skipping contact - no chat_id found`);
+          return null;
+        }
+        
+        try {
+          console.log(`Fetching messages for chat ${contact.chat_id}`);
+          const response = await axios.get(
+            `${baseUrl}/api/messages/${contact.chat_id}/${companyData.whapiToken}?limit=10`,
+            {
+              headers: {
+                'Authorization': `Bearer ${await user.getIdToken()}`
+              }
+            }
+          );
+
+          processedContacts++;
+          const progress = (processedContacts / mostRecentContacts.length) * 100;
+          console.log(`Progress: ${Math.round(progress)}% (${processedContacts}/${mostRecentContacts.length})`);
+          setLoadingProgress(progress);
+
+          return {
+            chatId: contact.chat_id,
+            messages: response.data.messages
+          };
+        } catch (error) {
+          console.error(`Error fetching messages for chat ${contact.chat_id}:`, error);
+          return null;
+        }
+      });
+
+      const results = await Promise.all(messagePromises);
+      const successfulResults = results.filter(result => result !== null);
+      console.log(`Successfully cached messages for ${successfulResults.length} chats`);
+
+      const messagesCache = results.reduce((acc: { [key: string]: any }, result) => {
+        if (result) {
+          acc[result.chatId] = result.messages;
+        }
+        return acc;
+      }, {});
+
+      // Store in localStorage with compression
+      const compressedData = LZString.compress(JSON.stringify(messagesCache));
+      console.log(`Compressed cache size: ${compressedData.length} characters`);
+      localStorage.setItem('messagesCache', compressedData);
+      localStorage.setItem('messagesCacheTimestamp', Date.now().toString());
+      console.log('Message caching complete!');
+
+    } catch (error) {
+      console.error('Error in message caching process:', error);
+      setError('Failed to cache messages, but continuing...');
+    }
+  };
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-white dark:bg-gray-900 py-8">
-      <div className="flex flex-col items-center w-full max-w-lg text-center px-4">
-        {trialExpired ? (
-          <div className="text-center p-8">
-            <h2 className="text-2xl font-bold text-red-600 mb-4">Trial Period Expired</h2>
-            <p className="text-gray-600 mb-4">Your trial period has ended. Please contact support to continue using the service.</p>
-            <a
-              href="https://wa.link/601xs3"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 px-6 py-3 bg-green-500 text-white text-lg font-semibold rounded hover:bg-green-600 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 w-full inline-block text-center"
-            >
-              Pay Now
-            </a>
-            <button
-              onClick={handleLogout}
-              className="mt-6 px-6 py-3 bg-primary text-white text-lg font-semibold rounded hover:bg-blue-600 transition-colors"
-            >
-              Back to Login
-            </button>
-          </div>
-        ) : (
-          <>
-            {(
-              <>
-                {botStatus === 'qr' ? (
-                  <>
-                    <div className="mt-2 text-md text-gray-800 dark:text-gray-200">
-                      Please use your WhatsApp QR scanner to scan the code or enter your phone number for a pairing code.
+      {!isAuthReady ? (
+        <div className="text-center">
+          <LoadingIcon className="w-8 h-8 mx-auto" />
+          <p className="mt-2">Initializing...</p>
+        </div>
+      ) : trialExpired ? (
+        <div className="text-center p-8">
+          <h2 className="text-2xl font-bold text-red-600 mb-4">Trial Period Expired</h2>
+          <p className="text-gray-600 mb-4">Your trial period has ended. Please contact support to continue using the service.</p>
+          <a
+    href="https://wa.link/jopopm"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="mt-4 px-6 py-3 bg-green-500 text-white text-lg font-semibold rounded hover:bg-green-600 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 w-full inline-block text-center"
+  >
+    Pay Now
+  </a>
+         
+
+          <button
+            onClick={handleLogout}
+            className="mt-6 px-6 py-3 bg-primary text-white text-lg font-semibold rounded hover:bg-blue-600 transition-colors"
+          >
+            Back to Login
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center w-full max-w-lg text-center px-4">
+          {(
+            <>
+              {botStatus === 'qr' ? (
+                <>
+                  <div className="mt-2 text-md text-gray-800 dark:text-gray-200">
+                    Please use your WhatsApp QR scanner to scan the code or enter your phone number for a pairing code.
+                  </div>
+                  <hr className="w-full my-4 border-t border-gray-300 dark:border-gray-700" />
+                  {error && <div className="text-red-500 dark:text-red-400 mt-2">{error}</div>}
+                  {isQRLoading ? (
+                    <div className="mt-4">
+                      <img alt="Logo" className="w-32 h-32 animate-spin mx-auto" src={logoUrl} style={{ animation: 'spin 10s linear infinite' }} />
+                      <p className="mt-2 text-gray-600 dark:text-gray-400">Loading QR Code...</p>
                     </div>
-                    <hr className="w-full my-4 border-t border-gray-300 dark:border-gray-700" />
-                    {error && <div className="text-red-500 dark:text-red-400 mt-2">{error}</div>}
-                    {isQRLoading ? (
-                      <div className="mt-4">
-                        <img alt="Logo" className="w-32 h-32 animate-spin mx-auto" src={logoUrl} style={{ animation: 'spin 10s linear infinite' }} />
-                        <p className="mt-2 text-gray-600 dark:text-gray-400">Loading QR Code...</p>
-                      </div>
-                    ) : qrCodeImage ? (
-                      <div className="bg-white p-4 rounded-lg mt-4">
-                        <img src={qrCodeImage} alt="QR Code" className="max-w-full h-auto" />
-                      </div>
-                    ) : (
-                      <div className="mt-4 text-gray-600 dark:text-gray-400">
-                        No QR Code available. Please try refreshing or use the pairing code option below.
-                      </div>
-                    )}
-                    
-                    <div className="mt-4 w-full">
-                      <input
-                        type="tel"
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
-                        placeholder="Enter phone number with country code eg: 60123456789"
-                        className="w-full px-4 py-2 border rounded-md text-gray-700 focus:outline-none focus:border-blue-500"
-                      />
-                      <button
-                        onClick={requestPairingCode}
-                        disabled={isPairingCodeLoading || !phoneNumber}
-                        className="mt-2 px-6 py-3 bg-primary text-white text-lg font-semibold rounded hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 w-full disabled:bg-gray-400"
-                      >
-                        {isPairingCodeLoading ? (
-                          <span className="flex items-center justify-center">
-                            <LoadingIcon className="w-5 h-5 mr-2" />
-                            Generating...
-                          </span>
-                        ) : 'Get Pairing Code'}
-                      </button>
+                  ) : qrCodeImage ? (
+                    <div className="bg-white p-4 rounded-lg mt-4">
+                      <img src={qrCodeImage} alt="QR Code" className="max-w-full h-auto" />
                     </div>
-                    
-                    {isPairingCodeLoading && (
-                      <div className="mt-4 text-gray-600 dark:text-gray-400">
-                        Generating pairing code...
-                      </div>
-                    )}
-                    
-                    {pairingCode && (
-                      <div className="mt-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
-                        Your pairing code: <strong>{pairingCode}</strong>
-                        <p className="text-sm mt-2">Enter this code in your WhatsApp app to authenticate.</p>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <div className="mt-2 text-xs text-gray-800 dark:text-gray-200">
-                      {botStatus === 'authenticated' || botStatus === 'ready' 
-                        ? 'Authentication successful. Loading contacts...' 
-                        : botStatus === 'initializing'
-                          ? 'Initializing WhatsApp connection...'
-                          : 'Fetching Data...'}
+                  ) : (
+                    <div className="mt-4 text-gray-600 dark:text-gray-400">
+                      No QR Code available. Please try refreshing or use the pairing code option below.
                     </div>
-                    {isProcessingChats && (
-                      <div className="space-y-2 mt-4">
-                        <Progress className="w-full">
-                          <Progress.Bar 
-                            className="transition-all duration-300 ease-in-out"
-                            style={{ width: `${(fetchedChats / totalChats) * 100}%` }}
-                          >
-                            {Math.round((fetchedChats / totalChats) * 100)}%
-                          </Progress.Bar>
-                        </Progress>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
-                          {processingComplete 
-                            ? contactsFetched
-                              ? "Chats loaded. Preparing to navigate..."
-                              : "Processing complete. Loading contacts..."
-                            : `Processing ${fetchedChats} of ${totalChats} chats`
-                          }
-                        </div>
-                      </div>
-                    )}
-                    {(isLoading || !processingComplete || isFetchingChats) && (
-                    <div className="mt-4 flex flex-col items-center">
-                      <img alt="Logo" className="w-32 h-32 animate-spin mx-auto" src={logoUrl} style={{ animation: 'spin 3s linear infinite' }} />
-                      <p className="mt-2 text-gray-600 dark:text-gray-400">
-                        {isQRLoading ? "Please wait while QR code is loading..." : "Please wait while QR Code is loading..."}
-                      </p>
+                  )}
+                  
+                  <div className="mt-4 w-full">
+                    <input
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      placeholder="Enter phone number with country code eg: 60123456789"
+                      className="w-full px-4 py-2 border rounded-md text-gray-700 focus:outline-none focus:border-blue-500"
+                    />
+                    <button
+                      onClick={requestPairingCode}
+                      disabled={isPairingCodeLoading || !phoneNumber}
+                      className="mt-2 px-6 py-3 bg-primary text-white text-lg font-semibold rounded hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 w-full disabled:bg-gray-400"
+                    >
+                      {isPairingCodeLoading ? (
+                        <span className="flex items-center justify-center">
+                          <LoadingIcon className="w-5 h-5 mr-2" />
+                          Generating...
+                        </span>
+                      ) : 'Get Pairing Code'}
+                    </button>
+                  </div>
+                  
+                  {isPairingCodeLoading && (
+                    <div className="mt-4 text-gray-600 dark:text-gray-400">
+                      Generating pairing code...
                     </div>
-                    )}
-                  </>
-                )}
-                
-                <hr className="w-full my-4 border-t border-gray-300 dark:border-gray-700" />
-                
-                <button
-                  onClick={handleRefresh}
-                  className="mt-4 px-6 py-3 bg-primary text-white text-lg font-semibold rounded hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 w-full"
-                >
-                  Refresh
-                </button>
-                <a
-                  href="https://wa.link/4uie1v"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-4 px-6 py-3 bg-green-500 text-white text-lg font-semibold rounded hover:bg-green-600 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 w-full inline-block text-center"
-                >
-                  Need Help?
-                </a>
-                <button
-                  onClick={handleLogout}
-                  className="mt-4 px-6 py-3 bg-red-500 text-white text-lg font-semibold rounded hover:bg-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 w-full"
-                >
-                  Logout
-                </button>
-            
-                {error && <div className="mt-2 text-red-500 dark:text-red-400">{error}</div>}
-              </>
-            )}
-          </>
-        )}
-      </div>
+                  )}
+                  
+                  {pairingCode && (
+                    <div className="mt-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
+                      Your pairing code: <strong>{pairingCode}</strong>
+                      <p className="text-sm mt-2">Enter this code in your WhatsApp app to authenticate.</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="mt-2 text-xs text-gray-800 dark:text-gray-200">
+                    {botStatus === 'authenticated' || botStatus === 'ready' 
+                      ? 'Authentication successful. Loading contacts...' 
+                      : botStatus === 'initializing'
+                        ? 'Initializing WhatsApp connection...'
+                        : 'Fetching Data...'}
+                  </div>
+                  {isProcessingChats && (
+                    <div className="space-y-2 mt-4">
+                      <Progress className="w-full">
+                        <Progress.Bar 
+                          className="transition-all duration-300 ease-in-out"
+                          style={{ width: `${(fetchedChats / totalChats) * 100}%` }}
+                        >
+                          {Math.round((fetchedChats / totalChats) * 100)}%
+                        </Progress.Bar>
+                      </Progress>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {processingComplete 
+                          ? contactsFetched
+                            ? "Chats loaded. Preparing to navigate..."
+                            : "Processing complete. Loading contacts..."
+                          : `Processing ${fetchedChats} of ${totalChats} chats`
+                        }
+                      </div>
+                    </div>
+                  )}
+                  {(isLoading || !processingComplete || isFetchingChats) && (
+                  <div className="mt-4 flex flex-col items-center">
+                    <img alt="Logo" className="w-32 h-32 animate-spin mx-auto" src={logoUrl} style={{ animation: 'spin 3s linear infinite' }} />
+                    <p className="mt-2 text-gray-600 dark:text-gray-400">
+                      {isQRLoading ? "Please wait while QR code is loading..." : "Please wait while QR Code is loading..."}
+                    </p>
+                  </div>
+                  )}
+                </>
+              )}
+              
+              <hr className="w-full my-4 border-t border-gray-300 dark:border-gray-700" />
+              
+              <button
+                onClick={handleRefresh}
+                className="mt-4 px-6 py-3 bg-primary text-white text-lg font-semibold rounded hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 w-full"
+              >
+                Refresh
+              </button>
+              <a
+    href="https://wa.link/pcgo1k"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="mt-4 px-6 py-3 bg-green-500 text-white text-lg font-semibold rounded hover:bg-green-600 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 w-full inline-block text-center"
+  >
+    Need Help?
+  </a>
+              <button
+                onClick={handleLogout}
+                className="mt-4 px-6 py-3 bg-red-500 text-white text-lg font-semibold rounded hover:bg-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 w-full"
+              >
+                Logout
+              </button>
+      
+              {error && <div className="mt-2 text-red-500 dark:text-red-400">{error}</div>}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
