@@ -259,40 +259,30 @@ function Main() {
 
   return (
     <>
-      <div
-        className={clsx([
-          "p-3 sm:px-8 relative h-screen overflow-hidden bg-primary xl:bg-white dark:bg-darkmode-800 xl:dark:bg-darkmode-600", // Changed lg:overflow-y-auto to overflow-hidden
-          "before:hidden before:xl:block before:content-[''] before:w-[57%] before:-mt-[28%] before:-mb-[16%] before:-ml-[13%] before:absolute before:inset-y-0 before:left-0 before:transform before:rotate-[-4.5deg] before:bg-primary/20 before:rounded-[100%] before:dark:bg-darkmode-400",
-          "after:hidden after:xl:block after:content-[''] after:w-[57%] after:-mt-[20%] after:-mb-[13%] after:-ml-[13%] after:absolute after:inset-y-0 after:left-0 after:transform after:rotate-[-4.5deg] after:bg-primary after:rounded-[100%] after:dark:bg-darkmode-700",
-        ])}
-      >
+      <div className="min-h-screen bg-primary xl:bg-white dark:bg-darkmode-800 xl:dark:bg-darkmode-600 flex flex-col">
         <ThemeSwitcher />
-        <div className="container relative z-10 sm:px-10">
-          <div className="block grid-cols-2 gap-4 xl:grid">
-            {/* BEGIN: Register Info */}
-            <div className="flex-col hidden min-h-screen xl:flex">
-            <div className="my-auto flex flex-col items-center w-full">
-                  <img
-                    alt="Juta Software Logo"
-                    className="w-[80%] -mt-16 -ml-64"
-                    src={logoUrl}
-                  />
-                </div>
+        <div className="flex-1 flex items-center justify-center p-5">
+          <div className="w-full max-w-[1100px] mx-auto">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+              {/* Logo Section */}
+              <div className="hidden xl:flex flex-col justify-center items-center">
+                <img
+                  alt="Juta Software Logo"
+                  className="w-[80%]"
+                  src={logoUrl}
+                />
               </div>
-            {/* END: Register Info */}
-            {/* BEGIN: Register Form */}
-            <div className="flex h-screen py-5 my-10 xl:h-auto xl:py-0 xl:my-0">
-              <div className="w-full px-5 py-8 mx-auto my-auto bg-white rounded-md shadow-md xl:ml-20 dark:bg-darkmode-600 xl:bg-transparent sm:px-8 xl:p-0 xl:shadow-none sm:w-3/4 lg:w-2/4 xl:w-auto">
-                <h2 className="text-2xl font-bold text-center intro-x xl:text-3xl xl:text-left">
+
+              {/* Form Section */}
+              <div className="bg-white dark:bg-darkmode-600 rounded-md shadow-md p-8 xl:bg-transparent xl:shadow-none">
+                <h2 className="text-2xl font-bold text-center xl:text-3xl xl:text-left mb-8">
                   Sign Up
                 </h2>
-                <div className="mt-2 text-center intro-x text-slate-400 dark:text-slate-400 xl:hidden">
-                  Start your 7 days free trial now!
-                </div>
-                <div className="mt-8 intro-x">
+                
+                <div className="space-y-4">
                   <FormInput
                     type="text"
-                    className="block px-4 py-3 intro-x min-w-full xl:min-w-[350px]"
+                    className="w-full px-4 py-3"
                     placeholder="Name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -300,15 +290,17 @@ function Main() {
                   />
                   <FormInput
                     type="text"
-                    className="block px-4 py-3 mt-4 intro-x min-w-full xl:min-w-[350px]"
+                    className="w-full px-4 py-3"
                     placeholder="Company Name"
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
                     onKeyDown={handleKeyDown}
                   />
+                  
+                  {/* Phone input group */}
                   <div className="flex gap-2">
                     <select
-                      className="block px-4 py-3 mt-4 intro-x bg-white border rounded dark:bg-darkmode-600 dark:border-darkmode-400"
+                      className="w-[180px] px-4 py-3 bg-white border rounded dark:bg-darkmode-600 dark:border-darkmode-400"
                       value={selectedCountry}
                       onChange={(e) => setSelectedCountry(e.target.value as CountryCode)}
                     >
@@ -320,55 +312,56 @@ function Main() {
                     </select>
                     <FormInput
                       type="tel"
-                      className="block px-4 py-3 mt-4 intro-x min-w-full xl:min-w-[350px]"
-                      placeholder={`Phone Number (e.g., 123456789)`}
+                      className="flex-1 px-4 py-3"
+                      placeholder="Phone Number (e.g., 123456789)"
                       value={phoneNumber}
                       onChange={handlePhoneChange}
                       onKeyDown={handleKeyDown}
                     />
                   </div>
+
                   <FormInput
                     type="text"
-                    className="block px-4 py-3 mt-4 intro-x min-w-full xl:min-w-[350px]"
+                    className="w-full px-4 py-3"
                     placeholder="Email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     onKeyDown={handleKeyDown}
                   />
-                
+                  
                   <FormInput
                     type="password"
-                    className="block px-4 py-3 mt-4 intro-x min-w-full xl:min-w-[350px]"
+                    className="w-full px-4 py-3"
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyDown={handleKeyDown}
                   />
-                
                 </div>
-                <div className="mt-5 text-center intro-x xl:mt-8 xl:text-left">
+
+                <div className="mt-8 flex flex-col xl:flex-row gap-3">
                   <Button
                     variant="primary"
-                    className="w-full px-4 py-3 align-top xl:w-32 xl:mr-3"
+                    className="w-full xl:w-32"
                     onClick={handleRegister}
                   >
                     Register
                   </Button>
-                  <Link to="/login">
+                  <Link to="/login" className="w-full xl:w-32">
                     <Button
                       variant="outline-secondary"
-                      className="w-full px-4 py-3 mt-3 align-top xl:w-32 xl:mt-0"
+                      className="w-full"
                     >
                       Back to Login
                     </Button>
                   </Link>
                 </div>
+
                 {registerResult && (
                   <div className="mt-5 text-center text-red-500">{registerResult}</div>
                 )}
               </div>
             </div>
-            {/* END: Register Form */}
           </div>
         </div>
       </div>
