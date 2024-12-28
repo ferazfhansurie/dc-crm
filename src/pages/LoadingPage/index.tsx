@@ -765,7 +765,7 @@ useEffect(() => {
                   {error && <div className="text-red-500 dark:text-red-400 mt-2">{error}</div>}
                   {isQRLoading ? (
                     <div className="mt-4">
-                      <img alt="Logo" className="w-32 h-32 animate-spin mx-auto" src={logoUrl} style={{ animation: 'spin 10s linear infinite' }} />
+                      
                       <p className="mt-2 text-gray-600 dark:text-gray-400">Loading QR Code...</p>
                     </div>
                   ) : qrCodeImage ? (
