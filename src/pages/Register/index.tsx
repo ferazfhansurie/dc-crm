@@ -95,7 +95,7 @@ function Main() {
       const code = generateVerificationCode();
       localStorage.setItem('verificationCode', code);
       
-      const response = await fetch(`https://mighty-dane-newly.ngrok-free.app/api/v2/messages/text/001/${formattedPhone}`, {
+      const response = await fetch(`https://mighty-dane-newly.ngrok-free.app/api/v2/messages/text/063/${formattedPhone}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
