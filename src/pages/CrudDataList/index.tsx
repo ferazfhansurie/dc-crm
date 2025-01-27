@@ -28,6 +28,10 @@ import { saveAs } from 'file-saver';
 import Papa from 'papaparse';
 import ReactPaginate from 'react-paginate';
 import { Tab } from '@headlessui/react';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+
+import type { DropResult } from '@hello-pangea/dnd';
+
 
 
 const firebaseConfig = {
@@ -91,7 +95,9 @@ function Main() {
     intakePreference?:string | null;
     englishProficiency?:string | null;
     passport?:string | null;
+    importedTags?:string[] | null;
     customFields?: { [key: string]: string };
+    notes?: string | null;  // Add this line to the Contact interface
 
   }
   
@@ -102,6 +108,8 @@ function Main() {
     phoneNumber: string;
     phoneIndex: number;
     employeeId: string;
+    assignedContacts: number;
+    quotaLeads: number;
 
   }
   interface Tag {
@@ -116,6 +124,10 @@ function Main() {
     id?: string;
     chatIds: string[];
     message: string;
+    messages?: Array<{
+      [x: string]: string; text: string 
+}>;
+    messageDelays?: number[];
     mediaUrl?: string;
     documentUrl?: string;
     mimeType?: string;
@@ -137,6 +149,17 @@ function Main() {
     count?: number;
     v2?:boolean;
     whapiToken?:string;
+    minDelay: number;
+    maxDelay: number;
+    activateSleep: boolean;
+    sleepAfterMessages: number | null;
+    sleepDuration: number | null;
+    activeHours: {
+      start: string;
+      end: string;
+    };
+    infiniteLoop: boolean;
+    numberOfBatches: number;
     processedMessages?: {
       chatId: string;
       message: string;
@@ -156,6 +179,22 @@ function Main() {
       hasPlaceholders: boolean;
       placeholdersUsed: string[];
     };
+  }
+  interface Message {
+    text: string;
+    delayAfter: number;
+  }
+
+  type ColumnConfig = {
+    id: string;
+    label: string;
+    sortKey?: string;
+  };
+
+  interface QRCodeData {
+    phoneIndex: number;
+    status: string;
+    qrCode: string | null;
   }
 
   const DatePickerComponent = DatePicker as any;
@@ -194,7 +233,12 @@ function Main() {
   const [excludedTags, setExcludedTags] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [showColumnsModal, setShowColumnsModal] = useState(false);
   const [exportModalContent, setExportModalContent] = useState<React.ReactNode | null>(null);
+  const [focusedMessageIndex, setFocusedMessageIndex] = useState<number>(0);
+  const [cursorPosition, setCursorPosition] = useState<number>(0);
+  const [selectedScheduledMessages, setSelectedScheduledMessages] = useState<string[]>([]);
+
   const [newContact, setNewContact] = useState({
       contactName: '',
       lastName: '',
@@ -208,6 +252,7 @@ function Main() {
       expiryDate:'',
       vehicleNumber:'',
       ic:'',
+      notes: '',  // Add this line
   });
   const [total, setTotal] = useState(0);
   const [fetched, setFetched] = useState(0);
@@ -249,6 +294,10 @@ function Main() {
   const [phoneOptions, setPhoneOptions] = useState<number[]>([]);
   const [phoneNames, setPhoneNames] = useState<{ [key: number]: string }>({});
   const [employeeSearch, setEmployeeSearch] = useState('');
+
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
   const [selectedPhoneIndex, setSelectedPhoneIndex] = useState<number | null>(null);
   const [showRecipients, setShowRecipients] = useState<string | null>(null);
   const [recipientSearch, setRecipientSearch] = useState('');
@@ -257,8 +306,51 @@ function Main() {
   const [activateSleep, setActivateSleep] = useState(false);
   const [sleepAfterMessages, setSleepAfterMessages] = useState(20);
   const [sleepDuration, setSleepDuration] = useState(5);
+  const [activeTimeStart, setActiveTimeStart] = useState('09:00');
+  const [activeTimeEnd, setActiveTimeEnd] = useState('17:00');
+  const [messages, setMessages] = useState<Message[]>([{ text: '', delayAfter: 0 }]);
+  const [infiniteLoop, setInfiniteLoop] = useState(false);
   const [showScheduledMessages, setShowScheduledMessages] = useState<boolean>(true);
- 
+  // First, add a state to track visible columns
+  const [visibleColumns, setVisibleColumns] = useState<{ [key: string]: boolean }>({
+    checkbox: true,  // Make sure this is included and set to true
+    contact: true,
+    phone: true,
+    tags: true,
+    notes: true,
+    ...contacts[0]?.customFields ? 
+    Object.keys(contacts[0].customFields).reduce((acc, field) => ({
+      ...acc,
+      [`customField_${field}`]: true
+    }), {}) : {},
+    actions: true,
+  });
+
+  const [columnOrder, setColumnOrder] = useState<string[]>(() => {
+    const saved = localStorage.getItem('contactsColumnOrder');
+    return saved ? JSON.parse(saved) : [
+      'checkbox',
+      'contact',
+      'phone',
+      'tags',
+      'points',
+      'notes',
+      'actions',
+      ...Object.keys(contacts[0]?.customFields || {}).map(field => `customField_${field}`)
+    ];
+  });
+
+  // Add this handler function
+  const handleColumnReorder = (result: DropResult) => {
+    if (!result.destination) return;
+    
+    const newColumnOrder = Array.from(columnOrder);
+    const [reorderedItem] = newColumnOrder.splice(result.source.index, 1);
+    newColumnOrder.splice(result.destination.index, 0, reorderedItem);
+    
+    setColumnOrder(newColumnOrder);
+    localStorage.setItem('contactsColumnOrder', JSON.stringify(newColumnOrder));
+  };
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -285,7 +377,7 @@ function Main() {
       if (companyDocSnap.exists()) {
         const companyData = companyDocSnap.data();
         const phoneCount = companyData.phoneCount || 0;
-        console.log('phoneCount for this company:', phoneCount);
+        
         
         // Generate phoneNames object
         const phoneNamesData: { [key: number]: string } = {};
@@ -295,7 +387,7 @@ function Main() {
             phoneNamesData[i] = phoneName;
           }
         }
-        console.log('Phone names:', phoneNamesData);
+        
         setPhoneNames(phoneNamesData);
         setPhoneOptions(Object.keys(phoneNamesData).map(Number));
       }
@@ -305,6 +397,118 @@ function Main() {
       setPhoneNames({});
     }
   };
+
+  // Add this sorting function
+const handleSort = (field: string) => {
+  if (sortField === field) {
+    // If clicking the same field, toggle direction
+    setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+  } else {
+    // If clicking a new field, set it with ascending direction
+    setSortField(field);
+    setSortDirection('asc');
+  }
+};
+const toggleScheduledMessageSelection = (messageId: string) => {
+  setSelectedScheduledMessages(prev => 
+    prev.includes(messageId) 
+      ? prev.filter(id => id !== messageId)
+      : [...prev, messageId]
+  );
+};
+const handleDeleteSelected = async () => {
+  if (selectedScheduledMessages.length === 0) {
+    toast.error('Please select messages to delete');
+    return;
+  }
+
+  try {
+    const user = auth.currentUser;
+    if (!user?.email) throw new Error('User not authenticated');
+
+    const docUserRef = doc(firestore, 'user', user.email);
+    const docUserSnapshot = await getDoc(docUserRef);
+    if (!docUserSnapshot.exists()) throw new Error('User document not found');
+
+    const userData = docUserSnapshot.data();
+    const companyId = userData.companyId;
+
+    // Delete all selected messages
+    await Promise.all(
+      selectedScheduledMessages.map(messageId => 
+        handleDeleteScheduledMessage(messageId)
+      )
+    );
+
+    setSelectedScheduledMessages([]); // Clear selection after deletion
+    toast.success(`Successfully deleted ${selectedScheduledMessages.length} messages`);
+  } catch (error) {
+    console.error('Error deleting selected messages:', error);
+    toast.error('Failed to delete some messages');
+  }
+};
+const handleSendSelectedNow = async () => {
+  if (selectedScheduledMessages.length === 0) {
+    toast.error('Please select messages to send');
+    return;
+  }
+
+  try {
+    const selectedMessages = scheduledMessages.filter(msg => 
+      selectedScheduledMessages.includes(msg.id!)
+    );
+
+    for (const message of selectedMessages) {
+      await handleSendNow(message);
+    }
+
+    setSelectedScheduledMessages([]); // Clear selection after sending
+    toast.success(`Successfully sent ${selectedMessages.length} messages`);
+  } catch (error) {
+    console.error('Error sending selected messages:', error);
+    toast.error('Failed to send some messages');
+  }
+};
+const getDisplayedContacts = () => {
+  if (!sortField) return currentContacts;
+
+  return [...currentContacts].sort((a, b) => {
+    let aValue: any = a[sortField as keyof typeof a];
+    let bValue: any = b[sortField as keyof typeof b];
+
+    // Handle special cases
+    if (sortField === 'tags') {
+      // Sort by first tag, or empty string if no tags
+      aValue = a.tags?.[0] || '';
+      bValue = b.tags?.[0] || '';
+    } else if (sortField === 'points') {
+      // Sort numerically for points
+      aValue = Number(a.points || 0);
+      bValue = Number(b.points || 0);
+      return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+    } else if (sortField.startsWith('customField_')) {
+      const fieldName = sortField.replace('customField_', '');
+      aValue = a.customFields?.[fieldName] || '';
+      bValue = b.customFields?.[fieldName] || '';
+    }
+
+    // Convert to strings for comparison (except for points which is handled above)
+    if (sortField !== 'points') {
+      aValue = String(aValue || '').toLowerCase();
+      bValue = String(bValue || '').toLowerCase();
+      return sortDirection === 'asc' 
+        ? aValue.localeCompare(bValue)
+        : bValue.localeCompare(aValue);
+    }
+
+    return 0; // Fallback return for points sorting
+  });
+};
+
+const resetSort = () => {
+  setSortField(null);
+  setSortDirection('asc');
+};
 
   const filterContactsByUserRole = (contacts: Contact[], userRole: string, userName: string) => {
     switch (userRole) {
@@ -358,6 +562,55 @@ function Main() {
       if (!docSnapshot.exists()) throw new Error('No company document found');
       const companyData = docSnapshot.data();
       const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+  
+      // Check for trigger tags and remove associated follow-up templates
+      const templatesRef = collection(firestore, 'companies', companyId, 'followUpTemplates');
+      const templatesSnapshot = await getDocs(templatesRef);
+      
+      // Find all templates where any of the removed tags are triggers
+      const matchingTemplates = templatesSnapshot.docs
+        .filter(doc => {
+          const template = doc.data();
+          return template.triggerTags?.some((tag: string) => 
+            tagsToRemove.includes(tag)
+          ) && template.status === 'active';
+        })
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+  
+      // Remove follow-up templates
+      for (const template of matchingTemplates) {
+        try {
+          const phoneNumber = contact.phone?.replace(/\D/g, '') || '';
+          const followUpResponse = await fetch(`${baseUrl}/api/tag/followup`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              requestType: 'removeTemplate',
+              phone: phoneNumber,
+              first_name: contact.contactName || contact.firstName || phoneNumber,
+              phoneIndex: userData.phone || 0,
+              templateId: template.id,
+              idSubstring: companyId
+            }),
+          });
+  
+          if (!followUpResponse.ok) {
+            const errorText = await followUpResponse.text();
+            console.error('Failed to remove template messages:', errorText);
+          } else {
+            
+          }
+        } catch (error) {
+          console.error('Error removing template messages:', error);
+        }
+      }
+  
+      // Remove tags from contact
       const response = await axios.post(`${baseUrl}/api/contacts/remove-tags`, {
         companyId,
         contactPhone: contact.phone,
@@ -374,12 +627,12 @@ function Main() {
           )
         );
   
-        toast.success('Tags removed successfully!');
+        toast.success(`Tags and associated follow-ups removed successfully!`);
         await fetchContacts();
       }
     } catch (error) {
       console.error('Error removing tags:', error);
-      toast.error('Failed to remove tags');
+      toast.error('Failed to remove tags and follow-ups');
     }
   };
   const fetchContacts = useCallback(async () => {
@@ -411,7 +664,7 @@ function Main() {
   
       const querySnapshot = await getDocs(q);
       const fetchedContacts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Contact));
-      console.log('Fetched contacts2:', fetchedContacts);
+      
       // Function to check if a chat_id is for an individual contact
       const isIndividual = (chat_id: string | undefined) => {
         return chat_id?.endsWith('@c.us') || false;
@@ -483,7 +736,7 @@ allSortedContacts.sort((a, b) => {
     };
   }, [filteredContacts]);
   useEffect(() => {
-    console.log('Selected tags updated:', selectedTags);
+    
   }, [selectedTags]);
   const loadMoreContacts = () => {
     if (initialContacts.length <= contacts.length) return;
@@ -595,7 +848,7 @@ const showTagSelectionModal = () => {
       <TagSelectionModal 
         onClose={() => setExportModalOpen(false)}
         onExport={(tags) => {
-          console.log('Exporting with tags:', tags);
+          
           exportContactsByTags(tags);
         }}
       />
@@ -605,7 +858,7 @@ const showTagSelectionModal = () => {
 };
 
 const exportContactsByTags = (currentSelectedTags: string[]) => {
-  console.log('Exporting contacts. Selected tags:', currentSelectedTags);
+  
 
   if (currentSelectedTags.length === 0) {
     toast.error("No tags selected. Please select at least one tag.");
@@ -616,7 +869,7 @@ const exportContactsByTags = (currentSelectedTags: string[]) => {
     contact.tags && contact.tags.some(tag => currentSelectedTags.includes(tag))
   );
 
-  console.log('Contacts to export:', contactsToExport);
+  
 
   if (contactsToExport.length === 0) {
     toast.error("No contacts found with the selected tags.");
@@ -665,7 +918,20 @@ const handleTagSelection = (e: React.ChangeEvent<HTMLInputElement>, tagName: str
 const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
   const file = e.target.files?.[0];
   if (file) {
-    setSelectedMedia(file);
+    const maxSizeInMB = 20;
+    const maxSizeInBytes = maxSizeInMB * 1024 * 1024;
+
+    if (file.type.startsWith('video/') && file.size > maxSizeInBytes) {
+      toast.error('The video file is too big. Please select a file smaller than 20MB.');
+      return;
+    }
+
+    try {
+      setSelectedMedia(file);
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      toast.error('Upload unsuccessful. Please try again.');
+    }
   }
 };
 
@@ -747,7 +1013,7 @@ const handleSaveNewContact = async () => {
     const docUserRef = doc(firestore, 'user', user?.email!);
     const docUserSnapshot = await getDoc(docUserRef);
     if (!docUserSnapshot.exists()) {
-      console.log('No such document for user!');
+      
       return;
     }
 
@@ -766,7 +1032,7 @@ const handleSaveNewContact = async () => {
     }
     const chat_id = formattedPhone.split('+')[1]+"@c.us";
     // Prepare the contact data with the formatted phone number
-    const contactData = {
+    const contactData: { [key: string]: any } = {
       id: formattedPhone,
       chat_id: chat_id,
       contactName: newContact.contactName,
@@ -804,6 +1070,7 @@ const handleSaveNewContact = async () => {
       expiryDate: '',
       vehicleNumber: '',
       ic: '',
+      notes: '',  // Add this line
     });
 
     await fetchContacts();
@@ -817,14 +1084,14 @@ const handleSaveNewTag = async () => {
   try {
     const user = auth.currentUser;
     if (!user) {
-      console.log('No authenticated user');
+      
       return;
     }
 
     const docUserRef = doc(firestore, 'user', user.email!);
     const docUserSnapshot = await getDoc(docUserRef);
     if (!docUserSnapshot.exists()) {
-      console.log('No such document for user!');
+      
       return;
     }
     const userData = docUserSnapshot.data();
@@ -833,7 +1100,7 @@ const handleSaveNewTag = async () => {
     const companyRef = doc(firestore, 'companies', companyId);
     const companySnapshot = await getDoc(companyRef);
     if (!companySnapshot.exists()) {
-      console.log('No such document for company!');
+      
       return;
     }
     const companyData = companySnapshot.data();
@@ -874,7 +1141,7 @@ const handleSaveNewTag = async () => {
           }
         }
       );
-      console.log(response.data);
+      
       setTagList([...tagList, response.data.tag]);
     }
 
@@ -974,7 +1241,7 @@ const handleConfirmDeleteTag = async () => {
     try {
       const user = auth.currentUser;
       if (!user) {
-        console.log('No authenticated user');
+        
         setLoading(false);
         return;
       }
@@ -982,7 +1249,7 @@ const handleConfirmDeleteTag = async () => {
       const docUserRef = doc(firestore, 'user', user.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
-        console.log('No such document for user!');
+        
         setLoading(false);
         return;
       }
@@ -992,7 +1259,7 @@ const handleConfirmDeleteTag = async () => {
       const companyRef = doc(firestore, 'companies', companyId);
       const companySnapshot = await getDoc(companyRef);
       if (!companySnapshot.exists()) {
-        console.log('No such document for company!');
+        
         setLoading(false);
         return;
       }
@@ -1064,7 +1331,7 @@ const handleConfirmDeleteTag = async () => {
       const docUserRef = doc(firestore, 'user', user?.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
-        console.log('No such document for user!');
+        
         return;
       }
 
@@ -1078,15 +1345,15 @@ const handleConfirmDeleteTag = async () => {
       const docRef = doc(firestore, 'companies', companyId);
       const docSnapshot = await getDoc(docRef);
       if (!docSnapshot.exists()) {
-        console.log('No such document for company!');
+        
         return;
       }
       const companyData = docSnapshot.data();
-      console.log(companyData.tags);
-      console.log('tags');
+      
+      
       setStopbot(companyData.stopbot || false);
-      console.log(stopbot);
-      console.log('stopbot');
+      
+      
       const employeeRef = collection(firestore, `companies/${companyId}/employee`);
       const employeeSnapshot = await getDocs(employeeRef);
 
@@ -1094,7 +1361,7 @@ const handleConfirmDeleteTag = async () => {
       employeeSnapshot.forEach((doc) => {
         employeeListData.push({ id: doc.id, ...doc.data() } as Employee);
       });
-     console.log(employeeListData);
+     
       setEmployeeList(employeeListData);
       const employeeNames = employeeListData.map(employee => employee.name.trim().toLowerCase());
       setEmployeeNames(employeeNames);
@@ -1102,7 +1369,7 @@ const handleConfirmDeleteTag = async () => {
       if (companyData.v2 !== true) {
         await fetchTags(companyData.ghl_accessToken, companyData.ghl_location, employeeNames);
       } else {
-        console.log('v2');
+        
         const tagsCollectionRef = collection(firestore, `companies/${companyId}/tags`);
         const tagsSnapshot = await getDocs(tagsCollectionRef);
         const tagsArray = tagsSnapshot.docs.map(doc => ({
@@ -1148,7 +1415,7 @@ const handleConfirmDeleteTag = async () => {
       const docUserRef = doc(firestore, 'user', user?.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
-        console.log('No such document for user!');
+        
         return false;
       }
       const userData = docUserSnapshot.data();
@@ -1156,7 +1423,7 @@ const handleConfirmDeleteTag = async () => {
       const docRef = doc(firestore, `companies/${companyId}/contacts`, contactId);
       const docSnapshot = await getDoc(docRef);
       if (!docSnapshot.exists()) {
-        console.log('No such document for contact!');
+        
         return false;
       }
   
@@ -1175,7 +1442,7 @@ const handleConfirmDeleteTag = async () => {
       toast.error("You don't have permission to assign users to contacts.");
       return;
     }
-  
+
     try {
       const user = auth.currentUser;
       if (!user) {
@@ -1191,154 +1458,333 @@ const handleConfirmDeleteTag = async () => {
       }
       const userData = docUserSnapshot.data();
       const companyId = userData.companyId;
-      const docRef = doc(firestore, 'companies', companyId);
-      const docSnapshot = await getDoc(docRef);
-      if (!docSnapshot.exists()) throw new Error('No company document found');
-      const companyData = docSnapshot.data();
-      const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
-      // Special handling for company '0123'
-      if (companyId === '0123') {
-        // Check if the new tag is an employee name
-        const isNewTagEmployee = employeeList.some(emp => emp.name === tagName);
-        
-        if (isNewTagEmployee) {
-          const contactRef = doc(firestore, 'companies', companyId, 'contacts', contact.id!);
-          const contactDoc = await getDoc(contactRef);
   
-          if (!contactDoc.exists()) {
-            console.error(`Contact document does not exist: ${contact.id}`);
-            toast.error(`Failed to add tag: Contact not found`);
-            return;
-          }
-  
-          const currentTags = contactDoc.data().tags || [];
-          // Find and remove any existing employee tags
-          const updatedTags = currentTags.filter((tag: string) => !employeeList.some(emp => emp.name === tag));
-          
-          // Add the new employee tag
-          updatedTags.push(tagName);
-  
-          // Update Firestore with the new tags
-          await updateDoc(contactRef, {
-            tags: updatedTags
-          });
-  
-          // Update local state
-          setContacts(prevContacts =>
-            prevContacts.map(c =>
-              c.id === contact.id
-                ? { ...c, tags: updatedTags }
-                : c
-            )
-          );
-  
-          console.log(`Employee tag updated to ${tagName} for contact ${contact.id}`);
-          toast.success(`Contact reassigned to ${tagName}`);
-  
-          // Send assignment notification for the new employee
-          await sendAssignmentNotification(tagName, contact);
-          return;
-        }
-      }
-  
-      // Check if tag is a trigger tag by looking up follow-up templates
-      const templatesRef = collection(firestore, 'companies', companyId, 'followUpTemplates');
-      const templatesSnapshot = await getDocs(templatesRef);
+    // Check if this is the 'Stop Blast' tag
+    if (tagName.toLowerCase() === 'stop blast') {
+      const contactChatId = contact.phone?.replace(/\D/g, '') + "@s.whatsapp.net";
+      const scheduledMessagesRef = collection(firestore, `companies/${companyId}/scheduledMessages`);
+      const scheduledSnapshot = await getDocs(scheduledMessagesRef);
       
-      let matchingTemplate: any = null;
-      templatesSnapshot.forEach(doc => {
-        const template = doc.data();
-        if (template.triggerTags?.includes(tagName) && template.status === 'active') {
-          matchingTemplate = { 
-            id: doc.id, 
-            ...template 
+      // Create a log entry for this batch of deletions
+      const logsRef = collection(firestore, `companies/${companyId}/scheduledMessageLogs`);
+      const batchLogRef = doc(logsRef);
+      
+      const deletedMessages: any[] = [];
+      
+      // Delete all scheduled messages for this contact
+      const deletePromises = scheduledSnapshot.docs.map(async (doc) => {
+        const messageData = doc.data();
+        if (messageData.chatIds?.includes(contactChatId)) {
+          const logEntry = {
+            messageId: doc.id,
+            deletedAt: serverTimestamp(),
+            deletedBy: user.email,
+            reason: 'Stop Blast tag added',
+            contactInfo: {
+              id: contact.id,
+              phone: contact.phone,
+              name: contact.contactName
+            },
+            originalMessage: messageData
           };
+
+          if (messageData.chatIds.length === 1) {
+            // Full message deletion
+            try {
+              await axios.delete(`https://mighty-dane-newly.ngrok-free.app/api/schedule-message/${companyId}/${doc.id}`);
+    
+              
+            } catch (error) {
+      
+            }
+          } else {
+            // Partial message update (removing recipient)
+            try {
+              const updatedChatIds = messageData.chatIds.filter((id: string) => id !== contactChatId);
+              const updatedMessages = messageData.messages?.filter((msg: any) => msg.chatId !== contactChatId) || [];
+              
+              await axios.put(
+                `https://mighty-dane-newly.ngrok-free.app/api/schedule-message/${companyId}/${doc.id}`,
+                {
+                  ...messageData,
+                  chatIds: updatedChatIds,
+                  messages: updatedMessages
+                }
+              );
+         
+              deletedMessages.push(logEntry);
+              
+            } catch (error) {
+              console.error(`Error updating scheduled message ${doc.id}:`, error);
+              
+              deletedMessages.push(logEntry);
+            }
+          }
         }
       });
+
+      await Promise.all(deletePromises);
+
+      // Save the batch log if there were any deletions
+      if (deletedMessages.length > 0) {
+        await setDoc(batchLogRef, {
+          timestamp: serverTimestamp(),
+          triggeredBy: user.email,
+          contactId: contact.id,
+          contactPhone: contact.phone,
+          reason: 'Stop Blast tag added',
+          deletedMessages: deletedMessages
+        });
+
+        console.log(`Logged ${deletedMessages.length} deleted messages`, {
+          logId: batchLogRef.id,
+          deletedMessages
+        });
+
+        toast.success(`Cancelled ${deletedMessages.length} scheduled messages for this contact`);
+      } else {
+        
+        toast.info('No scheduled messages found for this contact');
+      }
+    }
+      // Check if the tag is an employee name
+      const employee = employeeList.find(emp => emp.name === tagName);
+      
+      if (employee) {
+        // Handle employee assignment
+        const employeeRef = doc(firestore, `companies/${companyId}/employee/${employee.id}`);
+        const employeeDoc = await getDoc(employeeRef);
+        
+        if (!employeeDoc.exists()) {
+          toast.error(`Employee document not found for ${tagName}`);
+          return;
+        }
   
-      // Update contact's tags
-      const contactRef = doc(firestore, 'companies', companyId, 'contacts', contact.id!);
-      const contactDoc = await getDoc(contactRef);
+        const employeeData = employeeDoc.data();
+        const contactRef = doc(firestore, `companies/${companyId}/contacts/${contact.id}`);
+        const contactDoc = await getDoc(contactRef);
   
-      if (!contactDoc.exists()) {
-        console.error(`Contact document does not exist: ${contact.id}`);
-        toast.error(`Failed to add tag: Contact not found`);
+        if (!contactDoc.exists()) {
+          toast.error('Contact not found');
+          return;
+        }
+  
+        const currentTags = contactDoc.data().tags || [];
+        const oldEmployeeTag = currentTags.find((tag: string) => 
+          employeeList.some(emp => emp.name === tag)
+        );
+  
+        // If contact was assigned to another employee, update their quota first
+        if (oldEmployeeTag) {
+          const oldEmployee = employeeList.find(emp => emp.name === oldEmployeeTag);
+          if (oldEmployee) {
+            const oldEmployeeRef = doc(firestore, `companies/${companyId}/employee/${oldEmployee.id}`);
+            const oldEmployeeDoc = await getDoc(oldEmployeeRef);
+            
+            if (oldEmployeeDoc.exists()) {
+              const oldEmployeeData = oldEmployeeDoc.data();
+              await updateDoc(oldEmployeeRef, {
+                assignedContacts: (oldEmployeeData.assignedContacts || 1) - 1,
+                quotaLeads: (oldEmployeeData.quotaLeads || 0) + 1
+              });
+            }
+          }
+        }
+  
+        // Remove any existing employee tags and add new one
+        const updatedTags = [
+          ...currentTags.filter((tag: string) => !employeeList.some(emp => emp.name === tag)),
+          tagName
+        ];
+  
+        // Use batch write for atomic update
+        const batch = writeBatch(firestore);
+  
+        // Update contact with new tags and points if applicable
+        const updateData: any = {
+          tags: updatedTags,
+          assignedTo: tagName,
+          lastAssignedAt: serverTimestamp()
+        };
+  
+        if (contact.points !== undefined) {
+          updateData.points = contact.points;
+        }
+  
+        batch.update(contactRef, updateData);
+  
+        // Update new employee's quota and assigned contacts
+        batch.update(employeeRef, {
+          quotaLeads: Math.max(0, (employeeData.quotaLeads || 0) - 1), // Prevent negative quota
+          assignedContacts: (employeeData.assignedContacts || 0) + 1
+        });
+  
+        await batch.commit();
+  
+        // Update local states
+        setContacts(prevContacts =>
+          prevContacts.map(c =>
+            c.id === contact.id
+              ? { ...c, tags: updatedTags, assignedTo: tagName }
+              : c
+          )
+        );
+        
+        if (selectedContact && selectedContact.id === contact.id) {
+          setSelectedContact((prevContact: any) => ({
+            ...prevContact,
+            tags: updatedTags,
+            assignedTo: tagName
+          }));
+        }
+  
+        setEmployeeList(prevList =>
+          prevList.map(emp =>
+            emp.id === employee.id
+              ? {
+                  ...emp,
+                  quotaLeads: Math.max(0, (emp.quotaLeads || 0) - 1), // Prevent negative quota
+                  assignedContacts: (emp.assignedContacts || 0) + 1
+                }
+              : oldEmployeeTag && emp.name === oldEmployeeTag
+                ? {
+                    ...emp,
+                    quotaLeads: (emp.quotaLeads || 0) + 1,
+                    assignedContacts: (emp.assignedContacts || 1) - 1
+                  }
+                : emp
+          )
+        );
+  
+        toast.success(`Contact assigned to ${tagName}`);
+        await sendAssignmentNotification(tagName, contact);
         return;
       }
   
-      const currentTags = contactDoc.data().tags || [];
-  
-      // Prepare update data
-      const updateData: any = {
-        tags: arrayUnion(tagName)
-      };
-  
-      // Only include points if it's defined
-      if (contact.points !== undefined) {
-        updateData.points = contact.points;
-      }
-  
-      // If the tag is 'closed', add 5 points to the contact
-      if (tagName.toLowerCase() === 'closed') {
-        updateData.points = (contact.points || 0) + 5;
-      }
-  
-      await updateDoc(contactRef, updateData);
-  
-      // Update local state
-      setContacts(prevContacts =>
-        prevContacts.map(c =>
-          c.id === contact.id
-            ? { ...c, tags: [...(c.tags || []), tagName] }
-            : c
-        )
-      );
-  
-      if (selectedContact && selectedContact.id === contact.id) {
-        setSelectedContact((prevContact: Contact) => ({
-          ...prevContact,
-          tags: [...(prevContact.tags || []), tagName]
-        }));
-      }
-  
-      // If this is a trigger tag, call the follow-up API
-      if (matchingTemplate) {
-        const response = await fetch(`${baseUrl}/api/tag/followup`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            requestType: 'startTemplate',
-            phone: contact.phone,
-            first_name: contact.contactName || contact.firstName || contact.phone,
-            phoneIndex: contact.phoneIndex || 0,
-            templateId: matchingTemplate.id,
-            idSubstring: companyId
-          }),
-        });
-  
+     // Handle non-employee tags
+     const docRef = doc(firestore, 'companies', companyId);
+     const docSnapshot = await getDoc(docRef);
+     if (!docSnapshot.exists()) {
+       
+       return;
+     }
+     const data2 = docSnapshot.data();
+     const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+
+     // Check for trigger tags
+     const templatesRef = collection(firestore, 'companies', companyId, 'followUpTemplates');
+     const templatesSnapshot = await getDocs(templatesRef);
+     
+     let matchingTemplate: any = null;
+     templatesSnapshot.forEach(doc => {
+       const template = doc.data();
+       if (template.triggerTags?.includes(tagName) && template.status === 'active') {
+         matchingTemplate = { id: doc.id, ...template };
+       }
+     });
+
+     // Update contact's tags
+     const contactRef = doc(firestore, `companies/${companyId}/contacts/${contact.id}`);
+     const contactDoc = await getDoc(contactRef);
+
+     if (!contactDoc.exists()) {
+       toast.error('Contact not found');
+       return;
+     }
+
+     const currentTags = contactDoc.data().tags || [];
+
+     if (!currentTags.includes(tagName)) {
+       await updateDoc(contactRef, {
+         tags: arrayUnion(tagName)
+       });
+
+       setContacts(prevContacts =>
+         prevContacts.map(c =>
+           c.id === contact.id
+             ? { ...c, tags: [...(c.tags || []), tagName] }
+             : c
+         )
+       );
+
+
+// Add these constants at the top of the file with other constants
+const BATCH_SIZE = 10; // Number of requests to process at once
+const DELAY_BETWEEN_BATCHES = 1000; // Delay in ms between batches
+
+// Helper function to process requests in batches
+const processBatchRequests = async (requests: any[], batchSize: number, delayMs: number) => {
+  const results = [];
+  for (let i = 0; i < requests.length; i += batchSize) {
+    const batch = requests.slice(i, i + batchSize);
+    const batchResults = await Promise.all(batch);
+    results.push(...batchResults);
+    
+    if (i + batchSize < requests.length) {
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  return results;
+};
+
+// Update the relevant section in your code
+if (matchingTemplate) {
+  try {
+    // Prepare the requests
+    const requests = selectedContacts.map(contact => {
+      const phoneNumber = contact.phone?.replace(/\D/g, '');
+      return fetch(`${baseUrl}/api/tag/followup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestType: 'startTemplate',
+          phone: phoneNumber,
+          first_name: contact.contactName || contact.firstName || phoneNumber,
+          phoneIndex: contact.phoneIndex || 0,
+          templateId: matchingTemplate.id,
+          idSubstring: companyId
+        }),
+      }).then(async response => {
         if (!response.ok) {
-          throw new Error(`Follow-up API error: ${response.statusText}`);
+          throw new Error(`Follow-up API error for ${phoneNumber}: ${response.statusText}`);
         }
-  
-        console.log('Follow-up template started successfully');
-        toast.success('Follow-up sequence started');
-      }
-  
-      toast.success(`Tag "${tagName}" added to contact successfully!`);
-  
-      // Send assignment notification
-      const employee = employeeList.find(emp => emp.name === tagName);
-      if (employee) {
-        await sendAssignmentNotification(tagName, contact);
-      }
-  
-      await fetchContacts();
-  
+        return { success: true, phone: phoneNumber };
+      }).catch(error => {
+        console.error(`Error processing ${phoneNumber}:`, error);
+        return { success: false, phone: phoneNumber, error };
+      });
+    });
+
+    // Process requests in batches
+    const results = await processBatchRequests(requests, BATCH_SIZE, DELAY_BETWEEN_BATCHES);
+
+    // Count successes and failures
+    const successes = results.filter(r => r.success).length;
+    const failures = results.filter(r => !r.success).length;
+
+    // Show appropriate toast messages
+    if (successes > 0) {
+      toast.success(`Follow-up sequences started for ${successes} contacts`);
+    }
+    if (failures > 0) {
+      toast.error(`Failed to start follow-up sequences for ${failures} contacts`);
+    }
+
+  } catch (error) {
+    console.error('Error processing follow-up sequences:', error);
+    toast.error('Failed to process follow-up sequences');
+  }
+}
+
+   
+
+       toast.success(`Tag "${tagName}" added to contact`);
+     } else {
+       toast.info(`Tag "${tagName}" already exists for this contact`);
+     }
     } catch (error) {
-      console.error('Error adding tag and assigning contact:', error);
-      toast.error('Failed to add tag and assign contact.');
+      console.error('Error adding tag to contact:', error);
+      toast.error('Failed to add tag to contact');
     }
   };
 
@@ -1374,7 +1820,7 @@ const handleConfirmDeleteTag = async () => {
       const notificationSnapshot = await getDoc(notificationRef);
       
       if (notificationSnapshot.exists()) {
-        console.log('Notification already sent for this assignment');
+        
         return;
       }
   
@@ -1394,7 +1840,7 @@ const handleConfirmDeleteTag = async () => {
   
       // Format the phone number for WhatsApp chat_id
       const employeePhone = `${assignedEmployee.phoneNumber.replace(/[^\d]/g, '')}@c.us`;
-      console.log('Formatted employee chat_id:', employeePhone);
+      
   
       if (!employeePhone || !/^\d+@c\.us$/.test(employeePhone)) {
         console.error('Invalid employeePhone:', employeePhone);
@@ -1423,7 +1869,7 @@ const handleConfirmDeleteTag = async () => {
               phoneIndex = 0;
           } else {
               // Handle other cases
-              console.log(`User phone index is: ${userData.phone}`);
+              
               phoneIndex = userData.phone;
           }
       } else {
@@ -1433,29 +1879,16 @@ const handleConfirmDeleteTag = async () => {
       let url;
       let requestBody;
       if (companyData.v2 === true) {
-        console.log("v2 is true");
+        
         url = `${baseUrl}/api/v2/messages/text/${companyId}/${employeePhone}`;
         requestBody = { message, 
           phoneIndex  };
         } else {
-        console.log("v2 is false");
+        
         url = `${baseUrl}/api/messages/text/${employeePhone}/${companyData.whapiToken}`;
         requestBody = { message, 
           phoneIndex  };
       }
-  
-      console.log('Sending request to:', url);
-      console.log('Request body:', JSON.stringify(requestBody));
-  
-      console.log('Full request details:', {
-        url,
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: message,
-          phoneIndex: phoneIndex,
-        })
-      });
   
       // Send WhatsApp message to the employee
       const response = await fetch(url, {
@@ -1471,8 +1904,8 @@ const handleConfirmDeleteTag = async () => {
       }
   
       const responseData = await response.json();
-      console.log('Assignment notification response:', responseData);
-      console.log('Sent to phone number:', employeePhone);
+      
+      
   
       // Mark notification as sent
       await setDoc(notificationRef, {
@@ -1493,10 +1926,10 @@ const handleConfirmDeleteTag = async () => {
       }
       
       // Log additional information that might be helpful
-      console.log('Assigned Employee Name:', assignedEmployeeName);
-      console.log('Contact:', contact);
-      console.log('Employee List:', employeeList);
-      console.log('Company ID:', companyId);
+      
+      
+      
+      
     }
   };
 
@@ -1513,21 +1946,21 @@ const handleConfirmDeleteTag = async () => {
 
   const handleSyncContact = async () => {
     try {
-      console.log('Starting contact synchronization process');
+      
       setFetching(true);
       const user = auth.currentUser;
       if (!user) {
-        console.log('User not authenticated');
+        
         setFetching(false);
         toast.error("User not authenticated");
         return;
       }
 
-      console.log('Fetching user document');
+      
       const docUserRef = doc(firestore, 'user', user.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
-        console.log('User document not found');
+        
         setFetching(false);
         toast.error("User document not found");
         return;
@@ -1541,18 +1974,18 @@ const handleConfirmDeleteTag = async () => {
       const companyData = docSnapshot.data();
       const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
       if (!companyId) {
-        console.log('Company ID not found');
+        
         setFetching(false);
         toast.error("Company ID not found");
         return;
       }
 
-      console.log(`Initiating sync for company ID: ${companyId}`);
+      
       // Call the new API endpoint
       const response = await axios.post(`${baseUrl}/api/sync-contacts/${companyId}`);
 
       if (response.status === 200 && response.data.success) {
-        console.log('Contact synchronization started successfully');
+        
         toast.success("Contact synchronization started successfully");
         // You might want to add some UI indication that sync is in progress
       } else {
@@ -1564,13 +1997,13 @@ const handleConfirmDeleteTag = async () => {
       console.error('Error syncing contacts:', error);
       toast.error("An error occurred while syncing contacts: " + (error instanceof Error ? error.message : String(error)));
     } finally {
-      console.log('Contact synchronization process completed');
+      
       setFetching(false);
     }
   };
   
   const handleRemoveTag = async (contactId: string, tagName: string) => {
-    console.log('removing tag', tagName);
+    
     if (userRole === "3") {
       toast.error("You don't have permission to perform this action.");
       return;
@@ -1637,7 +2070,7 @@ const handleConfirmDeleteTag = async () => {
           const errorText = await response.text();
           console.error('Failed to remove template messages:', errorText);
         } else {
-          console.log(`Follow-up template ${template.id} removed successfully`);
+          
           toast.success('Follow-up sequence stopped');
         }
       } catch (error) {
@@ -1676,7 +2109,7 @@ const handleConfirmDeleteTag = async () => {
       const docUserRef = doc(firestore, 'user', user?.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
-        console.log('No such document for user!');
+        
         return;
       }
       const userData = docUserSnapshot.data();
@@ -1684,7 +2117,7 @@ const handleConfirmDeleteTag = async () => {
       const docRef = doc(firestore, 'companies', companyId);
       const docSnapshot = await getDoc(docRef);
       if (!docSnapshot.exists()) {
-        console.log('No such document for company!');
+        
         return;
       }
       const companyData = docSnapshot.data();
@@ -1762,7 +2195,7 @@ const chatId = tempphone + "@c.us"
         };
         try {
           const response = await axios.request(options);
-          console.log(response.data.meta.total);
+          
           return response;
         } catch (error: any) {
           if (error.response && error.response.status === 429 && retries < maxRetries) {
@@ -1862,7 +2295,7 @@ const chatId = tempphone + "@c.us"
               // If this is the only recipient, delete the entire scheduled message
               try {
                 await axios.delete(`https://mighty-dane-newly.ngrok-free.app/api/schedule-message/${companyId}/${doc.id}`);
-                console.log(`Deleted scheduled message ${doc.id}`);
+                
               } catch (error) {
                 console.error(`Error deleting scheduled message ${doc.id}:`, error);
               }
@@ -1880,7 +2313,7 @@ const chatId = tempphone + "@c.us"
                     messages: updatedMessages
                   }
                 );
-                console.log(`Updated scheduled message ${doc.id}`);
+                
               } catch (error) {
                 console.error(`Error updating scheduled message ${doc.id}:`, error);
               }
@@ -1928,7 +2361,7 @@ const chatId = tempphone + "@c.us"
                 const errorText = await response.text();
                 console.error('Failed to remove template messages:', errorText);
               } else {
-                console.log(`Follow-up template ${template.id} removed for contact ${phoneNumber}`);
+                
               }
             } catch (error) {
               console.error('Error removing template messages:', error);
@@ -1955,7 +2388,6 @@ const chatId = tempphone + "@c.us"
       }
     }
   };
-
   const handleMassDelete = async () => {
     if (userRole === "3") {
       toast.error("You don't have permission to perform this action.");
@@ -1980,24 +2412,119 @@ const chatId = tempphone + "@c.us"
       }
       const userData = docUserSnapshot.data();
       const companyId = userData.companyId;
+      const docRef = doc(firestore, 'companies', companyId);
+      const docSnapshot = await getDoc(docRef);
+      if (!docSnapshot.exists()) throw new Error('No company document found');
+      const companyData = docSnapshot.data();
+      const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
   
-      // Delete selected contacts from Firestore
+      // Get all active templates once
+      const templatesRef = collection(firestore, `companies/${companyId}/followUpTemplates`);
+      const templatesSnapshot = await getDocs(templatesRef);
+      const activeTemplates = templatesSnapshot.docs
+        .filter(doc => doc.data().status === 'active')
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+  
+      // Create batch for contact deletion
       const batch = writeBatch(firestore);
-      selectedContacts.forEach(contact => {
+  
+      // Process each contact
+      for (const contact of selectedContacts) {
+        // Remove follow-up templates
+        for (const template of activeTemplates) {
+          try {
+            const phoneNumber = contact.phone?.replace(/\D/g, '');
+            const followUpResponse = await fetch(`${baseUrl}/api/tag/followup`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                requestType: 'removeTemplate',
+                phone: phoneNumber,
+                first_name: contact.contactName || contact.firstName || phoneNumber,
+                phoneIndex: userData.phone || 0,
+                templateId: template.id,
+                idSubstring: companyId
+              }),
+            });
+  
+            if (!followUpResponse.ok) {
+              const errorText = await followUpResponse.text();
+              console.error('Failed to remove template messages:', errorText);
+            } else {
+              
+            }
+          } catch (error) {
+            console.error('Error removing template messages:', error);
+          }
+        }
+  
+        // Format contact's phone number for scheduled messages
+        const contactChatId = contact.phone?.replace(/\D/g, '') + "@s.whatsapp.net";
+  
+        // Get and handle scheduled messages
+        const scheduledMessagesRef = collection(firestore, `companies/${companyId}/scheduledMessages`);
+        const scheduledSnapshot = await getDocs(scheduledMessagesRef);
+        
+        const messagePromises = scheduledSnapshot.docs.map(async (doc) => {
+          const messageData = doc.data();
+          if (messageData.chatIds?.includes(contactChatId)) {
+            if (messageData.chatIds.length === 1) {
+              try {
+                await axios.delete(`${baseUrl}/api/schedule-message/${companyId}/${doc.id}`);
+                
+              } catch (error) {
+                console.error(`Error deleting scheduled message ${doc.id}:`, error);
+              }
+            } else {
+              try {
+                await axios.put(
+                  `${baseUrl}/api/schedule-message/${companyId}/${doc.id}`,
+                  {
+                    ...messageData,
+                    chatIds: messageData.chatIds.filter((id: string) => id !== contactChatId),
+                    messages: messageData.messages?.filter((msg: any) => msg.chatId !== contactChatId) || []
+                  }
+                );
+                
+              } catch (error) {
+                console.error(`Error updating scheduled message ${doc.id}:`, error);
+              }
+            }
+          }
+        });
+  
+        await Promise.all(messagePromises);
+  
+        // Add contact deletion to batch
         const contactRef = doc(firestore, `companies/${companyId}/contacts`, contact.id!);
         batch.delete(contactRef);
-      });
+      }
+  
+      // Execute the batch delete for contacts
       await batch.commit();
   
       // Update local state
-      setContacts(prevContacts => prevContacts.filter(contact => !selectedContacts.some(selected => selected.id === contact.id)));
+      setContacts(prevContacts => 
+        prevContacts.filter(contact => 
+          !selectedContacts.some(selected => selected.id === contact.id)
+        )
+      );
       setSelectedContacts([]);
       setShowMassDeleteModal(false);
-      toast.success(`${selectedContacts.length} contacts deleted successfully!`);
+      
+      // Refresh lists
+      await fetchScheduledMessages();
+      
+      toast.success(`${selectedContacts.length} contacts and their associated messages deleted successfully!`);
       await fetchContacts();
     } catch (error) {
       console.error('Error deleting contacts:', error);
-      toast.error("An error occurred while deleting the contacts.");
+      toast.error("An error occurred while deleting the contacts and associated messages.");
     }
   };
 
@@ -2008,7 +2535,7 @@ const chatId = tempphone + "@c.us"
         const docUserRef = doc(firestore, 'user', user?.email!);
         const docUserSnapshot = await getDoc(docUserRef);
         if (!docUserSnapshot.exists()) {
-          console.log('No such document for user!');
+          
           return;
         }
         const userData = docUserSnapshot.data();
@@ -2023,6 +2550,7 @@ const chatId = tempphone + "@c.us"
           'state', 'postalCode', 'website', 'dnd', 'dndSettings', 'tags', 
           'source', 'country', 'companyName', 'branch', 
           'expiryDate', 'vehicleNumber', 'points', 'IC', 'assistantId', 'threadid',
+          'notes',  // Add this line
         ];
   
         fieldsToUpdate.forEach(field => {
@@ -2066,7 +2594,7 @@ const addCustomFieldToAllContacts = async (fieldName: string) => {
     const docUserRef = doc(firestore, 'user', user.email!);
     const docUserSnapshot = await getDoc(docUserRef);
     if (!docUserSnapshot.exists()) {
-      console.log('No such document for user!');
+      
       return;
     }
     const userData = docUserSnapshot.data();
@@ -2174,47 +2702,28 @@ const handlePageClick = (event: { selected: number }) => {
   setItemOffset(newOffset);
 };
 
-useEffect(() => {
-  console.log('Contacts:', contacts);
-  console.log('Filtered Contacts:', filteredContactsSearch);
-  console.log('Search Query:', searchQuery);
-}, [contacts, filteredContactsSearch, searchQuery]);
-
-
-//faeez incompetent
 
 const sendBlastMessage = async () => {
-  console.log('Starting sendBlastMessage function');
+  
 
-  // Combine date and time
-  const combinedDateTime = new Date(
-    blastStartDate.getFullYear(),
-    blastStartDate.getMonth(),
-    blastStartDate.getDate(),
-    blastStartTime?.getHours() || 0,
-    blastStartTime?.getMinutes() || 0
-  );
-
+  // Validation checks
   if (selectedContacts.length === 0) {
-    console.log('No contacts selected');
     toast.error("No contacts selected!");
     return;
   }
 
   if (!blastStartTime) {
-    console.log('No start time selected');
     toast.error("Please select a start time for the blast message.");
     return;
   }
 
-  const now = new Date();
-  const scheduledTime = new Date(combinedDateTime);
+  if (messages.some(msg => !msg.text.trim())) {
+    toast.error("Please fill in all message fields");
+    return;
+  }
 
-  
-
-  if (scheduledTime <= now) {
-    console.log('Selected time is in the past');
-    toast.error("Please select a future time for the blast message.");
+  if (phoneIndex === undefined || phoneIndex === null) {
+    toast.error("Please select a phone to send from");
     return;
   }
 
@@ -2223,83 +2732,96 @@ const sendBlastMessage = async () => {
   try {
     let mediaUrl = '';
     let documentUrl = '';
+    let fileName = '';
+    let mimeType = '';
+
+    // Handle media and document uploads...
     if (selectedMedia) {
-      console.log('Uploading media...');
-      mediaUrl = await uploadFile(selectedMedia);
-      console.log(`Media uploaded. URL: ${mediaUrl}`);
+      try {
+        mediaUrl = await uploadFile(selectedMedia);
+        mimeType = selectedMedia.type;
+      } catch (error) {
+        console.error('Error uploading media:', error);
+        toast.error("Failed to upload media file");
+        return;
+      }
     }
+
     if (selectedDocument) {
-      console.log('Uploading document...');
-      documentUrl = await uploadFile(selectedDocument);
-      console.log(`Document uploaded. URL: ${documentUrl}`);
+      try {
+        documentUrl = await uploadFile(selectedDocument);
+        fileName = selectedDocument.name;
+        mimeType = selectedDocument.type;
+      } catch (error) {
+        console.error('Error uploading document:', error);
+        toast.error("Failed to upload document");
+        return;
+      }
     }
 
+    // Authentication and company data checks...
     const user = auth.currentUser;
-    console.log(`Current user: ${user?.email}`);
-
-    const docUserRef = doc(firestore, 'user', user?.email!);
-    const docUserSnapshot = await getDoc(docUserRef);
-    if (!docUserSnapshot.exists()) {
-      console.log('No such document for user!');
+    if (!user) {
+      toast.error("User not authenticated");
       return;
     }
+
+    // Get company data...
+    const docUserRef = doc(firestore, 'user', user.email!);
+    const docUserSnapshot = await getDoc(docUserRef);
+    if (!docUserSnapshot.exists()) {
+      toast.error("User data not found");
+      return;
+    }
+
     const userData = docUserSnapshot.data();
     const companyId = userData.companyId;
-    console.log(`Company ID: ${companyId}`);
 
     const companyRef = doc(firestore, 'companies', companyId);
     const companySnapshot = await getDoc(companyRef);
     if (!companySnapshot.exists()) {
-      console.log('No such document for company!');
+      toast.error("Company data not found");
       return;
     }
+
     const companyData = companySnapshot.data();
     const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
     const isV2 = companyData.v2 || false;
     const whapiToken = companyData.whapiToken || '';
 
+    // Process contact IDs
     const chatIds = selectedContacts.map(contact => {
       const phoneNumber = contact.phone?.replace(/\D/g, '');
-      return phoneNumber ? phoneNumber + "@s.whatsapp.net" : null;
+      return phoneNumber ? phoneNumber + "@c.us" : null;
     }).filter(chatId => chatId !== null);
 
-    if (chatIds.length === 0) {
-      toast.error("No valid chat IDs found in selected contacts.");
-      return;
-    }
-
-    // Process message for each contact
-    const processedMessages = selectedContacts.map(contact => {
-      let processedMessage = blastMessage;
-      // Replace placeholders
-      processedMessage = processedMessage.replace(/@{contactName}/g, contact.contactName || '');
-      processedMessage = processedMessage.replace(/@{firstName}/g, contact.firstName || '');
-      processedMessage = processedMessage.replace(/@{lastName}/g, contact.lastName || '');
-      processedMessage = processedMessage.replace(/@{email}/g, contact.email || '');
-      processedMessage = processedMessage.replace(/@{phone}/g, contact.phone || '');
-      processedMessage = processedMessage.replace(/@{vehicleNumber}/g, contact.vehicleNumber || '');
-      processedMessage = processedMessage.replace(/@{branch}/g, contact.branch || '');
-      processedMessage = processedMessage.replace(/@{expiryDate}/g, contact.expiryDate || '');
-      processedMessage = processedMessage.replace(/@{ic}/g, contact.ic || '');
-      // Add more placeholders as needed
-      return { chatId: contact.phone?.replace(/\D/g, '') + "@s.whatsapp.net", message: processedMessage };
-    });
-
+    // Format the data in the original structure with support for multiple messages
     const scheduledMessageData = {
-      chatIds: chatIds,
-      phoneIndex: phoneIndex,
-      message: blastMessage,
-      messages: processedMessages,
-      batchQuantity: batchQuantity,
-      companyId: companyId,
+      chatIds,
+      phoneIndex,
+      // First message goes in the original message field
+      message: messages[0].text,
+      // Additional messages go in the messages array
+      messages: messages.slice(1).map(msg => ({
+        text: msg.text
+      })),
+      messageDelays: messages.slice(1).map(msg => msg.delayAfter),
+      batchQuantity,
+      companyId,
       createdAt: Timestamp.now(),
-      documentUrl: documentUrl || "",
-      fileName: selectedDocument ? selectedDocument.name : null,
-      mediaUrl: mediaUrl || "",
-      mimeType: selectedMedia ? selectedMedia.type : (selectedDocument ? selectedDocument.type : null),
-      repeatInterval: repeatInterval,
-      repeatUnit: repeatUnit,
-      scheduledTime: Timestamp.fromDate(scheduledTime),
+      documentUrl,
+      fileName,
+      mediaUrl,
+      mimeType,
+      repeatInterval,
+      repeatUnit,
+      scheduledTime: Timestamp.fromDate(new Date(
+        blastStartDate.getFullYear(),
+        blastStartDate.getMonth(),
+        blastStartDate.getDate(),
+        blastStartTime?.getHours() || 0,
+        blastStartTime?.getMinutes() || 0
+      )),
       status: "scheduled",
       v2: isV2,
       whapiToken: isV2 ? null : whapiToken,
@@ -2308,51 +2830,61 @@ const sendBlastMessage = async () => {
       activateSleep,
       sleepAfterMessages: activateSleep ? sleepAfterMessages : null,
       sleepDuration: activateSleep ? sleepDuration : null,
+      activeHours: {
+        start: activeTimeStart,
+        end: activeTimeEnd
+      },
+      infiniteLoop,
+      numberOfBatches: 1
     };
 
-    console.log('Sending scheduledMessageData:', JSON.stringify(scheduledMessageData, null, 2));
+
 
     // Make API call to schedule the messages
     const response = await axios.post(`${baseUrl}/api/schedule-message/${companyId}`, scheduledMessageData);
 
-    console.log(`Scheduled messages added. Document ID: ${response.data.id}`);
+    if (response.data.success) {
+      toast.success(`Blast messages scheduled successfully for ${selectedContacts.length} contacts.`);
+      toast.info(`Messages will be sent at: ${scheduledMessageData.scheduledTime.toDate().toLocaleString()} (local time)`);
 
-    // Show success toast
-    toast.success(`Blast messages scheduled successfully for ${selectedContacts.length} contacts.`);
-    toast.info(`Messages will be sent at: ${scheduledTime.toLocaleString()} (local time)`);
-
-    // Refresh the scheduled messages list
-    await fetchScheduledMessages();
-
-    // Close the modal and reset state
-    setBlastMessageModal(false);
-    setBlastMessage("");
-    setBlastStartTime(null);
-    setBatchQuantity(10);
-    setRepeatInterval(0);
-    setRepeatUnit('days');
-    setSelectedMedia(null);
-    setSelectedDocument(null);
+      // Refresh and reset
+      await fetchScheduledMessages();
+      setBlastMessageModal(false);
+      resetForm();
+    } else {
+      toast.error(response.data.message || "Failed to schedule messages");
+    }
 
   } catch (error) {
     console.error('Error scheduling blast messages:', error);
     if (axios.isAxiosError(error) && error.response) {
-      console.error('Server response:', error.response.data);
-      console.error('Server status:', error.response.status);
-      console.error('Server headers:', error.response.headers);
       const errorMessage = error.response.data.error || 'Unknown server error';
       toast.error(`Failed to schedule message: ${errorMessage}`);
     } else {
-      console.error('Unexpected error:', error);
       toast.error("An unexpected error occurred while scheduling blast messages.");
     }
   } finally {
     setIsScheduling(false);
   }
-
-  console.log('sendBlastMessage function completed');
 };
-  
+
+// Helper function to reset the form
+const resetForm = () => {
+  setMessages([{ text: '', delayAfter: 0 }]);
+  setInfiniteLoop(false);
+  setBatchQuantity(10);
+  setRepeatInterval(0);
+  setRepeatUnit('days');
+  setSelectedMedia(null);
+  setSelectedDocument(null);
+  setActiveTimeStart('09:00');
+  setActiveTimeEnd('17:00');
+  setMinDelay(1);
+  setMaxDelay(3);
+  setActivateSleep(false);
+  setSleepAfterMessages(10);
+  setSleepDuration(30);
+};
 
   const sendImageMessage = async (id: string, imageUrl: string,caption?: string) => {
     try {
@@ -2361,7 +2893,7 @@ const sendBlastMessage = async () => {
       const docUserRef = doc(firestore, 'user', user?.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
-        console.log('No such document for user!');
+        
         return;
       }
       const userData = docUserSnapshot.data();
@@ -2369,7 +2901,7 @@ const sendBlastMessage = async () => {
       const docRef = doc(firestore, 'companies', companyId);
       const docSnapshot = await getDoc(docRef);
       if (!docSnapshot.exists()) {
-        console.log('No such document for company!');
+        
         return;
       }
       const phoneNumber = id.split('+')[1];
@@ -2394,7 +2926,7 @@ const sendBlastMessage = async () => {
   
       const data = await response.json();
     
-      console.log('Image message sent successfully:', data);
+      
     } catch (error) {
       console.error('Error sending image message:', error);
     }
@@ -2407,7 +2939,7 @@ const sendBlastMessage = async () => {
       const docUserRef = doc(firestore, 'user', user?.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
-        console.log('No such document for user!');
+        
         return;
       }
       const userData = docUserSnapshot.data();
@@ -2415,7 +2947,7 @@ const sendBlastMessage = async () => {
       const docRef = doc(firestore, 'companies', companyId);
       const docSnapshot = await getDoc(docRef);
       if (!docSnapshot.exists()) {
-        console.log('No such document for company!');
+        
         return;
       }
       const phoneNumber = id.split('+')[1];
@@ -2442,7 +2974,7 @@ const sendBlastMessage = async () => {
   
       const data = await response.json();
   
-      console.log('Image message sent successfully:', data);
+      
     } catch (error) {
       console.error('Error sending image message:', error);
     }
@@ -2456,174 +2988,35 @@ const sendBlastMessage = async () => {
   };
 
   const [importTags, setImportTags] = useState<string[]>([]);
-
-  const handleCsvImport = async () => {
-    if (!selectedCsvFile) {
-      toast.error("Please select a CSV file to import.");
-      return;
-    }
   
-    try {
-      setLoading(true);
-  
-      // Read CSV data
-      const parseCSV = async (): Promise<Array<any>> => {
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            const text = event.target?.result as string;
-            const lines = text.split('\n');
-            const headers = lines[0].toLowerCase().trim().split(',');
-            const data = lines.slice(1)
-              .filter(line => line.trim()) // Skip empty lines
-              .map(line => {
-                const values = line.split(',');
-                return headers.reduce((obj: any, header, index) => {
-                  obj[header.trim()] = values[index]?.trim() || '';
-                  return obj;
-                }, {});
-              });
-            resolve(data);
-          };
-          reader.onerror = () => reject(new Error('Failed to read CSV'));
-          reader.readAsText(selectedCsvFile);
+  const getAllCustomFields = (contacts: Contact[]): string[] => {
+    const customFieldsSet = new Set<string>();
+    contacts.forEach(contact => {
+      if (contact?.customFields) {
+        Object.keys(contact.customFields).forEach(field => {
+          if (field) customFieldsSet.add(field);
         });
-      };
-  
-      // Get user and company data
-      const user = auth.currentUser;
-      if (!user?.email) throw new Error('User not authenticated');
-  
-      const docUserRef = doc(firestore, 'user', user.email);
-      const docUserSnapshot = await getDoc(docUserRef);
-      if (!docUserSnapshot.exists()) throw new Error('User document not found');
-  
-      const userData = docUserSnapshot.data();
-      const companyId = userData.companyId;
-  
-      // Parse CSV data
-      const contacts = await parseCSV();
-      console.log('Parsed contacts:', contacts);
-  
-      // Validate contacts
-      const validContacts = contacts.filter(contact => {
-        const isValid = contact.contactname && contact.phone;
-        if (!isValid) {
-          console.warn('Invalid contact:', contact);
-        }
-        return isValid;
-      });
-  
-      if (validContacts.length === 0) {
-        throw new Error('No valid contacts found in CSV');
       }
-  
-      // Create contacts in batches of 500 (Firestore limit)
-      const batchSize = 500;
-      const batches = [];
-      
-      for (let i = 0; i < validContacts.length; i += batchSize) {
-        const batch = writeBatch(firestore);
-        const batchContacts = validContacts.slice(i, i + batchSize);
-  
-        for (const contact of batchContacts) {
-           // Format phone number (remove any non-digit characters)
-          let phoneNumber = contact.phone.replace(/\D/g, '');
-          
-          // Add proper prefix based on the starting digits
-          if (phoneNumber.startsWith('60')) {
-            phoneNumber = '+' + phoneNumber;
-          } else if (phoneNumber.startsWith('0')) {
-            phoneNumber = '+6' + phoneNumber;
-          } else if (phoneNumber.startsWith('1')) {
-            phoneNumber = '+60' + phoneNumber;
-          } else {
-            console.warn('Invalid phone number format:', contact.phone);
-            continue;
-          }
+    });
+    return Array.from(customFieldsSet);
+  };
 
-          // Validate final phone number format
-          if (!phoneNumber.match(/^\+60\d{9,10}$/)) {
-            console.warn('Invalid Malaysian phone number:', phoneNumber);
-            continue;
-          }
-  
-          const contactRef = doc(firestore, `companies/${companyId}/contacts`, phoneNumber);
-          
-          // Prepare contact data
-          const contactData = {
-            contactName: contact.contactname,
-            phone: phoneNumber,
-            email: contact.email || '',
-            lastName: contact.lastname || '',
-            companyName: contact.companyname || '',
-            address1: contact.address1 || '',
-            city: contact.city || '',
-            state: contact.state || '',
-            postalCode: contact.postalcode || '',
-            country: contact.country || '',
-            branch: contact.branch || userData.branch || '',
-            expiryDate: contact.expirydate || userData.expiryDate || '',
-            vehicleNumber: contact.vehiclenumber || userData.vehicleNumber || '',
-            points: contact.points || '0',
-            IC: contact.ic || '',
-            tags: [...new Set([...selectedImportTags, ...importTags])],
-            createdAt: Timestamp.now(),
-            updatedAt: Timestamp.now(),
-            createdBy: user.email,
-            updatedBy: user.email
-          };
-  
-          // Log each contact being added
-          console.log('Adding contact:', contactData);
-          
-          batch.set(contactRef, contactData, { merge: true });
-        }
-  
-        batches.push(batch.commit());
+  const ensureAllCustomFields = (contactData: any, allCustomFields: string[]): any => {
+    const customFields: { [key: string]: string } = {
+      ...(contactData.customFields || {})
+    };
+    
+    // Add any missing custom fields with empty string values
+    allCustomFields.forEach(field => {
+      if (!(field in customFields)) {
+        customFields[field] = '';
       }
-  
-      // Execute all batches
-      console.log(`Committing ${batches.length} batches...`);
-      await Promise.all(batches);
-      console.log('All batches committed successfully');
-  
-      // Verify the import
-      const verifyImport = async (): Promise<boolean> => {
-        const contactsRef = collection(firestore, `companies/${companyId}/contacts`);
-        const snapshot = await getDocs(contactsRef);
-        
-        // Log verification results
-        console.log('Verification - Total contacts in Firestore:', snapshot.size);
-        console.log('Verification - Recent contacts:');
-        snapshot.docs.slice(-5).forEach(doc => {
-          console.log(doc.id, doc.data());
-        });
-  
-        return snapshot.size > 0;
-      };
-  
-      if (await verifyImport()) {
-        // Clear cache and fetch updated contacts
-        localStorage.removeItem('contacts');
-        sessionStorage.removeItem('contactsFetched');
-        await fetchContacts();
-  
-        toast.success(`Successfully imported ${validContacts.length} contacts!`);
-        setShowCsvImportModal(false);
-        setSelectedCsvFile(null);
-        setSelectedImportTags([]);
-        setImportTags([]);
-      } else {
-        throw new Error('Failed to verify contact import');
-      }
-  
-    } catch (error) {
-      console.error('CSV Import Error:', error);
-      toast.error(error instanceof Error ? error.message : "Failed to import contacts");
-    } finally {
-      setLoading(false);
-    }
+    });
+
+    return {
+      ...contactData,
+      customFields
+    };
   };
 
   async function sendTextMessage(id: string, blastMessage: string, contact: Contact): Promise<void> {
@@ -2656,7 +3049,7 @@ const sendBlastMessage = async () => {
       const whapiToken = companyData.whapiToken;
       const phoneNumber = id.split('+')[1];
       const chat_id = phoneNumber + "@s.whatsapp.net";
-      console.log(chat_id);
+      
 
       if (companyData.v2) {
         // Handle v2 users
@@ -2670,7 +3063,7 @@ const sendBlastMessage = async () => {
           // Add any other necessary fields
         });
 
-        console.log("Message added to Firestore for v2 user");
+        
       } else {
         // Handle non-v2 users
         const response = await axios.post(
@@ -2708,10 +3101,10 @@ const sendBlastMessage = async () => {
           });
         }
 
-        console.log("Message sent and stored for non-v2 user");
+        
       }
 
-      console.log('Message sent successfully');
+      
     } catch (error) {
       console.error('Error sending message:', error);
       throw error;
@@ -2729,7 +3122,7 @@ const sendBlastMessage = async () => {
       const docUserRef = doc(firestore, 'user', user.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
-        console.log('No such document for user!');
+        
         return;
       }
       const userData = docUserSnapshot.data();
@@ -2797,12 +3190,64 @@ const sendBlastMessage = async () => {
       messages.sort((a, b) => a.scheduledTime.toDate().getTime() - b.scheduledTime.toDate().getTime());
   
       setScheduledMessages(messages);
-      console.log('Fetched scheduled messages:', messages); // Add this log
+       // Add this log
     } catch (error) {
       console.error("Error fetching scheduled messages:", error);
     }
   };
-
+  const handleSendNow = async (message: any) => {
+    try {
+      // Get user and company data
+      const user = auth.currentUser;
+      if (!user?.email) throw new Error('User not authenticated');
+  
+      const docUserRef = doc(firestore, 'user', user.email);
+      const docUserSnapshot = await getDoc(docUserRef);
+      if (!docUserSnapshot.exists()) throw new Error('User document not found');
+  
+      const userData = docUserSnapshot.data();
+      const companyId = userData.companyId;
+  
+      // Get company data for baseUrl
+      const docRef = doc(firestore, 'companies', companyId);
+      const docSnapshot = await getDoc(docRef);
+      if (!docSnapshot.exists()) throw new Error('Company document not found');
+      const companyData = docSnapshot.data();
+      const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+  
+      // Send messages to all recipients
+      const sendPromises = message.chatIds.map(async (chatId: string) => {
+        const response = await fetch(`${baseUrl}/api/v2/messages/text/${companyId}/${chatId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: message.message || '',
+            phoneIndex: message.phoneIndex || userData.phone || 0,
+            userName: userData.name || userData.email || ''
+          }),
+        });
+  
+        if (!response.ok) {
+          throw new Error(`Failed to send message to ${chatId}`);
+        }
+      });
+  
+      // Wait for all messages to be sent
+      await Promise.all(sendPromises);
+  
+      // Delete the scheduled message
+      if (message.id) {
+        await deleteDoc(doc(firestore, `companies/${companyId}/scheduledMessages/${message.id}`));
+        // Update local state to remove the message
+        setScheduledMessages(prev => prev.filter(msg => msg.id !== message.id));
+      }
+  
+      toast.success('Messages sent successfully!');
+    } catch (error) {
+      console.error('Error sending messages:', error);
+      toast.error('Failed to send messages. Please try again.');
+    }
+  };
   const handleEditScheduledMessage = (message: ScheduledMessage) => {
     setCurrentScheduledMessage(message);
     setBlastMessage(message.message || ''); // Set the blast message to the current message text
@@ -2811,6 +3256,13 @@ const sendBlastMessage = async () => {
 
   const insertPlaceholder = (field: string) => {
     const placeholder = `@{${field}}`;
+     // Update the current scheduled message
+  if (currentScheduledMessage) {
+    setCurrentScheduledMessage({
+      ...currentScheduledMessage,
+      message: blastMessage + placeholder
+    });
+  }
     setBlastMessage(prevMessage => prevMessage + placeholder);
   };
 
@@ -2846,7 +3298,16 @@ const sendBlastMessage = async () => {
 
   const handleEditMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setEditMediaFile(e.target.files[0]);
+      const file = e.target.files[0];
+      const maxSizeInMB = 20;
+      const maxSizeInBytes = maxSizeInMB * 1024 * 1024;
+
+      if (file.type.startsWith('video/') && file.size > maxSizeInBytes) {
+        toast.error('The video file is too big. Please select a file smaller than 20MB.');
+        return;
+      }
+
+      setEditMediaFile(file);
     }
   };
 
@@ -2858,15 +3319,15 @@ const sendBlastMessage = async () => {
 
   const handleSaveScheduledMessage = async () => {
     if (!currentScheduledMessage) return;
-
+  
     try {
       const user = auth.currentUser;
       if (!user) return;
-
+  
       const docUserRef = doc(firestore, 'user', user.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) return;
-
+  
       const userData = docUserSnapshot.data();
       const companyId = userData.companyId;
       const docRef = doc(firestore, 'companies', companyId);
@@ -2874,19 +3335,20 @@ const sendBlastMessage = async () => {
       if (!docSnapshot.exists()) throw new Error('No company document found');
       const companyData = docSnapshot.data();
       const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
-      // Upload new media/document files (existing code)
+  
+      // Upload new media/document files if needed
       let newMediaUrl = currentScheduledMessage.mediaUrl;
       if (editMediaFile) {
         newMediaUrl = await uploadFile(editMediaFile);
       }
-
+  
       let newDocumentUrl = currentScheduledMessage.documentUrl;
       let newFileName = currentScheduledMessage.fileName;
       if (editDocumentFile) {
         newDocumentUrl = await uploadFile(editDocumentFile);
         newFileName = editDocumentFile.name;
       }
-
+  
       // Process messages for each contact
       const processedMessages = await Promise.all(
         currentScheduledMessage.chatIds.map(async (chatId) => {
@@ -2895,10 +3357,10 @@ const sendBlastMessage = async () => {
           
           if (!contact) {
             console.warn(`No contact found for chatId: ${chatId}`);
-            return { chatId, message: blastMessage }; // Return unprocessed message as fallback
+            return { text: blastMessage }; // Return unprocessed message as fallback
           }
   
-          // Process message with contact data using the NEW blast message
+          // Process message with contact data
           let processedMessage = blastMessage
             .replace(/@{contactName}/g, contact.contactName || '')
             .replace(/@{firstName}/g, contact.contactName?.split(' ')[0] || '')
@@ -2910,60 +3372,55 @@ const sendBlastMessage = async () => {
             .replace(/@{expiryDate}/g, contact.expiryDate || '')
             .replace(/@{ic}/g, contact.ic || '');
   
-          return {
-            chatId,
-            message: processedMessage
-          };
+          return { text: processedMessage };
         })
       );
-
+  
       // Prepare the updated message data
-      const updatedMessageData = {
+      const updatedMessageData: ScheduledMessage = {
         ...currentScheduledMessage,
-        message: blastMessage, // Store the new template
-        messages: processedMessages, // Store the newly processed messages
-        templateData: {
-          hasPlaceholders: blastMessage.includes('@{'),
-          placeholdersUsed: [...blastMessage.matchAll(/@{([^}]+)}/g)].map(match => match[1])
-        },
+        message: blastMessage, // Store the main message
+        messages: processedMessages.slice(1), // Store additional messages if any
+        messageDelays: currentScheduledMessage.messageDelays || [],
         batchQuantity: currentScheduledMessage.batchQuantity || 10,
-        companyId,
         createdAt: currentScheduledMessage.createdAt || Timestamp.now(),
         documentUrl: newDocumentUrl,
         fileName: newFileName,
         mediaUrl: newMediaUrl,
-        mimeType: editMediaFile ? editMediaFile.type : (editDocumentFile ? editDocumentFile.type : null),
+        mimeType: editMediaFile ? editMediaFile.type : (editDocumentFile ? editDocumentFile.type : currentScheduledMessage.mimeType),
         repeatInterval: currentScheduledMessage.repeatInterval || 0,
         repeatUnit: currentScheduledMessage.repeatUnit || 'days',
         scheduledTime: currentScheduledMessage.scheduledTime,
         status: 'scheduled',
         v2: currentScheduledMessage.v2 || false,
-        whapiToken: currentScheduledMessage.whapiToken || null,
+        whapiToken: currentScheduledMessage.whapiToken || undefined,
+        minDelay: currentScheduledMessage.minDelay || 1,
+        maxDelay: currentScheduledMessage.maxDelay || 3,
+        activateSleep: currentScheduledMessage.activateSleep || false,
+        sleepAfterMessages: currentScheduledMessage.sleepAfterMessages || null,
+        sleepDuration: currentScheduledMessage.sleepDuration || null,
+        activeHours: currentScheduledMessage.activeHours || { start: '09:00', end: '17:00' },
+        infiniteLoop: currentScheduledMessage.infiniteLoop || false,
+        numberOfBatches: currentScheduledMessage.numberOfBatches || 1,
+        chatIds: currentScheduledMessage.chatIds
       };
-
-      console.log('Updating scheduled message with data:', updatedMessageData);
-
+  
       // Send PUT request to update the scheduled message
       const response = await axios.put(
         `${baseUrl}/api/schedule-message/${companyId}/${currentScheduledMessage.id}`,
         updatedMessageData
       );
-
+  
       if (response.status === 200) {
         // Update local state
         setScheduledMessages(prev => 
           prev.map(msg => 
             msg.id === currentScheduledMessage.id 
-              ? { 
-                  ...msg, 
-                  ...updatedMessageData, 
-                  message: blastMessage, // Use the edited message content
-                  mimeType: updatedMessageData.mimeType || undefined 
-                } as ScheduledMessage
+              ? updatedMessageData
               : msg
           )
         );
-
+  
         setEditScheduledMessageModal(false);
         setEditMediaFile(null);
         setEditDocumentFile(null);
@@ -2974,7 +3431,7 @@ const sendBlastMessage = async () => {
       } else {
         throw new Error("Failed to update scheduled message");
       }
-
+  
     } catch (error) {
       console.error("Error updating scheduled message:", error);
       toast.error("Failed to update scheduled message.");
@@ -3019,7 +3476,10 @@ const sendBlastMessage = async () => {
     if (selectedContacts.length === filteredContactsSearch.length) {
       setSelectedContacts([]);
     } else {
-      setSelectedContacts([...filteredContactsSearch]);
+      // Create a reversed copy of the filtered contacts array
+      const reversedContacts = [...filteredContactsSearch].reverse();
+      
+      setSelectedContacts(reversedContacts);
     }
   };
 
@@ -3052,6 +3512,41 @@ const sendBlastMessage = async () => {
     }
   };
 
+
+  useEffect(() => {
+    if (contacts.length > 0) {
+      const firstContact = contacts[0];
+      
+      // Update visible columns
+      setVisibleColumns(prev => ({
+        ...prev,
+        ...(firstContact.customFields ? 
+          Object.keys(firstContact.customFields).reduce((acc, field) => ({
+            ...acc,
+            [field]: true
+          }), {})
+        : {})
+      }));
+
+      // Update column order if new fields are found
+      setColumnOrder(prev => {
+        const customFields = firstContact.customFields ? 
+          Object.keys(firstContact.customFields).map(field => `customField_${field}`) 
+          : [];
+        
+        const existingCustomFields = prev.filter(col => col.startsWith('customField_'));
+        const newCustomFields = customFields.filter(field => !prev.includes(field));
+        
+        if (newCustomFields.length === 0) return prev;
+        
+        // Remove existing custom fields and add all custom fields before 'actions'
+        const baseColumns = prev.filter(col => !col.startsWith('customField_') && col !== 'actions');
+        return [...baseColumns, ...customFields, 'actions'];
+      });
+    }
+  }, [contacts]);
+
+
   const renderTags = (tags: string[] | undefined, contact: Contact) => {
     if (!tags || tags.length === 0) return null;
     return (
@@ -3082,14 +3577,320 @@ const sendBlastMessage = async () => {
     );
   };
 
+  // Update handleDownloadSampleCsv to use visible columns
   const handleDownloadSampleCsv = () => {
-    const sampleCsvContent = `contactName,lastName,phone,email,companyName,address1,branch,expiryDate,vehicleNumber,ic,points
-John,Doe,60123456789,john@example.com,ABC Company,123 Main St,Branch A,2023-12-31,ABC1234,123456-78-9012,100
-Jane,Smith,60198765432,jane@example.com,XYZ Corp,456 Elm St,Branch B,2024-06-30,XYZ5678,987654-32-1098,200`;
-
-    const blob = new Blob([sampleCsvContent], { type: 'text/csv;charset=utf-8' });
+    // Define all possible contact fields
+    const allFields = [
+      'contactName',
+      'lastName',
+      'phone',
+      'email',
+      'companyName',
+      'address1',
+      'city',
+      'state',
+      'postalCode',
+      'country',
+      'branch',
+      'expiryDate',
+      'vehicleNumber',
+      'points',
+      'IC',
+      'notes',
+      ...Object.keys(contacts[0]?.customFields || {}) // Include any custom fields
+    ];
+  
+    // Create sample data with all fields
+    const sampleData = [
+      allFields.join(','),
+      allFields.map(field => {
+        switch(field) {
+          case 'phone': return '60123456789';
+          case 'points': return '100';
+          case 'email': return 'john@example.com';
+          case 'IC': return '123456-78-9012';
+          case 'expiryDate': return '2024-12-31';
+          default: return `Sample ${field}`;
+        }
+      }).join(',')
+    ].join('\n');
+  
+    const blob = new Blob([sampleData], { type: 'text/csv;charset=utf-8' });
     saveAs(blob, 'sample_contacts.csv');
   };
+
+  const cleanPhoneNumber = (phone: string): string | null => {
+    if (!phone || phone === '#ERROR!') return null;
+    
+    // Remove all non-numeric characters except '+'
+    let cleaned = phone.replace(/[^0-9+]/g, '');
+    
+    // If already starts with +, validate length and return
+    if (cleaned.startsWith('+')) {
+      return cleaned.length >= 10 ? cleaned : null;
+    }
+    
+    // Add + prefix if missing
+    return cleaned.length >= 10 ? `+${cleaned}` : null;
+  };
+  
+  const parseCSV = async (): Promise<Array<any>> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const text = event.target?.result as string;
+          if (!text) {
+            throw new Error('Failed to read CSV file content');
+          }
+  
+          // Use Papa Parse for better CSV handling
+          Papa.parse(text, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+              if (results.errors.length > 0) {
+                console.error('CSV parsing errors:', results.errors);
+                throw new Error('Error parsing CSV file');
+              }
+  
+              if (results.data.length === 0) {
+                throw new Error('No valid data rows found in CSV file');
+              }
+  
+              // Log for debugging
+              console.log('Parsed CSV data:', {
+                headers: results.meta.fields,
+                rowCount: results.data.length,
+                firstRow: results.data[0]
+              });
+  
+              resolve(results.data);
+            },
+            error: (error: any) => {
+              console.error('Papa Parse error:', error);
+              reject(new Error('Failed to parse CSV file'));
+            }
+          });
+        } catch (error) {
+          console.error('CSV parsing error details:', error);
+          reject(error);
+        }
+      };
+  
+      reader.onerror = (error) => {
+        console.error('FileReader error:', error);
+        reject(new Error('Failed to read CSV file'));
+      };
+  
+      if (selectedCsvFile) {
+        reader.readAsText(selectedCsvFile);
+      } else {
+        reject(new Error('No file selected'));
+      }
+    });
+  };
+  
+  const handleCsvImport = async () => {
+    if (!selectedCsvFile) {
+      toast.error("Please select a CSV file to import.");
+      return;
+    }
+  
+    try {
+      setLoading(true);
+  
+      // Get user and company data
+      const user = auth.currentUser;
+      if (!user?.email) throw new Error('User not authenticated');
+  
+      const docUserRef = doc(firestore, 'user', user.email);
+      const docUserSnapshot = await getDoc(docUserRef);
+      if (!docUserSnapshot.exists()) throw new Error('User document not found');
+  
+      const userData = docUserSnapshot.data();
+      const companyId = userData.companyId;
+  
+      // Parse CSV data
+      const csvContacts = await parseCSV();
+  
+      // Define standard field mappings (case-insensitive)
+      const standardFields = {
+        'phone': ['phone', 'mobile', 'tel', 'telephone', 'contact number', 'phone number'],
+        'contactName': ['contactname', 'contact name', 'name', 'full name', 'customer name'],
+        'email': ['email', 'e-mail', 'mail'],
+        'lastName': ['lastname', 'last name', 'surname', 'family name'],
+        'companyName': ['companyname', 'company name', 'company', 'organization'],
+        'address1': ['address1', 'address', 'street address', 'location'],
+        'city': ['city', 'town'],
+        'state': ['state', 'province', 'region'],
+        'postalCode': ['postalcode', 'postal code', 'zip', 'zip code', 'postcode'],
+        'country': ['country', 'nation'],
+        'branch': ['branch', 'department', 'location'],
+        'expiryDate': ['expirydate', 'expiry date', 'expiration', 'expire date'],
+        'vehicleNumber': ['vehiclenumber', 'vehicle number', 'vehicle no', 'car number'],
+        'points': ['points', 'reward points'],
+        'IC': ['ic', 'identification', 'id number'],
+        'Notes': ['notes', 'note', 'comments', 'remarks'] // Added Notes field mapping
+      };
+  
+       // Validate and prepare contacts for import
+      const validContacts = csvContacts.map(contact => {
+        const baseContact: any = {
+          customFields: {},
+          tags: [],
+          updatedAt: Timestamp.now(),
+          updatedBy: user.email,
+          createdAt: Timestamp.now(),
+          createdBy: user.email
+        };
+
+        // Process each field in the CSV contact
+      Object.entries(contact).forEach(([header, value]) => {
+        const headerLower = header.toLowerCase().trim();
+        
+        // Try to match with standard fields
+        let matched = false;
+        for (const [fieldName, aliases] of Object.entries(standardFields)) {
+          // Convert both the header and aliases to lowercase for comparison
+          if (aliases.includes(headerLower) || headerLower === fieldName.toLowerCase()) {
+            if (fieldName === 'phone') {
+              const cleanedPhone = cleanPhoneNumber(value as string);
+              if (cleanedPhone) {
+                baseContact[fieldName] = cleanedPhone;
+              }
+            } else if (fieldName === 'Notes') {
+              // Ensure Notes field is properly capitalized
+              baseContact['Notes'] = value || '';
+            } else {
+              baseContact[fieldName] = value || '';
+            }
+            matched = true;
+            break;
+          }
+        }
+
+        // If no match found and value exists, add as custom field
+        if (!matched && value && !header.match(/^\d+$/)) {
+          baseContact.customFields[header] = value;
+        }
+      });
+
+      return baseContact;
+    });
+  
+      // Filter out contacts without valid phone numbers
+      const validContactsWithPhone = validContacts.filter(contact => contact.phone);
+  
+      if (validContactsWithPhone.length === 0) {
+        throw new Error('No valid contacts found in CSV. Please ensure phone numbers are present.');
+      }
+  
+      if (validContactsWithPhone.length < validContacts.length) {
+        toast.warning(`Skipped ${validContacts.length - validContactsWithPhone.length} contacts due to invalid phone numbers.`);
+      }
+  
+      // Create contacts in batches
+      const batchSize = 500;
+      const batches = [];
+      
+      for (let i = 0; i < validContactsWithPhone.length; i += batchSize) {
+        const batch = writeBatch(firestore);
+        const batchContacts = validContactsWithPhone.slice(i, i + batchSize);
+  
+        for (const contact of batchContacts) {
+          const contactRef = doc(firestore, `companies/${companyId}/contacts`, contact.phone);
+          batch.set(contactRef, contact, { merge: true });
+        }
+  
+        batches.push(batch.commit());
+      }
+  
+      await Promise.all(batches);
+  
+      // Update UI with new custom fields
+      const newCustomFields = new Set<string>();
+      validContactsWithPhone.forEach(contact => {
+        Object.keys(contact.customFields).forEach(field => newCustomFields.add(field));
+      });
+  
+      if (newCustomFields.size > 0) {
+        setVisibleColumns(prev => ({
+          ...prev,
+          ...Array.from(newCustomFields).reduce((acc, field) => ({
+            ...acc,
+            [field]: true
+          }), {})
+        }));
+      }
+  
+      // Success cleanup
+      toast.success(`Successfully imported ${validContactsWithPhone.length} contacts!`);
+      setShowCsvImportModal(false);
+      setSelectedCsvFile(null);
+      setSelectedImportTags([]);
+      setImportTags([]);
+      
+      await fetchContacts();
+  
+    } catch (error) {
+      console.error('CSV Import Error:', error);
+      toast.error(error instanceof Error ? error.message : "Failed to import contacts");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add these to your existing state declarations
+  const [qrCodes, setQrCodes] = useState<QRCodeData[]>([]);
+
+  // Add this helper function
+  const getPhoneName = (phoneIndex: number) => {
+    if (companyId === '0123') {
+      return phoneIndex === 0 ? 'Revotrend' : phoneIndex === 1 ? 'Storeguru' : 'ShipGuru';
+    }
+    return `Phone ${phoneIndex + 1}`;
+  };
+
+  useEffect(() => {
+    const fetchPhoneStatuses = async () => {
+      try {
+        const docRef = doc(firestore, 'companies', companyId);
+        const docSnapshot = await getDoc(docRef);
+        
+        if (!docSnapshot.exists()) {
+          throw new Error("Company document does not exist");
+        }
+
+        const companyData = docSnapshot.data();
+        const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+        
+        const botStatusResponse = await axios.get(`${baseUrl}/api/bot-status/${companyId}`, {
+          headers: companyId === '0123' 
+            ? {
+                'ngrok-skip-browser-warning': 'true',
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+              }
+            : {}
+        });
+
+        if (botStatusResponse.status === 200) {
+          const qrCodesData = Array.isArray(botStatusResponse.data) 
+            ? botStatusResponse.data 
+            : [];
+          setQrCodes(qrCodesData);
+        }
+      } catch (error) {
+        console.error('Error fetching phone statuses:', error);
+      }
+    };
+
+    if (companyId) {
+      fetchPhoneStatuses();
+    }
+  }, [companyId]);
+
   
 
   const filterRecipients = (chatIds: string[], search: string) => {
@@ -3126,6 +3927,7 @@ const getFilteredScheduledMessages = () => {
                 {/* Add Contact Button */}
                 <div className="w-full">
                   {/* Desktop view */}
+                 
                   <div className="hidden sm:flex sm:w-full sm:space-x-2">
                     <button 
                       className={`flex items-center justify-start p-2 !box bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 ${userRole === "3" ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -3304,30 +4106,43 @@ const getFilteredScheduledMessages = () => {
                           </Tab.List>
                           <Tab.Panels className="mt-2 max-h-[300px] overflow-y-auto">
                             <Tab.Panel>
-                              {tagList.map((tag) => (
-                                <div key={tag.id} className={`flex items-center justify-between m-2 p-2 text-sm w-full rounded-md ${selectedTagFilters.includes(tag.name) ? 'bg-primary dark:bg-primary text-white' : ''}`}>
-                                  <div 
-                                    className="flex items-center cursor-pointer"
-                                    onClick={() => handleTagFilterChange(tag.name)}
-                                  >
-                                    {tag.name}
+                              {tagList
+                                .sort((a, b) => {
+                                  // Check if either tag starts with a number
+                                  const aStartsWithNumber = /^\d/.test(a.name);
+                                  const bStartsWithNumber = /^\d/.test(b.name);
+                                  
+                                  // If one starts with number and other doesn't, number comes first
+                                  if (aStartsWithNumber && !bStartsWithNumber) return -1;
+                                  if (!aStartsWithNumber && bStartsWithNumber) return 1;
+                                  
+                                  // Otherwise sort alphabetically
+                                  return a.name.localeCompare(b.name);
+                                })
+                                .map((tag) => (
+                                  <div key={tag.id} className={`flex items-center justify-between m-2 p-2 text-sm w-full rounded-md ${selectedTagFilters.includes(tag.name) ? 'bg-primary dark:bg-primary text-white' : ''}`}>
+                                    <div 
+                                      className="flex items-center cursor-pointer"
+                                      onClick={() => handleTagFilterChange(tag.name)}
+                                    >
+                                      {tag.name}
+                                    </div>
+                                    <button
+                                      className={`px-2 py-1 text-xs rounded ${
+                                        excludedTags.includes(tag.name)
+                                          ? 'bg-red-500 text-white'
+                                          : 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300'
+                                      }`}
+                                      onClick={() => 
+                                        excludedTags.includes(tag.name)
+                                          ? handleRemoveExcludedTag(tag.name)
+                                          : handleExcludeTag(tag.name)
+                                      }
+                                    >
+                                      {excludedTags.includes(tag.name) ? 'Excluded' : 'Exclude'}
+                                    </button>
                                   </div>
-                                  <button
-                                    className={`px-2 py-1 text-xs rounded ${
-                                      excludedTags.includes(tag.name)
-                                        ? 'bg-red-500 text-white'
-                                        : 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300'
-                                    }`}
-                                    onClick={() => 
-                                      excludedTags.includes(tag.name)
-                                        ? handleRemoveExcludedTag(tag.name)
-                                        : handleExcludeTag(tag.name)
-                                    }
-                                  >
-                                    {excludedTags.includes(tag.name) ? 'Excluded' : 'Exclude'}
-                                  </button>
-                                </div>
-                              ))}
+                                ))}
                             </Tab.Panel>
                             <Tab.Panel>
                               {employeeList.map((employee) => (
@@ -3640,6 +4455,22 @@ const getFilteredScheduledMessages = () => {
                   >
                     <Lucide icon={showScheduledMessages ? "ChevronUp" : "ChevronDown"} className="w-6 h-6 ml-2 mb-1 text-gray-700 dark:text-gray-300" />
                   </button>
+                  {selectedScheduledMessages.length > 0 && (
+        <div className="mb-4 flex gap-2">
+          <button
+            onClick={handleSendSelectedNow}
+            className="text-sm bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition-colors duration-200"
+          >
+            Send Selected ({selectedScheduledMessages.length})
+          </button>
+          <button
+            onClick={handleDeleteSelected}
+            className="text-sm bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition-colors duration-200"
+          >
+            Delete Selected ({selectedScheduledMessages.length})
+          </button>
+        </div>
+      )}
                 </div>
                 {showScheduledMessages && (
                   getFilteredScheduledMessages().length > 0 ? (
@@ -3648,16 +4479,97 @@ const getFilteredScheduledMessages = () => {
                         <div key={message.id} className="z-10 bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden transition-all duration-300 hover:shadow-lg flex flex-col h-full">
                           <div className="z-10 p-4 flex-grow">
                             <div className="z-10 flex justify-between items-center mb-2">
+                              
                               <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">
                                 {message.status === 'scheduled' ? 'Scheduled' : message.status}
                               </span>
                               <span className="text-xs text-gray-500 dark:text-gray-400">
                                 {formatDate(message.scheduledTime.toDate())}
                               </span>
+                              <input
+                type="checkbox"
+                checked={selectedScheduledMessages.includes(message.id!)}
+                onChange={() => toggleScheduledMessageSelection(message.id!)}
+                className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+              />
                             </div>
-                            <p className="text-gray-800 dark:text-gray-200 mb-2 font-medium text-md line-clamp-2">
+                            <div className="text-gray-800 dark:text-gray-200 mb-2 font-medium text-md">
+                            {/* First Message */}
+                            <p className="line-clamp-2">
                               {message.message ? message.message : 'No message content'}
-                            </p>  
+                            </p>
+
+                            {/* Additional Messages */}
+                            {message.messages && message.messages.length > 0 && message.messages.some(msg => msg.message !== message.message) && (
+                              <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                {message.messages.map((msg: any, index: number) => {
+                                  // Only show messages that are different from the first message
+                                  if (msg.message !== message.message) {
+                                    return (
+                                      <div key={index} className="mt-2">
+                                        <p className="line-clamp-2">
+                                          Message {index + 2}: {msg.text}
+                                        </p>
+                                        {message.messageDelays && message.messageDelays[index] > 0 && (
+                                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                                            Delay: {message.messageDelays[index]} seconds
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })}
+                              </div>
+                            )}
+
+                              {/* Message Settings */}
+                              <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                <div className="grid grid-cols-2 gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                  {/* Batch Settings */}
+                                  <div>
+                                    <span className="font-semibold">Batch Size:</span> {message.batchQuantity}
+                                  </div>
+                                  
+                                  {/* Delay Settings */}
+                                  <div>
+                                    <span className="font-semibold">Delay:</span> {message.minDelay}-{message.maxDelay}s
+                                  </div>
+
+                                  {/* Repeat Settings */}
+                                  {message.repeatInterval > 0 && (
+                                    <div>
+                                      <span className="font-semibold">Repeat:</span> Every {message.repeatInterval} {message.repeatUnit}
+                                    </div>
+                                  )}
+
+                                  {/* Sleep Settings */}
+                                  {message.activateSleep && (
+                                    <>
+                                      <div>
+                                        <span className="font-semibold">Sleep After:</span> {message.sleepAfterMessages} messages
+                                      </div>
+                                      <div>
+                                        <span className="font-semibold">Sleep Duration:</span> {message.sleepDuration} minutes
+                                      </div>
+                                    </>
+                                  )}
+
+                                  {/* Active Hours */}
+                                  <div className="col-span-2">
+                                    <span className="font-semibold">Active Hours:</span> {message.activeHours?.start} - {message.activeHours?.end}
+                                  </div>
+
+                                  {/* Infinite Loop */}
+                                  {message.infiniteLoop && (
+                                    <div className="col-span-2 text-indigo-600 dark:text-indigo-400 flex items-center">
+                                      <Lucide icon="RefreshCw" className="w-4 h-4 mr-1" />
+                                      Messages will loop indefinitely
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
                             <div className="flex items-center text-xs text-gray-600 dark:text-gray-400">
                               <Lucide icon="Users" className="w-4 h-4 mr-1" />
                               <div className="ml-5 max-h-20 overflow-y-auto">
@@ -3686,6 +4598,14 @@ const getFilteredScheduledMessages = () => {
                             )}
                           </div>
                           <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 flex justify-end mt-auto">
+                            
+                          <button
+    onClick={() => handleSendNow(message)}
+    className="text-sm bg-green-600 hover:bg-green-700 text-white font-medium py-1 px-3 rounded-md shadow-sm transition-colors duration-200 mr-2"
+    title="Send message immediately"
+  >
+    Send Now
+  </button>
                             <button
                               onClick={() => handleEditScheduledMessage(message)}
                               className="text-sm bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 font-medium py-1 px-3 rounded-md shadow-sm transition-colors duration-200 mr-2"
@@ -3776,7 +4696,20 @@ const getFilteredScheduledMessages = () => {
                       <input
                         type="file"
                         accept="image/*,video/*"
-                        onChange={(e) => handleEditMediaUpload(e)}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            if (file.type.startsWith('video/') && file.size > 20 * 1024 * 1024) {
+                              toast.error('The video file is too big. Please select a file smaller than 20MB.');
+                              return;
+                            }
+                            try {
+                              handleEditMediaUpload(e);
+                            } catch (error) {
+                              toast.error('Upload unsuccessful. Please try again.');
+                            }
+                          }
+                        }}
                         className="block w-full mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       />
                     </div>
@@ -3933,7 +4866,111 @@ const getFilteredScheduledMessages = () => {
                         </button>
                       </span>
                     ))}
+                    
                   </div>
+                         {/* Add this Menu component */}
+                         <button 
+  onClick={() => setShowColumnsModal(true)}
+  className="inline-flex items-center p-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg cursor-pointer transition-colors duration-200"
+>
+  <Lucide icon="Grid2x2" className="w-4 h-4 mr-1 text-gray-600 dark:text-gray-300" />
+  <span className="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap font-medium">
+    Show/Hide Columns
+  </span>
+</button>
+<Dialog open={showColumnsModal} onClose={() => setShowColumnsModal(false)}>
+  <div className="fixed inset-0 flex items-center justify-center p-4 bg-black bg-opacity-50">
+    <Dialog.Panel className="w-full max-w-sm p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
+      <Dialog.Title className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+        Manage Columns
+      </Dialog.Title>
+      
+      <div className="space-y-3">
+        {Object.entries(visibleColumns).map(([column, isVisible]) => {
+          // Check if this is a custom field
+          const isCustomField = column.startsWith('customField_');
+          const displayName = isCustomField ? 
+            column.replace('customField_', '') : 
+            column;
+
+          // Don't allow deletion of essential columns
+          const isEssentialColumn = ['checkbox', 'contact', 'phone', 'actions'].includes(column);
+
+          return (
+            <div key={column} className="flex items-center px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+              <label className="flex items-center text-left w-full">
+                <input
+                  type="checkbox"
+                  checked={isVisible}
+                  onChange={() => {
+                    setVisibleColumns(prev => ({
+                      ...prev,
+                      [column]: !isVisible
+                    }));
+                  }}
+                  className="mr-2 rounded-sm"
+                />
+                <span className="text-sm capitalize text-gray-700 dark:text-gray-300">
+                  {isCustomField ? `${displayName} (Custom)` : displayName}
+                </span>
+              </label>
+              <div className="flex items-center ml-auto">
+                {!isEssentialColumn && (
+                  <button
+                    onClick={() => {
+                      setVisibleColumns(prev => {
+                        const newColumns = { ...prev };
+                        delete newColumns[column];
+                        return newColumns;
+                      });
+                    }}
+                    className="ml-2 p-1 text-red-500 hover:text-red-700 focus:outline-none"
+                    title="Delete column"
+                  >
+                    <Lucide icon="Trash2" className="w-4 h-4" />
+                  </button>
+                )}
+                {isEssentialColumn && (
+                  <span className="text-xs text-gray-500 italic">Required</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-6 flex justify-end space-x-3">
+        <button
+          onClick={() => setShowColumnsModal(false)}
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500"
+        >
+          Close
+        </button>
+        <button
+          onClick={() => {
+            // Show confirmation dialog before resetting
+            if (window.confirm('This will restore all default columns. Are you sure?')) {
+              // Reset to default columns
+              setVisibleColumns({
+                checkbox: true,
+                contact: true,
+                phone: true,
+                tags: true,
+                points: true,
+                notes: true,
+                actions: true,
+                // Add any other default columns you want to include
+              });
+            }
+          }}
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500"
+        >
+          Reset to Default
+        </button>
+      </div>
+    </Dialog.Panel>
+  </div>
+</Dialog>
                 </div>
               </div>
               {showMassDeleteModal && (
@@ -3985,143 +5022,273 @@ const getFilteredScheduledMessages = () => {
               </div>
             </div>
           </div>
+          
           <div className="w-full flex-wrap">
-            <div className="h-[calc(150vh-200px)] overflow-y-auto mb-4" ref={contactListRef}>
-              <table className="w-full border-collapse hidden sm:table">
-                <thead className="sticky top-0 bg-white dark:bg-gray-700 z-10 py-2">
-                  <tr className="text-left">
-                    <th className="p-4 font-medium text-gray-700 dark:text-gray-300">
-                      <input
-                        type="checkbox"
-                        checked={currentContacts.length > 0 && currentContacts.every(contact => 
-                          selectedContacts.some(sc => sc.phone === contact.phone)
-                        )}
-                        onChange={() => handleSelectCurrentPage()}
-                        className="rounded border-gray-300"
-                      />
-                    </th>
-                    <th className="p-4 font-medium text-gray-700 dark:text-gray-300">Contact</th>
-                    <th className="p-4 font-medium text-gray-700 dark:text-gray-300">Phone</th>
-                    <th className="p-4 font-medium text-gray-700 dark:text-gray-300">Tags</th>
-                    <th className="p-4 font-medium text-gray-700 dark:text-gray-300">Points</th>
-                    <th className="p-4 font-medium text-gray-700 dark:text-gray-300">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {currentContacts.map((contact, index) => {
-                    const isSelected = selectedContacts.some((c) => c.phone === contact.phone);
-                    return (
-                      <tr 
-                        key={index}
-                        className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                          isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                        }`}
-                      >
-                        <td className="p-4">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleContactSelection(contact)}
-                            className="rounded border-gray-300"
-                          />
-                        </td>
-                        <td className="p-4">
-                          <div className="flex items-center">
-                            {contact.profilePicUrl ? (
-                              <img 
-                                src={contact.profilePicUrl} 
-                                alt={contact.contactName || "Profile"} 
-                                className="w-8 h-8 rounded-full object-cover mr-3" 
-                              />
-                            ) : (
-                              <div className="w-8 h-8 mr-3 border-2 border-gray-500 dark:border-gray-400 rounded-full flex items-center justify-center">
-                                {contact.chat_id && contact.chat_id.includes('@g.us') ? (
-                                  <Lucide icon="Users" className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                                ) : (
-                                  <Lucide icon="User" className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+          <div className="overflow-x-auto">
+          <div className="h-[calc(150vh-200px)] overflow-y-auto mb-4" ref={contactListRef}>
+          <table className="w-full border-collapse hidden sm:table" style={{ minWidth: '1200px' }}>
+            <DragDropContext onDragEnd={handleColumnReorder}>
+              <Droppable droppableId="thead" direction="horizontal">
+                {(provided) => (
+                  <thead 
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className="sticky top-0 bg-white dark:bg-gray-700 z-10 py-2"
+                  >
+                    <tr className="text-left">
+                      {columnOrder.map((columnId, index) => {
+                        if (!visibleColumns[columnId.replace('customField_', '')]) return null;
+                        
+                        return (
+                          <Draggable key={columnId} draggableId={columnId} index={index}>
+                            {(provided) => (
+                              <th
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                {...provided.dragHandleProps}
+                                className="p-4 font-medium text-gray-700 dark:text-gray-300 cursor-move hover:bg-gray-50 dark:hover:bg-gray-600"
+                              >
+                                {columnId === 'checkbox' && (
+                                  <input
+                                    type="checkbox"
+                                    checked={currentContacts.length > 0 && currentContacts.every(contact => 
+                                      selectedContacts.some(sc => sc.phone === contact.phone)
+                                    )}
+                                    onChange={() => handleSelectCurrentPage()}
+                                    className="rounded border-gray-300"
+                                  />
                                 )}
-                              </div>
-                            )}
-                            <span className="font-medium text-gray-900 dark:text-white">
-                              {contact.contactName ? (contact.lastName ? `${contact.contactName} ${contact.lastName}` : contact.contactName) : contact.phone}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="p-4 text-gray-600 dark:text-gray-400">
-                          {contact.phone ?? contact.source}
-                        </td>
-                        <td className="p-4">
-                          <div className="flex flex-wrap gap-2">
-                            {contact.tags && contact.tags.length > 0 ? (
-                              contact.tags.map((tag, index) => (
-                                <div key={index} className="relative group">
-                                  <span className={`px-2 py-1 text-xs font-semibold rounded-full inline-flex justify-center items-center ${
-                                    employeeNames.includes(tag.toLowerCase())
-                                      ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200'
-                                      : 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-200'
-                                  }`}>
-                                    {tag.charAt(0).toUpperCase() + tag.slice(1)}
-                                  </span>
-                                  <button
-                                    className="absolute right-0 top-0 transform translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-red-500 hover:text-red-700"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleRemoveTag(contact.id!, tag);
-                                    }}
+                                {columnId === 'contact' && (
+                                  <div 
+                                    className="flex items-center"
+                                    onClick={() => handleSort('contactName')}
                                   >
-                                    <div className="w-4 h-4 bg-red-600 hover:bg-red-800 dark:bg-red-600 dark:hover:bg-red-800 rounded-full flex items-center justify-center">
+                                    Contact
+                                    {sortField === 'contactName' && (
                                       <Lucide 
-                                        icon="X" 
-                                        className="w-3 h-3 text-white" 
+                                        icon={sortDirection === 'asc' ? 'ChevronUp' : 'ChevronDown'} 
+                                        className="w-4 h-4 ml-1"
                                       />
-                                    </div>
-                                  </button>
-                                </div>
-                              ))
-                            ) : (
-                              <span className="text-sm text-gray-500 dark:text-gray-400">No tags</span>
+                                    )}
+                                  </div>
+                                )}
+                                {columnId === 'phone' && (
+                                  <div 
+                                    className="flex items-center"
+                                    onClick={() => handleSort('phone')}
+                                  >
+                                    Phone
+                                    {sortField === 'phone' && (
+                                      <Lucide 
+                                        icon={sortDirection === 'asc' ? 'ChevronUp' : 'ChevronDown'} 
+                                        className="w-4 h-4 ml-1"
+                                      />
+                                    )}
+                                  </div>
+                                )}
+                                {columnId === 'tags' && (
+                                  <div 
+                                    className="flex items-center"
+                                    onClick={() => handleSort('tags')}
+                                  >
+                                    Tags
+                                    {sortField === 'tags' && (
+                                      <Lucide 
+                                        icon={sortDirection === 'asc' ? 'ChevronUp' : 'ChevronDown'} 
+                                        className="w-4 h-4 ml-1"
+                                      />
+                                    )}
+                                  </div>
+                                )}
+                                {columnId === 'points' && (
+                                  <div 
+                                    className="flex items-center"
+                                    onClick={() => handleSort('points')}
+                                  >
+                                    Points
+                                    {sortField === 'points' && (
+                                      <Lucide 
+                                        icon={sortDirection === 'asc' ? 'ChevronUp' : 'ChevronDown'} 
+                                        className="w-4 h-4 ml-1"
+                                      />
+                                    )}
+                                  </div>
+                                )}
+                                {columnId === 'notes' && (
+                                  <div 
+                                    className="flex items-center"
+                                    onClick={() => handleSort('notes')}
+                                  >
+                                    Notes
+                                    {sortField === 'notes' && (
+                                      <Lucide 
+                                        icon={sortDirection === 'asc' ? 'ChevronUp' : 'ChevronDown'} 
+                                        className="w-4 h-4 ml-1"
+                                      />
+                                    )}
+                                  </div>
+                                )}
+                                {columnId === 'actions' && (
+                                  <div className="flex items-center">
+                                    Actions
+                                  </div>
+                                )}
+                                {columnId.startsWith('customField_') && (
+                                  <div 
+                                    className="flex items-center"
+                                    onClick={() => handleSort(columnId)}
+                                  >
+                                    {columnId.replace('customField_', '').replace(/^\w/, c => c.toUpperCase())}
+                                    {sortField === columnId && (
+                                      <Lucide 
+                                        icon={sortDirection === 'asc' ? 'ChevronUp' : 'ChevronDown'} 
+                                        className="w-4 h-4 ml-1"
+                                      />
+                                    )}
+                                  </div>
+                                )}
+                              </th>
                             )}
-                          </div>
+                          </Draggable>
+                        );
+                      })}
+                      {provided.placeholder}
+                    </tr>
+                  </thead>
+                )}
+              </Droppable>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {getDisplayedContacts().map((contact, index) => (
+                  <tr 
+                    key={index}
+                    className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                      selectedContacts.some((c) => c.phone === contact.phone) ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                    }`}
+                  >
+                    {columnOrder.map(columnId => {
+                      if (!visibleColumns[columnId.replace('customField_', '')]) return null;
+
+                      return (
+                        <td key={`${contact.id}-${columnId}`} className="p-4">
+                          {columnId === 'checkbox' && (
+                            <input
+                              type="checkbox"
+                              checked={selectedContacts.some((c) => c.phone === contact.phone)}
+                              onChange={() => toggleContactSelection(contact)}
+                              className="rounded border-gray-300"
+                            />
+                          )}
+                          {columnId === 'contact' && (
+                            <div className="flex items-center">
+                              {contact.profilePicUrl ? (
+                                <img 
+                                  src={contact.profilePicUrl} 
+                                  alt={contact.contactName || "Profile"} 
+                                  className="w-8 h-8 rounded-full object-cover mr-3" 
+                                />
+                              ) : (
+                                <div className="w-8 h-8 mr-3 border-2 border-gray-500 dark:border-gray-400 rounded-full flex items-center justify-center">
+                                  {contact.chat_id && contact.chat_id.includes('@g.us') ? (
+                                    <Lucide icon="Users" className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                                  ) : (
+                                    <Lucide icon="User" className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                                  )}
+                                </div>
+                              )}
+                              <span className="font-medium text-gray-900 dark:text-white">
+                                {contact.contactName ? (contact.lastName ? `${contact.contactName} ${contact.lastName}` : contact.contactName) : contact.phone}
+                              </span>
+                            </div>
+                          )}
+                          {columnId === 'phone' && (
+                            <span className="text-gray-600 dark:text-gray-400">
+                              {contact.phone ?? contact.source}
+                            </span>
+                          )}
+                          {columnId === 'tags' && (
+                            <div className="flex flex-wrap gap-2">
+                              {contact.tags && contact.tags.length > 0 ? (
+                                contact.tags.map((tag, index) => (
+                                  <div key={index} className="relative group">
+                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full inline-flex justify-center items-center ${
+                                      employeeNames.includes(tag.toLowerCase())
+                                        ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200'
+                                        : 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-200'
+                                    }`}>
+                                      {tag.charAt(0).toUpperCase() + tag.slice(1)}
+                                    </span>
+                                    <button
+                                      className="absolute right-0 top-0 transform translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-red-500 hover:text-red-700"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRemoveTag(contact.id!, tag);
+                                      }}
+                                    >
+                                      <div className="w-4 h-4 bg-red-600 hover:bg-red-800 dark:bg-red-600 dark:hover:bg-red-800 rounded-full flex items-center justify-center">
+                                        <Lucide icon="X" className="w-3 h-3 text-white" />
+                                      </div>
+                                    </button>
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-sm text-gray-500 dark:text-gray-400">No tags</span>
+                              )}
+                            </div>
+                          )}
+                          {columnId === 'points' && (
+                            <span className="text-gray-600 dark:text-gray-400">
+                              {contact.points || 0}
+                            </span>
+                          )}
+                          {columnId === 'notes' && (
+                            <span className="text-gray-600 dark:text-gray-400">
+                              {contact.notes || '-'}
+                            </span>
+                          )}
+                          {columnId === 'actions' && (
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => {
+                                  setCurrentContact(contact);
+                                  setEditContactModal(true);
+                                }}
+                                className="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                                title="View/Edit"
+                              >
+                                <Lucide icon="Eye" className="w-5 h-5" />
+                              </button>
+                              <button
+                                onClick={() => handleClick(contact.phone)}
+                                className="p-2 text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
+                                title="Chat"
+                              >
+                                <Lucide icon="MessageSquare" className="w-5 h-5" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setCurrentContact(contact);
+                                  setDeleteConfirmationModal(true);
+                                }}
+                                className="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                                title="Delete"
+                              >
+                                <Lucide icon="Trash" className="w-5 h-5" />
+                              </button>
+                            </div>
+                          )}
+                          {columnId.startsWith('customField_') && (
+                            <span className="text-gray-600 dark:text-gray-400">
+                              {contact.customFields?.[columnId.replace('customField_', '')] || '-'}
+                            </span>
+                          )}
                         </td>
-                        <td className="p-4 text-gray-600 dark:text-gray-400">
-                          {contact.points || 0}
-                        </td>
-                        <td className="p-4">
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => {
-                                setCurrentContact(contact);
-                                setEditContactModal(true);
-                              }}
-                              className="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                              title="View/Edit"
-                            >
-                              <Lucide icon="Eye" className="w-5 h-5" />
-                            </button>
-                            <button
-                              onClick={() => handleClick(contact.phone)}
-                              className="p-2 text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
-                              title="Chat"
-                            >
-                              <Lucide icon="MessageSquare" className="w-5 h-5" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setCurrentContact(contact);
-                                setDeleteConfirmationModal(true);
-                              }}
-                              className="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                              title="Delete"
-                            >
-                              <Lucide icon="Trash" className="w-5 h-5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </DragDropContext>
+          </table>
                {/* Mobile Layout - Shown only on small screens */}
               <div className="sm:hidden">
                 {currentContacts.map((contact, index) => {
@@ -4643,6 +5810,19 @@ const getFilteredScheduledMessages = () => {
         >
           Add New Field
         </button>
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Notes
+          </label>
+          <textarea
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600"
+            rows={3}
+            value={currentContact?.notes || ''}
+            onChange={(e) =>
+              setCurrentContact((prev) => ({ ...prev!, notes: e.target.value }))
+            }
+          />
+        </div>
       </div>
       <div className="flex justify-end mt-6">
         <button
@@ -4662,218 +5842,433 @@ const getFilteredScheduledMessages = () => {
   </div>
 </Dialog>
      
-        <Dialog open={blastMessageModal} onClose={() => setBlastMessageModal(false)}>
-          <div className="fixed inset-0 flex items-center justify-center p-4 bg-black bg-opacity-50">
-            <Dialog.Panel className="w-full max-w-md p-6 bg-white dark:bg-gray-800 rounded-md mt-10 text-gray-900 dark:text-white">
-              <div className="mb-4 text-lg font-semibold">Send Blast Message</div>
-              {userRole === "3" ? (
-                <div className="text-red-500">You don't have permission to send blast messages.</div>
-              ) : (
-                <>
+<Dialog open={blastMessageModal} onClose={() => setBlastMessageModal(false)}>
+  <div className="fixed inset-0 flex items-center justify-center p-4 bg-black bg-opacity-50">
+    <Dialog.Panel className="w-full max-w-md p-6 bg-white dark:bg-gray-800 rounded-md mt-10 text-gray-900 dark:text-white">
+      <div className="mb-4 text-lg font-semibold">Send Blast Message</div>
+      {userRole === "3" ? (
+        <div className="text-red-500">You don't have permission to send blast messages.</div>
+      ) : (
+        <>
+          {/* Multiple Messages Section */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Messages</label>
+              <button
+                type="button"
+                className="text-sm text-indigo-600 hover:text-indigo-500"
+                onClick={() => setMessages([...messages, { text: '', delayAfter: 0 }])}
+              >
+                Add Message
+              </button>
+            </div>
+            
+            {messages.map((message, index) => (
+              <div key={index} className="mt-4 space-y-2">
+                <div className="flex items-start space-x-2">
                   <textarea
-                    className="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder="Type your message here..."
-                    value={blastMessage}
-                    onChange={(e) => setBlastMessage(e.target.value)}
+                    className="flex-1 p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder={`Message ${index + 1}`}
+                    value={message.text}
+                    onFocus={() => setFocusedMessageIndex(index)}
+                    onSelect={(e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+                      setCursorPosition((e.target as HTMLTextAreaElement).selectionStart);
+                    }}
+                    onClick={(e) => {
+                      setCursorPosition((e.target as HTMLTextAreaElement).selectionStart);
+                    }}
+                    onChange={(e) => {
+                      const newMessages = [...messages];
+                      newMessages[index] = { ...message, text: e.target.value };
+                      setMessages(newMessages);
+                    }}
                     rows={3}
                     style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-                  ></textarea>
-                  <div className="mt-2">
+                  />
+                  {messages.length > 1 && (
                     <button
-                      type="button"
-                      className="text-sm text-blue-500 hover:text-blue-400"
-                      onClick={() => setShowPlaceholders(!showPlaceholders)}
+                      onClick={() => {
+                        const newMessages = messages.filter((_, i) => i !== index);
+                        setMessages(newMessages);
+                      }}
+                      className="p-2 text-red-500 hover:text-red-700"
                     >
-                      {showPlaceholders ? 'Hide Placeholders' : 'Show Placeholders'}
+                      <span>×</span>
                     </button>
-                    {showPlaceholders && (
-                      <div className="mt-2 space-y-1">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Click to insert:</p>
-                        {['contactName', 'firstName', 'lastName', 'email', 'phone', 'vehicleNumber', 'branch', 'expiryDate', 'ic'].map(field => (
-                          <button
-                            key={field}
-                            type="button"
-                            className="mr-2 mb-2 px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
-                            onClick={() => insertPlaceholder(field)}
-                          >
-                            @{'{'}${field}{'}'}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Attach Media (Image or Video)</label>
-                    <input
-                      type="file"
-                      accept="image/*,video/*"
-                      onChange={(e) => handleMediaUpload(e)}
-                      className="block w-full mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Attach Document</label>
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                      onChange={(e) => handleDocumentUpload(e)}
-                      className="block w-full mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date & Time</label>
-                    <div className="flex space-x-2">
-                      <DatePickerComponent
-                        selected={blastStartDate}
-                        onChange={(date: Date | null) => setBlastStartDate(date as Date)}
-                        dateFormat="MMMM d, yyyy"
-                        className="w-full mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
-                      <DatePickerComponent
-                        selected={blastStartTime}
-                        onChange={(date: Date | null) => setBlastStartTime(date as Date)}
-                        showTimeSelect
-                        showTimeSelectOnly
-                        timeIntervals={15}
-                        timeCaption="Time"
-                        dateFormat="h:mm aa"
-                        className="w-full mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Contacts per Batch</label>
-                    <input
-                      type="number"
-                      value={batchQuantity}
-                      onChange={(e) => setBatchQuantity(parseInt(e.target.value))}
-                      min={1}
-                      className="block w-full mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Repeat Every</label>
-                    <div className="flex items-center">
-                      <input
-                        type="number"
-                        value={repeatInterval}
-                        onChange={(e) => setRepeatInterval(parseInt(e.target.value))}
-                        min={0}
-                        className="w-20 mt-1 mr-2 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
-                      <select
-                        value={repeatUnit}
-                        onChange={(e) => setRepeatUnit(e.target.value as 'minutes' | 'hours' | 'days')}
-                        className="mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      >
-                        <option value="minutes">Minutes</option>
-                        <option value="hours">Hours</option>
-                        <option value="days">Days</option>
-                      </select>
-                    </div>
-                    <div className="mt-4">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Delay between messages</label>
-        <div className="flex items-center space-x-2 mt-1">
-          <div className="flex items-center">
-            <span className="text-sm text-gray-600 dark:text-gray-400 mr-2">Wait between:</span>
-            <input
-              type="number"
-              value={minDelay}
-              onChange={(e) => setMinDelay(parseInt(e.target.value))}
-              min={1}
-              className="w-20 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-          </div>
-          <div className="flex items-center">
-            <span className="text-sm text-gray-600 dark:text-gray-400 mx-2">and</span>
-            <input
-              type="number"
-              value={maxDelay}
-              onChange={(e) => setMaxDelay(parseInt(e.target.value))}
-              min={1}
-              className="w-20 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-            <span className="text-sm text-gray-600 dark:text-gray-400 ml-2">Seconds</span>
-          </div>
-        </div>
+                  )}
+                </div>
+                
+                 {/* Only show delay input if there are multiple messages */}
+                 {messages.length > 1 && (
+  <div className="flex items-center space-x-2">
+    <span className="text-sm text-gray-600 dark:text-gray-400">Wait</span>
+    <input
+      type="number"
+      value={message.delayAfter}
+      onFocus={(e: React.FocusEvent<HTMLInputElement>) => {
+        setFocusedMessageIndex(index);
+        setCursorPosition(e.target.selectionStart ?? 0);
+      }}
+      onSelect={(e: React.SyntheticEvent<HTMLInputElement>) => {
+        setCursorPosition((e.target as HTMLInputElement).selectionStart ?? 0);
+      }}
+      onClick={(e: React.MouseEvent<HTMLInputElement>) => {
+        setCursorPosition((e.target as HTMLInputElement).selectionStart ?? 0);
+      }}
+      onChange={(e) => {
+        const newMessages = [...messages];
+        newMessages[index] = { ...message, delayAfter: parseInt(e.target.value) || 0 };
+        setMessages(newMessages);
+      }}
+      min={0}
+      className="w-20 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+    />
+    <span className="text-sm text-gray-600 dark:text-gray-400">seconds after this message</span>
+  </div>
+)}
+  </div>
+            ))}
 
-        <div className="mt-4">
-          <label className="flex items-center">
+            <div className="mt-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={infiniteLoop}
+                  onChange={(e) => setInfiniteLoop(e.target.checked)}
+                  className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">
+                  Loop messages indefinitely
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* Placeholders Section */}
+          <div className="mt-2">
+            <button
+              type="button"
+              className="text-sm text-blue-500 hover:text-blue-400"
+              onClick={() => setShowPlaceholders(!showPlaceholders)}
+            >
+              {showPlaceholders ? 'Hide Placeholders' : 'Show Placeholders'}
+            </button>
+            {showPlaceholders && (
+              <div className="mt-2 space-y-1">
+                <p className="text-sm text-gray-600 dark:text-gray-400">Click to insert:</p>
+                {['contactName', 'firstName', 'lastName', 'email', 'phone', 'vehicleNumber', 'branch', 'expiryDate', 'ic'].map(field => (
+        <button
+          key={field}
+          type="button"
+          className="mr-2 mb-2 px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
+          onClick={() => {
+            const placeholder = `@{${field}}`;
+            const newMessages = [...messages];
+            if (newMessages.length > 0) {
+              const currentText = newMessages[focusedMessageIndex].text;
+              const newText = 
+                currentText.slice(0, cursorPosition) + 
+                placeholder + 
+                currentText.slice(cursorPosition);
+              
+              newMessages[focusedMessageIndex] = {
+                ...newMessages[focusedMessageIndex],
+                text: newText
+              };
+              setMessages(newMessages);
+              
+              // Optional: Update cursor position after insertion
+              setCursorPosition(cursorPosition + placeholder.length);
+            }
+          }}
+        >
+          @{'{'}${field}{'}'}
+        </button>
+      ))}
+              </div>
+            )}
+          </div>
+
+          {/* Media Upload Section */}
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Attach Media (Image or Video)
+            </label>
             <input
-              type="checkbox"
-              checked={activateSleep}
-              onChange={(e) => setActivateSleep(e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+              type="file"
+              accept="image/*,video/*"
+              onChange={(e) => handleMediaUpload(e)}
+              className="block w-full mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             />
-            <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">Activate Sleep between sending</span>
-          </label>
-          {activateSleep && (
-            <div className="flex items-center space-x-2 mt-2 ml-6">
-              <span className="text-sm text-gray-600 dark:text-gray-400">After:</span>
+          </div>
+
+          {/* Document Upload Section */}
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Attach Document
+            </label>
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+              onChange={(e) => handleDocumentUpload(e)}
+              className="block w-full mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+          </div>
+
+          {/* Schedule Settings */}
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Start Date & Time
+            </label>
+            <div className="flex space-x-2">
+              <DatePickerComponent
+                selected={blastStartDate}
+                onChange={(date: Date | null) => setBlastStartDate(date as Date)}
+                dateFormat="MMMM d, yyyy"
+                className="w-full mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+              <DatePickerComponent
+                selected={blastStartTime}
+                onChange={(date: Date | null) => setBlastStartTime(date as Date)}
+                showTimeSelect
+                showTimeSelectOnly
+                timeIntervals={15}
+                timeCaption="Time"
+                dateFormat="h:mm aa"
+                className="w-full mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+            </div>
+          </div>
+
+          {/* Batch Settings */}
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Contacts per Batch
+            </label>
+            <input
+              type="number"
+              value={batchQuantity}
+              onChange={(e) => setBatchQuantity(parseInt(e.target.value))}
+              min={1}
+              className="block w-full mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+          </div>
+
+          {/* Repeat Settings */}
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Repeat Every
+            </label>
+            <div className="flex items-center">
               <input
                 type="number"
-                value={sleepAfterMessages}
-                onChange={(e) => setSleepAfterMessages(parseInt(e.target.value))}
-                min={1}
-                className="w-20 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                value={repeatInterval}
+                onChange={(e) => setRepeatInterval(parseInt(e.target.value))}
+                min={0}
+                className="w-20 mt-1 mr-2 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
-              <span className="text-sm text-gray-600 dark:text-gray-400">Messages</span>
-              <span className="text-sm text-gray-600 dark:text-gray-400">for:</span>
+              <select
+                value={repeatUnit}
+                onChange={(e) => setRepeatUnit(e.target.value as 'minutes' | 'hours' | 'days')}
+                className="mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="minutes">Minutes</option>
+                <option value="hours">Hours</option>
+                <option value="days">Days</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Delay Settings */}
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Delay between batches
+            </label>
+            <div className="flex items-center space-x-2 mt-1">
+              <div className="flex items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400 mr-2">Wait between:</span>
+                <input
+                  type="number"
+                  value={minDelay}
+                  onChange={(e) => setMinDelay(parseInt(e.target.value))}
+                  min={1}
+                  className="w-20 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+              <div className="flex items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400 mx-2">and</span>
+                <input
+                  type="number"
+                  value={maxDelay}
+                  onChange={(e) => setMaxDelay(parseInt(e.target.value))}
+                  min={1}
+                  className="w-20 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+                <span className="text-sm text-gray-600 dark:text-gray-400 ml-2">Seconds</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Sleep Settings */}
+          <div className="mt-4">
+            <label className="flex items-center">
               <input
-                type="number"
-                value={sleepDuration}
-                onChange={(e) => setSleepDuration(parseInt(e.target.value))}
-                min={1}
-                className="w-20 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                type="checkbox"
+                checked={activateSleep}
+                onChange={(e) => setActivateSleep(e.target.checked)}
+                className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
               />
-              <span className="text-sm text-gray-600 dark:text-gray-400">Seconds</span>
+              <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">
+                Activate Sleep between sending
+              </span>
+            </label>
+            {activateSleep && (
+              <div className="flex items-center space-x-2 mt-2 ml-6">
+                <span className="text-sm text-gray-600 dark:text-gray-400">After:</span>
+                <input
+                  type="number"
+                  value={sleepAfterMessages}
+                  onChange={(e) => setSleepAfterMessages(parseInt(e.target.value))}
+                  min={1}
+                  className="w-20 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+                <span className="text-sm text-gray-600 dark:text-gray-400">Messages</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">for:</span>
+                <input
+                  type="number"
+                  value={sleepDuration}
+                  onChange={(e) => setSleepDuration(parseInt(e.target.value))}
+                  min={1}
+                  className="w-20 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+                <span className="text-sm text-gray-600 dark:text-gray-400">Seconds</span>
+              </div>
+            )}
+          </div>
+
+          {/* Active Hours */}
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Active Hours
+            </label>
+            <div className="flex items-center space-x-2">
+              <div>
+                <label className="text-sm text-gray-600 dark:text-gray-400">From</label>
+                <DatePickerComponent
+                  selected={(() => {
+                    const date = new Date();
+                    const [hours, minutes] = activeTimeStart.split(':');
+                    date.setHours(parseInt(hours), parseInt(minutes));
+                    return date;
+                  })()}
+                  onChange={(date: Date | null) => {
+                    if (date) {
+                      setActiveTimeStart(`${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`);
+                    }
+                  }}
+                  showTimeSelect
+                  showTimeSelectOnly
+                  timeIntervals={15}
+                  timeCaption="Time"
+                  dateFormat="h:mm aa"
+                  className="w-full mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 dark:text-gray-400">To</label>
+                <DatePickerComponent
+                  selected={(() => {
+                    const date = new Date();
+                    const [hours, minutes] = activeTimeEnd.split(':');
+                    date.setHours(parseInt(hours), parseInt(minutes));
+                    return date;
+                  })()}
+                  onChange={(date: Date | null) => {
+                    if (date) {
+                      setActiveTimeEnd(`${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`);
+                    }
+                  }}
+                  showTimeSelect
+                  showTimeSelectOnly
+                  timeIntervals={15}
+                  timeCaption="Time"
+                  dateFormat="h:mm aa"
+                  className="w-full mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Phone Selection */}
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300" htmlFor="phone">
+              Phone
+            </label>
+            <select
+              id="phone"
+              name="phone"
+              value={phoneIndex}
+              onChange={(e) => setPhoneIndex(parseInt(e.target.value))}
+              className="mt-1 text-black dark:text-white border-primary dark:border-primary-dark bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-700 rounded-lg text-sm w-full"
+            >
+              <option value="">Select a phone</option>
+              {Object.entries(phoneNames).map(([index, phoneName]) => {
+                return (
+                  <option 
+                    key={index} 
+                    value={parseInt(index) - 1}
+                  >
+                    {phoneName}
+                  </option>
+                );
+              })}
+            </select>
+            {phoneIndex !== null && phoneIndex >= 0 && (
+              <div className="mt-1">
+                <span 
+                  className={
+                    qrCodes[phoneIndex]?.status === 'ready' || qrCodes[phoneIndex]?.status === 'authenticated'
+                      ? 'text-green-600 text-sm'
+                      : 'text-red-600 text-sm'
+                  }
+                >
+                  Status: {
+                    qrCodes[phoneIndex]?.status === 'ready' || qrCodes[phoneIndex]?.status === 'authenticated'
+                      ? 'Connected'
+                      : 'Not Connected'
+                  }
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Submit Button */}
+          <div className="flex justify-end mt-6">
+            <button
+              className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={sendBlastMessage}
+              disabled={isScheduling}
+            >
+              {isScheduling ? (
+                <div className="flex items-center">
+                  Scheduling...
+                </div>
+              ) : (
+                "Send Blast Message"
+              )}
+            </button>
+          </div>
+
+          {isScheduling && (
+            <div className="mt-4 text-center text-sm text-gray-500 dark:text-gray-400">
+              Please wait while we schedule your messages...
             </div>
           )}
-        </div>
-      </div>
-                    <div className="mt-2">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300" htmlFor="phone">Phone</label>
-                      <select
-                        id="phone"
-                        name="phone"
-                        value={phoneIndex}
-                        onChange={(e) => setPhoneIndex(parseInt(e.target.value))}
-                        className="mt-1 text-black dark:text-white border-primary dark:border-primary-dark bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-700 rounded-lg text-sm w-full"
-                      >
-                        <option value="">Select a phone</option>
-                        {Object.entries(phoneNames).map(([index, phoneName]) => (
-                          <option key={index} value={parseInt(index) - 1}>
-                            {phoneName}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="flex justify-end mt-4">
-                    <button
-                      className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={sendBlastMessage}
-                      disabled={isScheduling}
-                    >
-                      {isScheduling ? (
-                        <div className="flex items-center">
-                          Scheduling...
-                        </div>
-                      ) : (
-                        "Send Blast Message"
-                      )}
-                    </button>
-                  </div>
-                  {isScheduling && (
-                    <div className="mt-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                      Please wait while we schedule your messages...
-                    </div>
-                  )}
-                </>
-              )}
-            </Dialog.Panel>
-          </div>
-        </Dialog>
+        </>
+      )}
+    </Dialog.Panel>
+  </div>
+</Dialog>
 
         {showAddTagModal && (
           <Dialog open={showAddTagModal} onClose={() => setShowAddTagModal(false)}>
@@ -5090,6 +6485,7 @@ const getFilteredScheduledMessages = () => {
           draggable
           pauseOnHover
         />
+      </div>
       </div>
     </div>
   );
