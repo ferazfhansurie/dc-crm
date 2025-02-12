@@ -46,7 +46,7 @@ const firestore = getFirestore(app);
 const handleSignOut = () => {
   signOut(auth)
     .then(() => {
-      console.log("Sign-out successful.");
+      
       localStorage.removeItem('contacts'); // Clear contacts from localStorage
       sessionStorage.removeItem('contactsFetched'); // Clear the session marker
 
@@ -219,6 +219,11 @@ function Main() {
             </Menu.Header>
         
             <Menu.Divider className="bg-white/[0.08]" />
+            <Menu.Item className="hover:bg-white/5">
+              <Link to="/client-ticket">
+                <Lucide icon="Ticket" className="w-4 h-4 mr-2" /> Client Ticket
+              </Link>
+            </Menu.Item>
             <Menu.Item className="hover:bg-white/5" >
               {/* Logout link with sign out function */}
               <Link to="/login" onClick={handleSignOut}>

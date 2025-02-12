@@ -51,7 +51,9 @@ interface Contact {
 const app = initializeApp(firebaseConfig);
 const firestore = getFirestore(app);
 
-
+interface MessageCache {
+  [chatId: string]: any[]; // or specify more detailed message type if available
+}
 
 function LoadingPage() {
   const [progress, setProgress] = useState(0);
@@ -120,7 +122,7 @@ function LoadingPage() {
 
       const companyData = docSnapshot.data();
       const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
-      console.log('baseUrl: '+baseUrl);
+      
       if (companyData.trialEndDate) {
         const trialEnd = companyData.trialEndDate.toDate();
         const now = new Date();
@@ -147,9 +149,11 @@ function LoadingPage() {
 
       // Only proceed with QR code and bot status if v2 exists
       const headers = companyData.apiUrl 
-        ? {
-            'Authorization': `Bearer ${await user?.getIdToken()}`
-          }
+        ?  {
+          'Authorization': `Bearer ${await user?.getIdToken()}`,
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',  // Add this for ngrok
+        }
         : {
             'Authorization': `Bearer ${await user?.getIdToken()}`,
             'Content-Type': 'application/json'
@@ -159,61 +163,61 @@ function LoadingPage() {
         `${baseUrl}/api/bot-status/${companyId}`,
         {
           headers,
-          withCredentials: companyData.apiUrl ? true : false
+          withCredentials:false
         }
       );
 
-      console.log(botStatusResponse.data);
+      
       if (botStatusResponse.status !== 200) {
         throw new Error(`Unexpected response status: ${botStatusResponse.status}`);
       }
       let phoneCount = companyData.phoneCount ?? null;
-      console.log('Phone count:', phoneCount);
+      
       
       if (phoneCount === null || phoneCount === 1) {
         const { status, qrCode } = botStatusResponse.data;
-        console.log('Single bot status response:', botStatusResponse.data);
+        
         setBotStatus(status);
         if (status === 'qr') {
           setQrCodeImage(qrCode);
         } else if (status === 'authenticated' || status === 'ready') {
-          console.log('Single bot is authenticated/ready, navigating to chat');
+          
           setShouldFetchContacts(true);
           navigate('/chat');
           return;
         }
       } else {
-        console.log('Multiple phones configuration:', botStatusResponse.data);
+        
         // Check if response is an array
         const statusArray = Array.isArray(botStatusResponse.data) 
           ? botStatusResponse.data 
           : [botStatusResponse.data];
-
-        let anyAuthenticated = false;
-        for (const bot of statusArray) {
-          console.log('Checking bot status:', bot.status);
-          if (bot.status === 'authenticated' || bot.status === 'ready') {
-            anyAuthenticated = true;
-            setBotStatus(bot.status);
-            break;
-          }
-        }
-
-        if (anyAuthenticated) {
-          console.log('At least one bot is authenticated/ready, navigating to chat');
+    // Check if any phone is authenticated/ready
+    const anyPhoneReady = statusArray.some(phone => 
+      phone.status === 'authenticated' || phone.status === 'ready'
+    );
+    if (anyPhoneReady) {
+      
+      setShouldFetchContacts(true);
+      navigate('/chat');
+      return;
+    }
+        // Only check the first phone's status
+        const firstPhone = statusArray[0];
+        
+        
+        if (firstPhone.status === 'authenticated' || firstPhone.status === 'ready') {
+          
           setShouldFetchContacts(true);
           navigate('/chat');
           return;
+        } else if (firstPhone.status === 'qr' && firstPhone.qrCode) {
+          
+          setBotStatus('qr');
+          setQrCodeImage(firstPhone.qrCode);
         } else {
-          console.log("No bots are authenticated yet");
-          // Find first bot with QR code
-          for (const bot of statusArray) {
-            if (bot.status === 'qr' && bot.qrCode) {
-              setBotStatus('qr');
-              setQrCodeImage(bot.qrCode);
-              break;
-            }
-          }
+          
+          setBotStatus(firstPhone.status);
         }
       }
    
@@ -268,7 +272,7 @@ function LoadingPage() {
           
           if (!docUserSnapshot.exists()) {
             if (retries > 0) {
-              console.log(`User document not found. Retrying... (${retries} attempts left)`);
+            
               setTimeout(() => initWebSocket(retries - 1), 2000); // Retry after 2 seconds
               return;
             } else {
@@ -280,23 +284,23 @@ function LoadingPage() {
           const companyId = dataUser.companyId;
           ws.current = new WebSocket(`wss://mighty-dane-newly.ngrok-free.app/ws/${user?.email}/${companyId}`);
           ws.current.onopen = () => {
-            console.log('WebSocket connected');
+            
             setWsConnected(true);
             setError('')
           };
           
           ws.current.onmessage = async (event) => {
             const data = JSON.parse(event.data);
-            console.log('WebSocket message received:', data);
+            
       
             if (data.type === 'auth_status') {
-              console.log(`Bot status update: ${data.status}`);
+              
               setBotStatus(data.status);
               
               if (data.status === 'qr') {
                 setQrCodeImage(data.qrCode);
               } else if (data.status === 'authenticated' || data.status === 'ready') {
-                console.log('Bot authenticated/ready via WebSocket, navigating to chat');
+                
                 setShouldFetchContacts(true);
                 navigate('/chat');
                 return;
@@ -322,7 +326,7 @@ function LoadingPage() {
           };
           
           ws.current.onclose = () => {
-            console.log('WebSocket disconnected');
+            
             setWsConnected(false);
           };
         } catch (error) {
@@ -334,7 +338,6 @@ function LoadingPage() {
           }
           
           if (retries > 0) {
-            console.log(`Retrying WebSocket connection... (${retries} attempts left)`);
             setTimeout(() => initWebSocket(retries - 1), 2000);
           }
         }
@@ -350,30 +353,30 @@ function LoadingPage() {
   useEffect(() => {
     return () => {
       if (ws.current && processingComplete && !isLoading && contacts.length > 0) {
-        console.log('Closing WebSocket connection');
+        
         ws.current.close();
       }
     };
   }, [processingComplete, isLoading, contacts]);
 
   useEffect(() => {
-    console.log("useEffect triggered. shouldFetchContacts:", shouldFetchContacts, "isLoading:", isLoading);
+
     if (shouldFetchContacts && !isLoading) {
-      console.log("Conditions met for navigation, navigating to chat");
+      
       navigate('/chat');
     }
   }, [shouldFetchContacts, isLoading, navigate]);
 
   useEffect(() => {
-    console.log("Contact state changed. contactsFetched:", contactsFetched, "fetchedChats:", fetchedChats, "totalChats:", totalChats, "contacts length:", contacts.length);
+    
     if (contactsFetched && fetchedChats === totalChats && contacts.length > 0) {
-      console.log('Contacts and chats fetched and loaded, navigating to chat');
+      
       navigate('/chat');
     }
   }, [contactsFetched, fetchedChats, totalChats, contacts, navigate]);
 
   const fetchContacts = async () => {
-    console.log('fetchContacts triggered');
+    
     try {
       setLoadingPhase('fetching_contacts');
       const user = auth.currentUser;
@@ -503,7 +506,7 @@ const getLoadingMessage = () => {
 )}
 
 useEffect(() => {
-  console.log('useEffect triggered. processingComplete:', processingComplete, 'contactsFetched:', contactsFetched, 'isLoading:', isLoading);
+  
   if (processingComplete && contactsFetched && !isLoading) {
     const timer = setTimeout(() => {
       navigate('/chat');
@@ -532,9 +535,9 @@ useEffect(() => {
   };
 
   useEffect(() => {
-    console.log('Current bot status:', botStatus);
-    console.log('Is processing chats:', isProcessingChats);
-    console.log('Processing progress:', fetchedChats, totalChats);
+    
+    
+    
   }, [botStatus, isProcessingChats, fetchedChats, totalChats]);
 
   useEffect(() => {
@@ -553,7 +556,7 @@ useEffect(() => {
     try {
       // Close WebSocket connection if it exists
       if (ws.current) {
-        console.log('Closing WebSocket connection');
+        
         ws.current.close();
         setWsConnected(false);
       }
@@ -577,7 +580,7 @@ useEffect(() => {
       const docUserRef = doc(firestore, 'user', user?.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
-        console.log('No such document!');
+        
         return;
       }
       const dataUser = docUserSnapshot.data();
@@ -585,7 +588,7 @@ useEffect(() => {
       const docRef = doc(firestore, 'companies', companyId);
       const docSnapshot = await getDoc(docRef);
       if (!docSnapshot.exists()) {
-        console.log('No such document!');
+        
         return;
       }
       const data2 = docSnapshot.data();
@@ -629,7 +632,6 @@ useEffect(() => {
 
   useEffect(() => {
     if (botStatus === 'ready' || botStatus === 'authenticated') {
-      console.log('Bot status changed to ready/authenticated, navigating to chat');
       setShouldFetchContacts(true);
       navigate('/chat');
     }
@@ -637,92 +639,93 @@ useEffect(() => {
 
   const fetchAndCacheMessages = async (contacts: Contact[], companyId: string, user: any) => {
     setLoadingPhase('caching_messages');
-    console.log('Starting message caching process...');
-    try {
-      // Sort contacts by last message timestamp and take the 100 most recent
-      const mostRecentContacts = contacts
-        .sort((a, b) => {
-          const getTimestamp = (contact: Contact) => {
-            if (!contact.last_message) return 0;
-            return contact.last_message.createdAt
-              ? new Date(contact.last_message.createdAt).getTime()
-              : contact.last_message.timestamp
-                ? contact.last_message.timestamp * 1000
-                : 0;
-          };
-          return getTimestamp(b) - getTimestamp(a);
-        })
-        .slice(0, 100);
+    console.log('fetchAndCacheMessages');
+    // Reduce number of cached contacts
+    const mostRecentContacts = contacts
+      .sort((a, b) => {
+        const getTimestamp = (contact: Contact) => {
+          if (!contact.last_message) return 0;
+          return contact.last_message.createdAt
+            ? new Date(contact.last_message.createdAt).getTime()
+            : contact.last_message.timestamp
+              ? contact.last_message.timestamp * 1000
+              : 0;
+        };
+        return getTimestamp(b) - getTimestamp(a);
+      })
+      .slice(0, 10); // Reduce from 100 to 20 most recent contacts
 
-      console.log(`Processing ${mostRecentContacts.length} most recent contacts`);
-      let processedContacts = 0;
-      
-      // Get company config for API URL
-      const docRef = doc(firestore, 'companies', companyId);
-      const docSnapshot = await getDoc(docRef);
-      if (!docSnapshot.exists()) {
-        throw new Error("Company document does not exist");
-      }
-      const companyData = docSnapshot.data();
-      const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
-
-      console.log('Starting parallel message fetching...');
-      // Fetch messages in parallel with rate limiting
-      const messagePromises = mostRecentContacts.map(async (contact) => {
-        if (!contact.chat_id) {
-          console.log(`Skipping contact - no chat_id found`);
+    // Only cache last 50 messages per contact
+    const messagePromises = mostRecentContacts.map(async (contact) => {
+      try {
+        // Get company data to access baseUrl
+        const docRef = doc(firestore, 'companies', companyId);
+        const docSnapshot = await getDoc(docRef);
+        const companyData = docSnapshot.data();
+        if (!docSnapshot.exists() || !companyData) {
+          console.error('Company data not found');
           return null;
         }
-        
-        try {
-          console.log(`Fetching messages for chat ${contact.chat_id}`);
-          const response = await axios.get(
-            `${baseUrl}/api/messages/${contact.chat_id}/${companyData.whapiToken}?limit=10`,
-            {
-              headers: {
-                'Authorization': `Bearer ${await user.getIdToken()}`
-              }
+
+        const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+        const response = await axios.get(
+          `${baseUrl}/api/messages/${contact.chat_id}/${companyData.whapiToken}?limit=20`,
+          {
+            headers: {
+              'Authorization': `Bearer ${await user.getIdToken()}`
             }
-          );
+          }
+        );
 
-          processedContacts++;
-          const progress = (processedContacts / mostRecentContacts.length) * 100;
-          console.log(`Progress: ${Math.round(progress)}% (${processedContacts}/${mostRecentContacts.length})`);
-          setLoadingProgress(progress);
+        return {
+          chatId: contact.chat_id,
+          messages: response.data.messages
+        };
+      } catch (error) {
+        console.error(`Error fetching messages for chat ${contact.chat_id}:`, error);
+        return null;
+      }
+    });
 
-          return {
-            chatId: contact.chat_id,
-            messages: response.data.messages
-          };
-        } catch (error) {
-          console.error(`Error fetching messages for chat ${contact.chat_id}:`, error);
-          return null;
-        }
-      });
+    // Wait for all message fetching promises to complete
+    const results = await Promise.all(messagePromises);
 
-      const results = await Promise.all(messagePromises);
-      const successfulResults = results.filter(result => result !== null);
-      console.log(`Successfully cached messages for ${successfulResults.length} chats`);
+    // Create messages cache object from results
+    const messagesCache = results.reduce<MessageCache>((acc, result) => {
+      if (result) {
+        acc[result.chatId] = result.messages;
+      }
+      return acc;
+    }, {});
 
-      const messagesCache = results.reduce((acc: { [key: string]: any }, result) => {
-        if (result) {
-          acc[result.chatId] = result.messages;
-        }
-        return acc;
-      }, {});
+    const cacheData = {
+      messages: messagesCache,
+      timestamp: Date.now(),
+      expiry: Date.now() + (30 * 60 * 1000)
+    };
 
-      // Store in localStorage with compression
-      const compressedData = LZString.compress(JSON.stringify(messagesCache));
-      console.log(`Compressed cache size: ${compressedData.length} characters`);
-      localStorage.setItem('messagesCache', compressedData);
-      localStorage.setItem('messagesCacheTimestamp', Date.now().toString());
-      console.log('Message caching complete!');
-
-    } catch (error) {
-      console.error('Error in message caching process:', error);
-      setError('Failed to cache messages, but continuing...');
-    }
+    const compressedData = LZString.compress(JSON.stringify(cacheData));
+    localStorage.setItem('messagesCache', compressedData);
   };
+
+  // Add storage cleanup on page load/refresh
+  useEffect(() => {
+    const cleanupStorage = () => {
+      // Clear old message caches
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith('messages_') || key?.startsWith('messagesCache')) {
+          localStorage.removeItem(key);
+        }
+      }
+    };
+
+    cleanupStorage();
+    
+    // Also clean up on page unload
+    window.addEventListener('beforeunload', cleanupStorage);
+    return () => window.removeEventListener('beforeunload', cleanupStorage);
+  }, []);
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-white dark:bg-gray-900 py-8">

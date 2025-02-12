@@ -31,20 +31,20 @@ const menu: Array<Menu | "divider"> = [
       pathname: "/calendar",
       title: "Calendar",
     },
-    /*
+ 
     {
-      icon: "HardDrive",
-      pathname: "/dashboard/file-manager",
-      title: "File Manager",
+      icon: "Ticket",
+      pathname: "/ticket",
+      title: "Ticket",
     },
-   */
+
     "divider",
     {
       icon: "Users",
       title: "Users",
       pathname: "/users-layout-2",
     },
-    
+
   /* {
       icon: "Trello",
       title: "Profile",

@@ -3738,7 +3738,7 @@ const resetForm = () => {
       const validContacts = csvContacts.map(contact => {
         const baseContact: any = {
           customFields: {},
-          tags: [],
+          tags: [...selectedImportTags], // Add selected import tags here
           updatedAt: Timestamp.now(),
           updatedBy: user.email,
           createdAt: Timestamp.now(),
@@ -3748,6 +3748,16 @@ const resetForm = () => {
         // Process each field in the CSV contact
       Object.entries(contact).forEach(([header, value]) => {
         const headerLower = header.toLowerCase().trim();
+        
+                // Check if the header is a tag column (tag 1 through tag 10)
+                const tagMatch = headerLower.match(/^tag\s*(\d+)$/);
+                if (tagMatch && Number(tagMatch[1]) <= 10) {
+                  // If value exists and isn't empty, add it to tags array
+                  if (value && typeof value === 'string' && value.trim()) {
+                    baseContact.tags.push(value.trim());
+                  }
+                  return; // Skip further processing for tag columns
+                }
         
         // Try to match with standard fields
         let matched = false;
@@ -3775,6 +3785,9 @@ const resetForm = () => {
           baseContact.customFields[header] = value;
         }
       });
+
+      baseContact.tags = [...new Set(baseContact.tags)];
+
 
       return baseContact;
     });

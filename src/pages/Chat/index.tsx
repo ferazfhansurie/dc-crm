@@ -33,6 +33,8 @@ import 'react-datepicker/dist/react-datepicker.css';
 import ReactPaginate from 'react-paginate';
 import { getFileTypeFromMimeType } from '../../utils/fileUtils';
 import { Transition } from "@headlessui/react";
+import VirtualContactList from '../../components/VirtualContactList';
+import SearchModal from '@/components/SearchModal';
 
 interface Label {
   id: string;
@@ -41,7 +43,7 @@ interface Label {
   count: number;
 }
 
-interface Contact {
+export interface Contact {
   conversation_id?: string | null;
   additionalEmails?: string[] | null;
   address1?: string | null;
@@ -80,25 +82,8 @@ interface Contact {
   points?:number |null;
   phoneIndexes?:number[] |null;
 }
-interface GhlConfig {
-  ghl_id: string;
-  ghl_secret: string;
-  refresh_token: string;
-  ghl_accessToken: string;
-  ghl_location: string;
-  whapiToken: string;
-  v2?: boolean;
-}
-interface Chat {
-  id?: string;
-  name?: string;
-  last_message?: Message | null;
-  labels?: Label[];
-  contact_id?: string;
-  tags?: string[];
-}
 
-interface Message {
+export interface Message {
   chat_id: string;
   dateAdded?: number | 0;
   timestamp: number | 0;
@@ -129,12 +114,12 @@ interface Message {
     sha256: string;
     data?:string;
     caption?:string;
-  mimetype?: string;
-  fileSize?: number;
+    mimetype?: string;
+    fileSize?: number;
   };
   link_preview?: { link: string; title: string; description: string ,body:string,preview:string};
   sticker?: { link: string; emoji: string;mimetype:string;data:string };
-  location?: { latitude: number; longitude: number; name: string };
+  location?: { latitude: number; longitude: number; name: string; description:string };
   live_location?: { latitude: number; longitude: number; name: string };
   contact?: { name: string; phone: string };
   contact_list?: { contacts: { name: string; phone: string }[] };
@@ -155,7 +140,18 @@ interface Message {
   reactions?: { emoji: string; from_name: string }[];
   name?:string;
   isPrivateNote?: boolean;
+  call_log?: any;
 }
+
+interface Chat {
+  id?: string;
+  name?: string;
+  last_message?: Message | null;
+  labels?: Label[];
+  contact_id?: string;
+  tags?: string[];
+}
+
 interface Employee {
   id: string;
   name: string;
@@ -183,9 +179,22 @@ interface QuickReply {
   id: string;
   keyword: string;
   text: string;
-  type:string;
-  document?: string | null;
-  image?: string | null;
+  type: string;
+  category: string;
+  documents?: {
+    name: string;
+    type: string;
+    size: number;
+    url: string;
+    lastModified: number;
+  }[] | null;
+  images?: string[] | null;
+}
+interface Category {
+  id: string;
+  name: string;
+  createdAt: any;
+  createdBy: string;
 }
 interface ImageModalProps {
   isOpen: boolean;
@@ -234,6 +243,12 @@ interface EditMessagePopupProps {
   setEditedMessageText: (value: string) => void;
   handleEditMessage: () => void;
   cancelEditMessage: () => void;
+}
+
+interface QRCodeData {
+  phoneIndex: number;
+  status: string;
+  qrCode: string | null;
 }
 
 const DatePickerComponent = DatePicker as any;
@@ -398,8 +413,16 @@ const app = initializeApp(firebaseConfig);
 const firestore = getFirestore(app);
 const auth = getAuth(app);
 
+interface ContactsState {
+  items: Contact[];
+  hasMore: boolean;
+  lastVisible: any;
+  isLoading: boolean;
+  currentPage: number;
+}
+
 function Main() {
-   // Initial state setup with localStorage
+  // Initial state setup with localStorage
   const { contacts: contextContacts, isLoading: contextLoading } = useContacts();
   const [contacts, setContacts] = useState<Contact[]>(() => {
     const storedContacts = localStorage.getItem('contacts');
@@ -433,16 +456,17 @@ function Main() {
   const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
   const baseMessageClass = "flex flex-col max-w-[auto] min-w-[auto] p-1 text-white";
   const myMessageClass = `${baseMessageClass} bg-primary self-end ml-auto text-left mb-1 mr-6 group`;
-  const otherMessageClass = `${baseMessageClass} bg-gray-700 self-start text-left mt-1 ml-2 group`;
+  const otherMessageClass = `${baseMessageClass} bg-white dark:bg-gray-800 self-start text-left mt-1 ml-2 group`;
   const myFirstMessageClass = `${myMessageClass} rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-xl mt-4`;
   const myMiddleMessageClass = `${myMessageClass} rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-xl`;
   const myLastMessageClass = `${myMessageClass} rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-xl mb-4`;
   const otherFirstMessageClass = `${otherMessageClass} rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-xl mt-4`;
   const otherMiddleMessageClass = `${otherMessageClass} rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-xl`;
   const otherLastMessageClass = `${otherMessageClass} rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-xl mb-4`;
+  const privateNoteClass = `${baseMessageClass} bg-yellow-500 dark:bg-yellow-900 self-start text-left mt-1 ml-2 group rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-xl`;
   const [messageMode, setMessageMode] = useState('reply');
   const myMessageTextClass = "text-white"
-  const otherMessageTextClass = "text-white"
+  const otherMessageTextClass = "text-black dark:text-white"
   const [activeTags, setActiveTags] = useState<string[]>(['all']);
   const [tagList, setTagList] = useState<Tag[]>([]);
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -469,7 +493,7 @@ function Main() {
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
   const [isEmojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [isImageModalOpen2, setImageModalOpen2] = useState(false);
-  const [pastedImageUrl, setPastedImageUrl] = useState('');
+  const [pastedImageUrl, setPastedImageUrl] = useState<string | string[] | null>('');
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentPage, setCurrentPage] = useState(0);
@@ -531,6 +555,8 @@ function Main() {
   const [documentModalOpen, setDocumentModalOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<File | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [selectedDocuments, setSelectedDocuments] = useState<File[]>([]);
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [quickReplyFilter, setQuickReplyFilter] = useState('');
   const [phoneNames, setPhoneNames] = useState<Record<number, string>>({});
   const [userPhone, setUserPhone] = useState<number | null>(null);
@@ -568,58 +594,91 @@ function Main() {
   const [videoCaption, setVideoCaption] = useState('');
   const [trialExpired, setTrialExpired] = useState(false);
   const [minDelay, setMinDelay] = useState(1);
-const [maxDelay, setMaxDelay] = useState(2);
-const [activateSleep, setActivateSleep] = useState(false);
-const [sleepAfterMessages, setSleepAfterMessages] = useState(20);
-const [sleepDuration, setSleepDuration] = useState(5);
+  const [maxDelay, setMaxDelay] = useState(2);
+  const [activateSleep, setActivateSleep] = useState(false);
+  const [sleepAfterMessages, setSleepAfterMessages] = useState(20);
+  const [sleepDuration, setSleepDuration] = useState(5);
+
+  const [qrCodes, setQrCodes] = useState<QRCodeData[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [quickReplyCategory, setQuickReplyCategory] = useState<string>('all');
+  const [contactsState, setContactsState] = useState<ContactsState>({
+    items: [],
+    hasMore: true,
+    lastVisible: null,
+    isLoading: false,
+    currentPage: 1
+  });
+  const CONTACTS_PER_PAGE = 50;
+
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+
   useEffect(() => {
-    const checkTrialStatus = async () => {
+    const fetchCategories = async () => {
       try {
-        const auth = getAuth();
         const user = auth.currentUser;
-        
-        if (!user?.email) {
-          return;
-        }
+        if (!user) return;
   
-        const docUserRef = doc(firestore, 'user', user.email);
+        const docUserRef = doc(firestore, 'user', user.email!);
         const docUserSnapshot = await getDoc(docUserRef);
+        if (!docUserSnapshot.exists()) return;
         
-        if (!docUserSnapshot.exists()) {
-          throw new Error("User document not found");
-        }
+        const userData = docUserSnapshot.data();
+        const companyId = userData.companyId;
+  
+        const categoriesRef = collection(firestore, `companies/${companyId}/categories`);
+        const categoriesSnapshot = await getDocs(categoriesRef);
+        const fetchedCategories = categoriesSnapshot.docs.map(doc => doc.data().name);
+        setCategories(['all', ...fetchedCategories]);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+  
+    fetchCategories();
+  }, []);
+  useEffect(() => {
+    const fetchPhoneStatuses = async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) return;
+  
+        const docUserRef = doc(firestore, 'user', user.email!);
+        const docUserSnapshot = await getDoc(docUserRef);
+        if (!docUserSnapshot.exists()) return;
   
         const userData = docUserSnapshot.data();
         const companyId = userData.companyId;
   
-        const companyRef = doc(firestore, 'companies', companyId);
-        const companySnapshot = await getDoc(companyRef);
-  
-        if (!companySnapshot.exists()) {
-          throw new Error("Company document not found");
-        }
-  
-        const companyData = companySnapshot.data();
+        const docRef = doc(firestore, 'companies', companyId);
+        const docSnapshot = await getDoc(docRef);
         
-        if (companyData.trialEndDate) {
-          const trialEnd = companyData.trialEndDate.toDate();
-          const now = new Date();
-          
-          if (now > trialEnd) {
-            setTrialExpired(true);
-            toast.error("Your trial period has expired. Please contact support to continue using the service.");
-            await signOut(auth);
-            navigate('/login');
-          }
+        if (!docSnapshot.exists()) return;
+  
+        const companyData = docSnapshot.data();
+        const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+        
+        const botStatusResponse = await axios.get(`${baseUrl}/api/bot-status/${companyId}`);
+  
+        if (botStatusResponse.status === 200) {
+          const qrCodesData = Array.isArray(botStatusResponse.data) 
+            ? botStatusResponse.data 
+            : [];
+          setQrCodes(qrCodesData);
         }
       } catch (error) {
-        console.error("Error checking trial status:", error);
-        toast.error("Error checking subscription status");
+        console.error('Error fetching phone statuses:', error);
       }
     };
   
-    checkTrialStatus();
-  }, []); // Run once when component mounts
+    fetchPhoneStatuses();
+    
+    // Set up an interval to refresh the status
+    const intervalId = setInterval(fetchPhoneStatuses, 30000); // Refresh every 30 seconds
+  
+    return () => clearInterval(intervalId);
+}, []);
+
   useEffect(() => {
     if (contextContacts.length > 0) {
       setContacts(contextContacts as Contact[]);
@@ -715,7 +774,7 @@ const [sleepDuration, setSleepDuration] = useState(5);
 
 
   const onStop = (recordedBlob: { blob: Blob; blobURL: string }) => {
-    console.log('recordedBlob is: ', recordedBlob);
+    
     setAudioBlob(recordedBlob.blob);
   };
   
@@ -733,7 +792,7 @@ const handleVideoUpload = async (caption: string = '') => {
     // First upload the video file to get a URL
     const videoFile = new File([selectedVideo], `video_${Date.now()}.mp4`, { type: selectedVideo.type });
     const videoUrl = await uploadFile(videoFile);
-
+    
     // Get company ID and other necessary data
     const docUserRef = doc(firestore, 'user', userData.email);
     const docUserSnapshot = await getDoc(docUserRef);
@@ -741,14 +800,30 @@ const handleVideoUpload = async (caption: string = '') => {
       throw new Error('No such document for user!');
     }
     const userDataFromDb = docUserSnapshot.data();
-    const companyId = userDataFromDb.companyId;
 
+    const companyId = userDataFromDb.companyId;
     // Format chat ID
     const phoneNumber = selectedChatId.split('+')[1];
     const chat_id = phoneNumber + "@s.whatsapp.net";
 
+    const docRef = doc(firestore, 'companies', companyId);
+    const docSnapshot = await getDoc(docRef);
+    if (!docSnapshot.exists()) return;
+    const companyData = docSnapshot.data();
+    
+    const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+    
+
+    // Check the size of the video file
+    const maxSizeInMB = 20;
+    const maxSizeInBytes = maxSizeInMB * 1024 * 1024;
+
+    if (selectedVideo.size > maxSizeInBytes) {
+      toast.error('The video file is too big. Please select a file smaller than 20MB.');
+      return;
+    }
     // Call the video message API
-    const response = await axios.post(`/api/v2/messages/video/${companyId}/${chat_id}`, {
+    const response = await axios.post(`${baseUrl}/api/v2/messages/video/${companyId}/${selectedChatId}`, {
       videoUrl,
       caption,
       phoneIndex: selectedContact.phoneIndex || 0,
@@ -762,7 +837,11 @@ const handleVideoUpload = async (caption: string = '') => {
       toast.success('Video sent successfully');
     }
   } catch (error) {
-    console.error('Error uploading video:', error);
+    if (axios.isAxiosError(error)) {
+      console.error('Error uploading video:', error.response?.data || error.message);
+    } else {
+      console.error('Unexpected error:', error);
+    }
     toast.error('Failed to send video message');
   }
 };
@@ -784,12 +863,34 @@ const handleVideoUpload = async (caption: string = '') => {
 const sendVoiceMessage = async () => {
   if (audioBlob && selectedChatId && userData) {
     try {
+      const user = getAuth().currentUser;
+      if (!user) {
+        console.error("User not authenticated");
+        setError("User not authenticated");
+        return;
+      }
+      const docUserRef = doc(firestore, 'user', user?.email!);
+      const docUserSnapshot = await getDoc(docUserRef);
+      if (!docUserSnapshot.exists()) {
+        
+        return;
+      }
+      const dataUser = docUserSnapshot.data();
+      const companyId = dataUser.companyId;
+      const docRef = doc(firestore, 'companies', companyId);
+      const docSnapshot = await getDoc(docRef);
+      if (!docSnapshot.exists()) {
+        
+        return;
+      }
+      const data2 = docSnapshot.data();
+      const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
       // Convert the audio Blob to a File
       const audioFile = new File([audioBlob], `voice_message_${Date.now()}.webm`, { type: "audio/webm" });
 
       // Upload the audio file using the provided uploadFile function
       const audioUrl = await uploadFile(audioFile);
-      console.log(audioUrl)
+      
       const requestBody = {
         audioUrl,
         caption: '',
@@ -798,12 +899,12 @@ const sendVoiceMessage = async () => {
       };
 
       const response = await axios.post(
-        `https://mighty-dane-newly.ngrok-free.app/api/v2/messages/audio/${userData.companyId}/${selectedChatId}`,
+        `${baseUrl}/api/v2/messages/audio/${userData.companyId}/${selectedChatId}`,
         requestBody
       );
 
       if (response.data.success) {
-        console.log("Voice message sent successfully:", response.data.messageId);
+        
         toast.success("Voice message sent successfully");
       } else {
         console.error("Failed to send voice message");
@@ -821,6 +922,28 @@ const sendVoiceMessage = async () => {
 
 const handleReaction = async (message: any, emoji: string) => {
   try {
+    const user = getAuth().currentUser;
+    if (!user) {
+      console.error("User not authenticated");
+      setError("User not authenticated");
+      return;
+    }
+    const docUserRef = doc(firestore, 'user', user?.email!);
+    const docUserSnapshot = await getDoc(docUserRef);
+    if (!docUserSnapshot.exists()) {
+      
+      return;
+    }
+    const dataUser = docUserSnapshot.data();
+    const companyId = dataUser.companyId;
+    const docRef = doc(firestore, 'companies', companyId);
+    const docSnapshot = await getDoc(docRef);
+    if (!docSnapshot.exists()) {
+      
+      return;
+    }
+    const data2 = docSnapshot.data();
+    const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
     // Ensure we have all required data
     if (!userData?.companyId || !message.id) {
       throw new Error('Missing required data: companyId or messageId');
@@ -829,25 +952,17 @@ const handleReaction = async (message: any, emoji: string) => {
     // Use the full message ID from Firebase
     const messageId = message.id;
     
-    console.log('Reaction details:', {
-      emoji,
-      messageId,
-      companyId: userData.companyId,
-      phoneIndex: selectedContact?.phoneIndex
-    });
+   
     
     // Construct the endpoint with the full message ID
-    const endpoint = `https://mighty-dane-newly.ngrok-free.app/api/messages/react/${userData.companyId}/${messageId}`;
+    const endpoint = `${baseUrl}/api/messages/react/${userData.companyId}/${messageId}`;
     
     const payload = {
       reaction: emoji,
       phoneIndex: selectedContact?.phoneIndex || 0
     };
 
-    console.log('Sending reaction request:', {
-      endpoint,
-      payload
-    });
+    
 
     const response = await axios.post(endpoint, payload);
 
@@ -1112,11 +1227,11 @@ const ReactionPicker = ({ onSelect, onClose }: { onSelect: (emoji: string) => vo
   };
 
   // useEffect(() => {
-  //   console.log('Initial contacts:', initialContacts);
+  //   
   // }, []);
 
   const filterContactsByUserRole = useCallback((contacts: Contact[], userRole: string, userName: string) => {
-    console.log('Filtering contacts by user role', { userRole, userName, contactsCount: contacts.length });
+    
     switch (userRole) {
       case '1': // Admin
         return contacts; // Admin sees all contacts
@@ -1168,49 +1283,44 @@ const handlePhoneChange = async (newPhoneIndex: number) => {
   }
 };
   const filterAndSetContacts = useCallback((contactsToFilter: Contact[]) => {
-    console.log('Filtering contacts', { 
-      contactsLength: contactsToFilter.length, 
-      userRole, 
-      userName: userData?.name,
-      activeTags,
-    });
+   
   
     // Apply role-based filtering first
     let filtered = filterContactsByUserRole(contactsToFilter, userRole, userData?.name || '');
-    console.log('After role-based filtering:', { filteredCount: filtered.length });
+    
   
     // Filter out group chats
     filtered = filtered.filter(contact => 
       contact.chat_id && !contact.chat_id.includes('@g.us')
     );
-    console.log('After filtering group chats:', { filteredCount: filtered.length });
+    
   
     // Apply tag-based filtering only if activeTags is not empty and doesn't include 'all'
     if (activeTags.length > 0 && !activeTags.includes('all')) {
       filtered = filtered.filter(contact => 
         contact.tags?.some(tag => activeTags.includes(tag))
       );
-      console.log('After tag-based filtering:', { filteredCount: filtered.length, activeTags });
+      
     }
   
     setFilteredContacts(filtered);
-    console.log('Final filtered contacts set:', { filteredCount: filtered.length });
+    
   }, [userRole, userData, activeTags, filterContactsByUserRole]);
 
   useEffect(() => {
     const fetchContacts = async () => {
       if (!userData?.companyId) {
-        console.log('No company ID available, skipping contact fetch');
+        
         return;
       }
   
-      console.log('Fetching contacts for company:', userData.companyId);
+      
       const contactsRef = collection(firestore, `companies/${userData.companyId}/contacts`);
       const q = query(contactsRef, orderBy("last_message.timestamp", "desc"));
   
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const updatedContacts = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Contact));
-        console.log('Fetched contacts:', updatedContacts.length);
+        
         setContacts(updatedContacts);
         filterAndSetContacts(updatedContacts);
       }, (error) => {
@@ -1225,7 +1335,7 @@ const handlePhoneChange = async (newPhoneIndex: number) => {
 
   // useEffect(() => {
   //   if (initialContacts.length > 0) {
-  //     console.log('Initial contacts:', initialContacts.length);
+  //     
   //     setContacts(initialContacts);
   //     filterAndSetContacts(initialContacts);
   //     localStorage.setItem('contacts', LZString.compress(JSON.stringify(initialContacts)));
@@ -1322,13 +1432,14 @@ const sendWhatsAppAlert = async (employeeName: string, chatId: string) => {
 
     const companyData = docSnapshot.data();
 
+    const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
     // Fetch employee's WhatsApp number
     const employeesRef = collection(firestore, 'companies', companyId, 'employee');
     const q = query(employeesRef, where("name", "==", employeeName));
     const querySnapshot = await getDocs(q);
     
     if (querySnapshot.empty) {
-      console.log(`No employee found with name ${employeeName}`);
+      
       return; 
     }
 
@@ -1337,11 +1448,11 @@ const sendWhatsAppAlert = async (employeeName: string, chatId: string) => {
     const temp = employeePhone.split('+')[1];
     const employeeId = temp+`@c.us`;
 
-    console.log(employeeId);
-    console.log(selectedChatId);
+    
+    
 
     // Send WhatsApp alert using the ngrok URL
-    const response = await fetch(`https://mighty-dane-newly.ngrok-free.app/api/v2/messages/text/${companyId}/${employeeId}`, {
+    const response = await fetch(`${baseUrl}/api/v2/messages/text/${companyId}/${employeeId}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1355,7 +1466,7 @@ const sendWhatsAppAlert = async (employeeName: string, chatId: string) => {
       throw new Error(`Failed to send WhatsApp alert: ${response.statusText}`);
     }
 
-    console.log(`WhatsApp alert sent to ${employeeName}`);
+    
   } catch (error) {
     console.error('Error sending WhatsApp alert:', error);
   }
@@ -1401,7 +1512,14 @@ const closePDFModal = () => {
       }
       const userData = docUserSnapshot.data();
       const companyId = userData.companyId;
-  
+      const docRef = doc(firestore, 'companies', companyId);
+      const docSnapshot = await getDoc(docRef);
+      if (!docSnapshot.exists()) {
+        
+        return;
+      }
+      const data2 = docSnapshot.data();
+      const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
       let successCount = 0;
       let failureCount = 0;
   
@@ -1409,9 +1527,9 @@ const closePDFModal = () => {
   
       for (const message of selectedMessages) {
         try {
-          console.log(`Attempting to delete message: ${message.id}`);
+          
           const response = await axios.delete(
-            `https://mighty-dane-newly.ngrok-free.app/api/v2/messages/${companyId}/${selectedChatId}/${message.id}`,
+            `${baseUrl}/api/v2/messages/${companyId}/${selectedChatId}/${message.id}`,
             {
               data: { 
                 deleteForEveryone: true, 
@@ -1426,7 +1544,7 @@ const closePDFModal = () => {
           );
   
           if (response.data.success) {
-            console.log(`Successfully deleted message: ${message.id}`);
+            
             setMessages((prevMessages) => prevMessages.filter((msg) => msg.id !== message.id));
             successCount++;
           } else {
@@ -1506,16 +1624,18 @@ const closePDFModal = () => {
           keyword: doc.data().keyword || '',
           text: doc.data().text || '',
           type: 'all',
-          document: doc.data().document || null,
-          image: doc.data().image || null,
+          category: doc.data().category || '',
+          documents: doc.data().documents || [],
+          images: doc.data().images || [],
         })),
         ...userSnapshot.docs.map(doc => ({
           id: doc.id,
           keyword: doc.data().keyword || '',
           text: doc.data().text || '',
           type: 'self',
-          document: doc.data().document || null,
-          image: doc.data().image || null,
+          category: doc.data().category || '',
+          documents: doc.data().documents || [],
+          images: doc.data().images || [],
         }))
       ];
   
@@ -1570,8 +1690,8 @@ const fetchFileFromURL = async (url: string): Promise<File | null> => {
         type: newQuickReplyType,
         createdAt: serverTimestamp(),
         createdBy: user.email,
-        document: selectedDocument ? await uploadDocument(selectedDocument) : null, // URL stored
-        image: selectedImage ? await uploadImage(selectedImage) : null,
+        documents: selectedDocuments ? await Promise.all(selectedDocuments.map(uploadDocument)) : [],
+        images: selectedImages ? await Promise.all(selectedImages.map(uploadImage)) : [],
       };
   
       if (newQuickReplyType === 'self') {
@@ -1585,8 +1705,8 @@ const fetchFileFromURL = async (url: string): Promise<File | null> => {
       }
   
       setNewQuickReply('');
-      setSelectedDocument(null);
-      setSelectedImage(null);
+      setSelectedDocuments([]);
+      setSelectedImages([]);
       setNewQuickReplyKeyword('');
       setNewQuickReplyType('all');
       fetchQuickReplies();
@@ -1656,23 +1776,50 @@ const fetchFileFromURL = async (url: string): Promise<File | null> => {
     }
   };
 
-  const handleQRClick = (reply: QuickReply) => {
-    if (reply.image) {
-      setPastedImageUrl(reply.image);
-      setImageModalOpen2(true);
-    }
-  
-    if (reply.document) {
-      fetchFileFromURL(reply.document).then(file => {
-        if (file) {
-          setSelectedDocument(file);
-          setDocumentModalOpen(true);
+  const handleQRClick = async (reply: QuickReply) => {
+    try {
+      // Handle images one at a time
+      if (reply.images?.length) {
+        setPastedImageUrl(reply.images);
+        setDocumentCaption(reply.text || '');
+        setImageModalOpen2(true);
+      }
+
+      // Handle documents one at a time
+      if (reply.documents?.length) {
+        for (const doc of reply.documents) {
+          try {
+            const response = await fetch(doc.url);
+            const blob = await response.blob();
+            const documentFile = new File([blob], doc.name, {
+              type: doc.type,
+              lastModified: doc.lastModified
+            });
+            setSelectedDocument(documentFile);
+            setDocumentModalOpen(true);
+            await new Promise<void>(resolve => {
+              const interval = setInterval(() => {
+                if (!documentModalOpen) {
+                  clearInterval(interval);
+                  resolve();
+                }
+              }, 100);
+            });
+          } catch (error) {
+            console.error('Error handling document:', error);
+            toast.error(`Failed to process document: ${doc.name}`);
+          }
         }
-      });
+      }
+
+      if (reply.text) {
+        setNewMessage(reply.text);
+      }
+      setIsQuickRepliesOpen(false);
+    } catch (error) {
+      console.error('Error in handleQRClick:', error);
+      toast.error('Failed to process quick reply');
     }
-  
-    setNewMessage(reply.text);
-    setIsQuickRepliesOpen(false);
   };
 
 
@@ -1720,7 +1867,7 @@ const showNotificationToast = (notification: Notification, index: number) => {
   });
 
   if (isDuplicate) {
-    console.log('Duplicate notification, not showing toast');
+    
     return;
   }
 
@@ -1786,12 +1933,12 @@ useEffect(() => {
     if (selectedChatId && auth.currentUser) {
    
       const phone = "+"+selectedChatId.split('@')[0];
-      console.log('listing to messages' + phone);
+      
       const userDocRef = doc(firestore, 'user', auth.currentUser.email!);
       const userDocSnapshot = await getDoc(userDocRef);
       
       if (!userDocSnapshot.exists()) {
-        console.log('No such user document!');
+        
         return;
       }
       
@@ -1802,12 +1949,12 @@ useEffect(() => {
       const companyDocSnapshot = await getDoc(companyDocRef);
       
       if (!companyDocSnapshot.exists()) {
-        console.log('No such company document!');
+        
         return;
       }
       
       const data = companyDocSnapshot.data();
-      console.log('Setting up message listener for company:', newCompanyId);
+      
 
       let prevMessagesCount = 0;
 
@@ -1818,7 +1965,7 @@ useEffect(() => {
           
           // Check if new messages have been added
           if (currentMessages.length > prevMessagesCount) {
-            console.log('New message(s) detected');
+           
             fetchMessagesBackground(selectedChatId, data.whapiToken);
           }
 
@@ -1910,7 +2057,7 @@ async function fetchConfigFromDatabase() {
       return;
     }
 
-    console.log('Company ID:', companyId);
+    
 
     const docRef = doc(firestore, 'companies', companyId);
     const docSnapshot = await getDoc(docRef);
@@ -1920,7 +2067,7 @@ async function fetchConfigFromDatabase() {
     }
     const data = docSnapshot.data();
 
-    console.log('Company Data:', data);
+    
 
     if (!data) {
       console.error('Company data is missing');
@@ -1946,10 +2093,10 @@ async function fetchConfigFromDatabase() {
     if(data.phoneCount >=2){
       setMessageMode('phone1');
     }
-    console.log(messageMode);
+    
 
 
-    console.log('Tags:', data.tags);
+    
 
     setToken(data.whapiToken);
     user_name = dataUser.name;
@@ -1971,27 +2118,27 @@ async function fetchConfigFromDatabase() {
     });
 
     setEmployeeList(employeeListData);
-    console.log('Employee List:', employeeListData);
+    
     const employeeNames = employeeListData.map(employee => employee.name.trim().toLowerCase());
 
     // Check if the company is using v2
     if (data.v2) {
-      console.log('Company is using v2, fetching tags from Firebase');
+      
       // For v2, fetch tags from Firebase
       const tagsRef = collection(firestore, `companies/${companyId}/tags`);
       const tagsSnapshot = await getDocs(tagsRef);
       const tags = tagsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }));
       const filteredTags = tags.filter((tag: Tag) => !employeeNames.includes(tag.name.toLowerCase()));
-      console.log('Fetched Tags:', filteredTags);
+      
       setTagList(filteredTags);
     } else {
-      console.log('Company is not using v2, fetching tags from GHL');
+      
       // For non-v2, fetch from GHL API
  
     }
 
-    console.log('User Role:', userRole);
-    console.log('User Name:', userData?.name);
+    
+    
   } catch (error) {
     console.error('Error fetching config:', error);
   }
@@ -2002,7 +2149,7 @@ async function fetchConfigFromDatabase() {
     try {
       const user = auth.currentUser;
       if (!user) {
-        console.log('No authenticated user');
+        
         return;
       }
   
@@ -2016,98 +2163,61 @@ async function fetchConfigFromDatabase() {
       });
   
       await batch.commit();
-      console.log(`Deleted notifications for chat: ${chatId}`);
+      
     } catch (error) {
       console.error('Error deleting notifications:', error);
     }
   };
 
   const selectChat = useCallback(async (chatId: string, contactId?: string, contactSelect?: Contact) => {
-    console.log('Attempting to select chat:', { chatId, userRole, userName: userData?.name });
+    setMessages([]);
+ 
     
     try {
-      // Only check permissions for role '3', allow role '2' full access
+      // Permission check
       if (userRole === "3" && contactSelect && contactSelect.assignedTo?.toLowerCase() !== userData?.name.toLowerCase()) {
-        console.log('Permission denied for role 3 user');
+        
         toast.error("You don't have permission to view this chat.");
         return;
       }
   
-      // Find contact - prioritize contactSelect if provided
+      const user = auth.currentUser;
+      if (!user) {
+        console.error('No authenticated user');
+        return;
+      }
+  
+      // Find contact
       let contact = contactSelect || contacts.find(c => c.chat_id === chatId || c.id === contactId);
       if (!contact) {
         console.error('Contact not found');
         return;
       }
-
-      // Debug logging
-      console.log('Selected contact:', contact);
-      console.log('User role:', userRole);
   
-      // Update local state first for immediate UI response
-      setContacts(prevContacts => {
-        const updatedContacts = prevContacts.map(c =>
-          c.chat_id === chatId ? { ...c, unreadCount: 0 } : c
-        ).sort((a, b) => {
-          if (a.pinned && !b.pinned) return -1;
-          if (!a.pinned && b.pinned) return 1;
-          
-          const timestampA = getTimestamp(a.last_message?.timestamp || a.last_message?.createdAt);
-          const timestampB = getTimestamp(b.last_message?.timestamp || b.last_message?.createdAt);
-          
-          return timestampB - timestampA;
-        });
-  
-        // Update localStorage with new contacts
-        localStorage.setItem('contacts', LZString.compress(JSON.stringify(updatedContacts)));
-        return updatedContacts;
-      });
-  
-      // Update Firebase in parallel
-      const updateFirebasePromise = (async () => {
-        const user = auth.currentUser;
-        if (!user?.email) return;
-  
-        const docUserRef = doc(firestore, 'user', user.email);
-        const docUserSnapshot = await getDoc(docUserRef);
-        
-        if (docUserSnapshot.exists()) {
-          const userData = docUserSnapshot.data();
-          const contactRef = doc(firestore, `companies/${userData.companyId}/contacts`, contact.id!);
-          await updateDoc(contactRef, { unreadCount: 0 });
-          console.log('Updated unreadCount in Firebase for contact:', contact.id);
-        }
-      })();
-  
-      // Delete notifications in parallel
-      const deleteNotificationsPromise = (async () => {
-        const user = auth.currentUser;
-        if (!user?.email) return;
-
-        console.log('Deleted notifications for chat:', chatId);
-      })();
-  
-      // Update UI state
+      // Update UI state immediately
       setSelectedContact(contact);
       setSelectedChatId(chatId);
       setIsChatActive(true);
+
+      // Run background tasks in parallel
+      const backgroundTasks = [
+        updateFirebaseUnreadCount(contact),
+        deleteNotifications(chatId)
+      ];
   
-      // Wait for background operations to complete
-      await Promise.all([
-        updateFirebasePromise,
-        deleteNotificationsPromise
-      ]);
+      await Promise.all(backgroundTasks);
   
-      // Update URL without triggering a page reload
+      // Update URL
       const newUrl = `/chat?chatId=${chatId.replace('@c.us', '')}`;
       window.history.pushState({ path: newUrl }, '', newUrl);
   
     } catch (error) {
       console.error('Error in selectChat:', error);
       toast.error('An error occurred while loading the chat. Please try again.');
+    } finally {
+      
     }
-  }, [contacts, userRole, userData?.name]);
-
+  }, [contacts, userRole, userData?.name, whapiToken]);
   const getTimestamp = (timestamp: any): number => {
     // If timestamp is missing, return 0 to put it at the bottom
     if (!timestamp) return 0;
@@ -2133,33 +2243,46 @@ async function fetchConfigFromDatabase() {
     console.warn('Invalid timestamp format:', timestamp);
     return 0;
   };
+// Add this helper function above your component
+const updateFirebaseUnreadCount = async (contact: Contact) => {
+  const user = auth.currentUser;
+  if (!user?.email) return;
+  
+  const docUserRef = doc(firestore, 'user', user.email);
+  const docUserSnapshot = await getDoc(docUserRef);
+  
+  if (docUserSnapshot.exists()) {
+    const userData = docUserSnapshot.data();
+    const contactRef = doc(firestore, `companies/${userData.companyId}/contacts`, contact.id!);
+    await updateDoc(contactRef, { unreadCount: 0 });
+  }
+};
+  const fetchContactsBackground = async (whapiToken: string, locationId: string, ghlToken: string, user_name: string, role: string, userEmail: string | null | undefined) => {
+    try {
+      if (!userEmail) throw new Error("User email is not provided.");
+      
+      const docUserRef = doc(firestore, 'user', userEmail);
+      const docUserSnapshot = await getDoc(docUserRef);
+      if (!docUserSnapshot.exists()) {
+      
+        return;
+      }
 
-const fetchContactsBackground = async (whapiToken: string, locationId: string, ghlToken: string, user_name: string, role: string, userEmail: string | null | undefined) => {
-  try {
-    if (!userEmail) throw new Error("User email is not provided.");
-    
-    const docUserRef = doc(firestore, 'user', userEmail);
-    const docUserSnapshot = await getDoc(docUserRef);
-    if (!docUserSnapshot.exists()) {
-      console.log('User document not found');
-      return;
-    }
+      const dataUser = docUserSnapshot.data();
+      const companyId = dataUser?.companyId;
+      if (!companyId) {
+      
+        return;
+      }
 
-    const dataUser = docUserSnapshot.data();
-    const companyId = dataUser?.companyId;
-    if (!companyId) {
-      console.log('Company ID not found');
-      return;
-    }
-
-    // Pagination settings
+      // Pagination settings
     const batchSize = 4000;
     let lastVisible: QueryDocumentSnapshot<DocumentData> | null = null;
     const phoneSet = new Set<string>();
     let allContacts: Contact[] = [];
 
     // Fetch contacts in batches
-    const contactsCollectionRef = collection(firestore, `companies/${companyId}/contacts`);
+      const contactsCollectionRef = collection(firestore, `companies/${companyId}/contacts`);
     while (true) {
       let queryRef: Query<DocumentData> = lastVisible
         ? query(contactsCollectionRef, startAfter(lastVisible), limit(batchSize))
@@ -2179,14 +2302,14 @@ const fetchContactsBackground = async (whapiToken: string, locationId: string, g
       lastVisible = contactsSnapshot.docs[contactsSnapshot.docs.length - 1];
     }
 
-    // Fetch pinned chats
-    const pinnedChatsRef = collection(firestore, `user/${userEmail}/pinned`);
-    const pinnedChatsSnapshot = await getDocs(pinnedChatsRef);
-    const pinnedChats = pinnedChatsSnapshot.docs.map(doc => doc.data() as Contact);
+      // Fetch pinned chats
+      const pinnedChatsRef = collection(firestore, `user/${userEmail}/pinned`);
+      const pinnedChatsSnapshot = await getDocs(pinnedChatsRef);
+      const pinnedChats = pinnedChatsSnapshot.docs.map(doc => doc.data() as Contact);
 
     // Update pinned status in Firebase and local contacts
     const updatePromises = allContacts.map(async contact => {
-      const isPinned = pinnedChats.some(pinned => pinned.chat_id === contact.chat_id);
+        const isPinned = pinnedChats.some(pinned => pinned.chat_id === contact.chat_id);
       if (isPinned !== contact.pinned) {
         const contactDocRef = doc(contactsCollectionRef, contact.id!);
         await updateDoc(contactDocRef, { pinned: isPinned });
@@ -2196,18 +2319,12 @@ const fetchContactsBackground = async (whapiToken: string, locationId: string, g
 
     await Promise.all(updatePromises);
 
-    console.log('Before sorting - First 5 contacts:', allContacts.slice(0, 5).map(c => ({
-      id: c.chat_id,
-      unread: c.unreadCount,
-      timestamp: c.last_message?.timestamp,
-      pinned: c.pinned
-    })));
 
     allContacts.sort((a, b) => {
       // First priority: pinned status
-      if (a.pinned && !b.pinned) return -1;
-      if (!a.pinned && b.pinned) return 1;
-      
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        
       // Second priority: unread messages
       if (a.unreadCount && !b.unreadCount) return -1;
       if (!a.unreadCount && b.unreadCount) return 1;
@@ -2229,16 +2346,11 @@ const fetchContactsBackground = async (whapiToken: string, locationId: string, g
       timestampB = timestampB || 0;
 
       // Sort descending (newest first)
-      return timestampB - timestampA;
-    });
+        return timestampB - timestampA;
+      });
 
     // Add debugging after sorting
-    console.log('After sorting - First 5 contacts:', allContacts.slice(0, 5).map(c => ({
-      id: c.chat_id,
-      unread: c.unreadCount,
-      timestamp: c.last_message?.timestamp,
-      pinned: c.pinned
-    })));
+
 
     // Before setting contacts, ensure all timestamps are in the correct format
     allContacts = allContacts.map(contact => {
@@ -2265,26 +2377,26 @@ const fetchContactsBackground = async (whapiToken: string, locationId: string, g
       };
     });
 
-    console.log('Active tag:', activeTags[0]);
-    console.log('Total contacts:', allContacts.length);
+    
+    
 
     // Set all contacts to state instead of just the first 200
     setContacts(allContacts);
 
     // Store all contacts in localStorage
     localStorage.setItem('contacts', LZString.compress(JSON.stringify(allContacts)));
-    sessionStorage.setItem('contactsFetched', 'true');
-    
+      sessionStorage.setItem('contactsFetched', 'true');
+      
     // If you need to limit the displayed contacts, implement pagination in the UI component
     // For example, you could add a state variable for the current page:
     // const [currentPage, setCurrentPage] = useState(1);
     // const contactsPerPage = 200;
     // const displayedContacts = allContacts.slice((currentPage - 1) * contactsPerPage, currentPage * contactsPerPage);
     
-  } catch (error) {
-    console.error('Error fetching contacts:', error);
-  }
-};
+    } catch (error) {
+      console.error('Error fetching contacts:', error);
+    }
+  };
 
 
 
@@ -2297,13 +2409,173 @@ useEffect(() => {
       if (docUserSnapshot.exists()) {
         const userData = docUserSnapshot.data();
         setUserRole(userData.role);
-        console.log('User role set:', userData.role);
+        
       }
     }
   };
   fetchUserRole();
 }, []);
 
+  useEffect(() => {
+    const cleanupStorage = () => {
+      const MAX_CACHE_SIZE = 5 * 1024 * 1024; // 5MB limit
+      let totalSize = 0;
+      
+      // Calculate total size and remove expired caches
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith('messages_') || key === 'messagesCache') {
+          const item = localStorage.getItem(key);
+          if (item) {
+            totalSize += item.length;
+            
+            // Remove expired caches
+            try {
+              const cache = JSON.parse(LZString.decompress(item));
+              if (cache.expiry && cache.expiry < Date.now()) {
+                localStorage.removeItem(key);
+              }
+            } catch (error) {
+              localStorage.removeItem(key); // Remove invalid cache
+            }
+          }
+        }
+      }
+      
+      // If total size exceeds limit, clear all message caches
+      if (totalSize > MAX_CACHE_SIZE) {
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const key = localStorage.key(i);
+          if (key?.startsWith('messages_') || key === 'messagesCache') {
+            localStorage.removeItem(key);
+          }
+        }
+      }
+    };
+
+    cleanupStorage();
+    window.addEventListener('beforeunload', cleanupStorage);
+    return () => window.removeEventListener('beforeunload', cleanupStorage);
+  }, []);
+
+  const storeMessagesInLocalStorage = (chatId: string, messages: any[]) => {
+    try {
+      
+      const storageKey = `messages_${chatId}`;
+      
+      // Limit messages to most recent 100
+      const limitedMessages = messages.slice(-100);
+      
+      // Try to compress and store
+      try {
+        const compressedMessages = LZString.compress(JSON.stringify({
+          messages: limitedMessages,
+          timestamp: Date.now(),
+          expiry: Date.now() + (30 * 60 * 1000) // 30 min expiry
+        }));
+        
+        // Check available space
+        const MAX_ITEM_SIZE = 2 * 1024 * 1024; // 2MB per chat
+        if (compressedMessages.length > MAX_ITEM_SIZE) {
+          // If too large, store even fewer messages
+          const veryLimitedMessages = messages.slice(-50);
+          const smallerCompressedMessages = LZString.compress(JSON.stringify({
+            messages: veryLimitedMessages,
+            timestamp: Date.now(),
+            expiry: Date.now() + (30 * 60 * 1000)
+          }));
+          localStorage.setItem(storageKey, smallerCompressedMessages);
+        } else {
+          localStorage.setItem(storageKey, compressedMessages);
+        }
+        
+      } catch (quotaError) {
+        // If still getting quota error, clear old caches
+        
+        clearOldCaches();
+        
+        // Try one more time with very limited messages
+        const minimalMessages = messages.slice(-25);
+        const minimalCompressed = LZString.compress(JSON.stringify({
+          messages: minimalMessages,
+          timestamp: Date.now(),
+          expiry: Date.now() + (30 * 60 * 1000)
+        }));
+        localStorage.setItem(storageKey, minimalCompressed);
+      }
+      
+    } catch (error) {
+      console.error('Error storing messages in localStorage:', error);
+    }
+  };
+  
+  const clearOldCaches = () => {
+    const currentTime = Date.now();
+    const keys = Object.keys(localStorage);
+    
+    // Sort keys by timestamp (oldest first)
+    const messageCacheKeys = keys
+      .filter(key => key.startsWith('messages_'))
+      .sort((a, b) => {
+        const timeA = localStorage.getItem(a) ? JSON.parse(LZString.decompress(localStorage.getItem(a)!)).timestamp : 0;
+        const timeB = localStorage.getItem(b) ? JSON.parse(LZString.decompress(localStorage.getItem(b)!)).timestamp : 0;
+        return timeA - timeB;
+      });
+  
+    // Remove oldest 50% of caches
+    const removeCount = Math.ceil(messageCacheKeys.length / 2);
+    messageCacheKeys.slice(0, removeCount).forEach(key => {
+      localStorage.removeItem(key);
+    });
+  };
+  
+  // Add this to your existing cleanup useEffect
+  useEffect(() => {
+    const cleanup = () => {
+      try {
+        clearOldCaches();
+      } catch (error) {
+        console.error('Error during cleanup:', error);
+      }
+    };
+  
+    // Run cleanup every 5 minutes
+    const interval = setInterval(cleanup, 5 * 60 * 1000);
+    
+    // Run cleanup on mount
+    cleanup();
+    
+    return () => {
+      clearInterval(interval);
+    };
+  }, []);
+
+  const getMessagesFromLocalStorage = (chatId: string): any[] | null => {
+    try {
+      
+      const storageKey = `messages_${chatId}`;
+      const compressedMessages = localStorage.getItem(storageKey);
+      const timestamp = localStorage.getItem(`${storageKey}_timestamp`);
+      
+      if (!compressedMessages || !timestamp) {
+        
+        return null;
+      }
+      
+      if (Date.now() - parseInt(timestamp) > 3600000) {
+     
+        return null;
+      }
+      
+      const messages = JSON.parse(LZString.decompress(compressedMessages));
+   
+      
+      return messages;
+    } catch (error) {
+      console.error('Error retrieving messages from localStorage:', error);
+      return null;
+    }
+  };
   useEffect(() => {
     if (selectedChatId) {
       console.log(selectedContact);
@@ -2315,34 +2587,34 @@ useEffect(() => {
     setLoading(true);
     setSelectedIcon('ws');
     const auth = getAuth(app);
-    const user = auth.currentUser;
-    
+      const user = auth.currentUser;
+
     try {
         const docUserRef = doc(firestore, 'user', user?.email!);
-        const docUserSnapshot = await getDoc(docUserRef);
-        
+      const docUserSnapshot = await getDoc(docUserRef);
+
         if (!docUserSnapshot.exists()) {
-            console.log('No such document!');
+            
             return;
         }
-        const dataUser = docUserSnapshot.data();
+      const dataUser = docUserSnapshot.data();
 
-        console.log('Fetching messages for user role:', dataUser.role);
+        
         
         const companyId = dataUser.companyId;
         const docRef = doc(firestore, 'companies', companyId);
         const docSnapshot = await getDoc(docRef);
         if (!docSnapshot.exists()) {
-            console.log('No such document!');
+            
             return;
         }
         const data2 = docSnapshot.data();
         
         setToken(data2.whapiToken);
-        console.log('fetching messages');
+        
         let messages = await fetchMessagesFromFirebase(companyId, selectedChatId);
-        console.log('messages');
-        console.log(messages);
+        
+        
         
         const formattedMessages: any[] = [];
         const reactionsMap: Record<string, any[]> = {};
@@ -2493,6 +2765,13 @@ useEffect(() => {
                     case 'product_items':
                         formattedMessage.product_items = message.product_items ? message.product_items : undefined;
                         break;
+                    case 'call_log':
+                        formattedMessage.call_log = {
+                            status: message.call_log?.status || 'missed',
+                            duration: message.call_log?.duration,
+                            timestamp: message.call_log?.timestamp || message.timestamp,
+                        };
+                        break;
                     case 'action':
                         formattedMessage.action = message.action ? message.action : undefined;
                         break;
@@ -2503,9 +2782,9 @@ useEffect(() => {
                         formattedMessage.reactions = message.reactions ? message.reactions : undefined;
                         break;
                     case 'privateNote':
-                        console.log('Private note data:', message);
+                        
                         formattedMessage.text = typeof message.text === 'string' ? message.text : message.text?.body || '';
-                        console.log('Formatted private note text:', formattedMessage.text);
+                        
                         formattedMessage.from_me = true;
                         formattedMessage.from_name = message.from;
                         break;
@@ -2523,6 +2802,8 @@ useEffect(() => {
                 message.reactions = reactionsMap[message.id];
             }
         });
+
+        storeMessagesInLocalStorage(selectedChatId, formattedMessages);
         
         setMessages(formattedMessages);
         fetchContactsBackground(
@@ -2542,7 +2823,7 @@ useEffect(() => {
 
 async function fetchMessagesFromFirebase(companyId: string, chatId: string): Promise<any[]> {
   const number = '+' + chatId.split('@')[0];
-  console.log(number);
+  
   const messagesRef = collection(firestore, `companies/${companyId}/contacts/${number}/messages`);
   const messagesSnapshot = await getDocs(messagesRef);
   
@@ -2567,7 +2848,7 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
     const docUserSnapshot = await getDoc(docUserRef);
     
     if (!docUserSnapshot.exists()) {
-      console.log('No such document!');
+      
       return;
     }
     const dataUser = docUserSnapshot.data();
@@ -2576,7 +2857,7 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
     const docRef = doc(firestore, 'companies', companyId);
     const docSnapshot = await getDoc(docRef);
     if (!docSnapshot.exists()) {
-      console.log('No such document!');
+      
       return;
     }
     const data2 = docSnapshot.data();
@@ -2585,8 +2866,8 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
     
     let messages;
     messages = await fetchMessagesFromFirebase(companyId, selectedChatId);
-    console.log('messages');
-    console.log(messages);
+    
+    
     
     const formattedMessages: any[] = [];
     const reactionsMap: Record<string, any[]> = {};
@@ -2736,6 +3017,13 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
           case 'product_items':
             formattedMessage.product_items = message.product_items ? message.product_items : undefined;
             break;
+          case 'call_log':
+            formattedMessage.call_log = {
+              status: message.call_log?.status || 'missed',
+              duration: message.call_log?.duration,
+              timestamp: message.call_log?.timestamp || message.timestamp,
+            };
+            break;
           case 'action':
             formattedMessage.action = message.action ? message.action : undefined;
             break;
@@ -2746,9 +3034,9 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
             formattedMessage.reactions = message.reactions ? message.reactions : undefined;
             break;
             case 'privateNote':
-              console.log('Private note data:', message);
+              
               formattedMessage.text = typeof message.text === 'string' ? message.text : message.text?.body || '';
-              console.log('Formatted private note text:', formattedMessage.text);
+              
               formattedMessage.from_me = true;
               formattedMessage.from_name = message.from;
               break;
@@ -2782,6 +3070,8 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
       a.timestamp - b.timestamp
     );
 
+    storeMessagesInLocalStorage(selectedChatId, allMessages);
+
     setMessages(allMessages);
     
     // Update private notes state
@@ -2793,8 +3083,8 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
         timestamp: note.timestamp
       }))
     }));
-    
-  } catch (error) {
+
+    } catch (error) {
     console.error('Failed to fetch messages:', error);
   }
 }
@@ -2823,7 +3113,7 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
       const companyId = userData.companyId;
       
       const numericChatId = '+' + selectedChatId.split('').filter(char => /\d/.test(char)).join('');
-      console.log('Numeric Chat ID:', numericChatId);
+      
   
       const privateNoteRef = collection(firestore, 'companies', companyId, 'contacts', numericChatId, 'privateNotes');
       const currentTimestamp = new Date();
@@ -2834,11 +3124,11 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
         type: 'privateNote'
       };
   
-      console.log('Adding private note:', newPrivateNote);
-      console.log('Private note ref:', privateNoteRef);
+      
+      
   
       const docRef = await addDoc(privateNoteRef, newPrivateNote);
-      console.log('Private note added with ID:', docRef.id);
+      
   
       const messageData = {
         chat_id: numericChatId,
@@ -2859,14 +3149,14 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
       const messageDoc = doc(messagesRef, docRef.id);
       await setDoc(messageDoc, messageData);
   
-      console.log('Private note added to messages collection');
+      
   
       const mentions = detectMentions(newMessage);
-      console.log('Mentions:', mentions); 
+       
       for (const mention of mentions) {
         const employeeName = mention.slice(1);
-        console.log(employeeName);
-        console.log('Adding notification for:', employeeName);
+        
+        
         await addNotificationToUser(companyId, employeeName, {
           chat_id: selectedChatId,
           from: userData.name,
@@ -2900,138 +3190,178 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedChatId) return;
-      
+    
+    // Store the message text before clearing input
+    const messageText = newMessage;
     setNewMessage('');
     setReplyToMessage(null);
-    const user = auth.currentUser;
-    const docUserRef = doc(firestore, 'user', user?.email!);
-    const docUserSnapshot = await getDoc(docUserRef);
-    if (!docUserSnapshot.exists()) {
-      console.log('No such document!');
-      return;
-    }
-    const dataUser = docUserSnapshot.data();
-    companyId = dataUser.companyId;
-  // Use contact's phoneIndex instead of user's phone
-  let phoneIndex = selectedContact?.phoneIndex ?? 0;
-    
-    const userName = dataUser.name || dataUser.email || ''; // Get the user's name
-    const docRef = doc(firestore, 'companies', companyId);
-    const docSnapshot = await getDoc(docRef);
-    if (!docSnapshot.exists()) {
-      console.log('No such document!');
-      return;
-    }
-    const data2 = docSnapshot.data();
   
-    if (messageMode === 'privateNote') {
-      handleAddPrivateNote(newMessage);
-    } else {
-      try {
-        let response;
-        console.log("v2 is true");
-        // Use the new API
+    // Create temporary message object for immediate display
+    const tempMessage = {
+      id: `temp_${Date.now()}`,
+      from_me: true,
+      text: { body: messageText },
+      createdAt: new Date().toISOString(),
+      type: 'text',
+      phoneIndex: selectedContact?.phoneIndex ?? 0,
+      chat_id: selectedChatId,
+      from_name: userData?.name || '',
+      timestamp: Math.floor(Date.now() / 1000)
+    };
+   // Update UI immediately
+   setMessages(prevMessages => [
+    ...prevMessages, 
+    { 
+      ...tempMessage, 
+      createdAt: new Date(tempMessage.createdAt).getTime() 
+    } as unknown as Message
+  ]);
+
+
+  
+    const currentMessages = getMessagesFromLocalStorage(selectedChatId) || [];
+    
+    
+    const updatedMessages = [...currentMessages, tempMessage];
+    
+    
+    storeMessagesInLocalStorage(selectedChatId, updatedMessages);
+    
+
+ 
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('No authenticated user');
+  
+      const docUserRef = doc(firestore, 'user', user.email!);
+      const docUserSnapshot = await getDoc(docUserRef);
+      if (!docUserSnapshot.exists()) throw new Error('No user document found');
+  
+      const dataUser = docUserSnapshot.data();
+      companyId = dataUser.companyId;
+      const phoneIndex = selectedContact?.phoneIndex ?? 0;
+      const userName = dataUser.name || dataUser.email || '';
+  
+      const docRef = doc(firestore, 'companies', companyId);
+      const docSnapshot = await getDoc(docRef);
+      if (!docSnapshot.exists()) throw new Error('No company document found');
+  
+      const data2 = docSnapshot.data();
+      const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+  
+      if (messageMode === 'privateNote') {
+        handleAddPrivateNote(messageText);
+        return;
+      }
+  
+     const url = `${baseUrl}/api/v2/messages/text/${companyId}/${selectedChatId}`;
+    const requestBody = {
+      message: messageText,
+      quotedMessageId: replyToMessage?.id || null,
+      phoneIndex: selectedContact?.phoneIndex ?? 0,
+      userName: userData?.name || ''
+    };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        credentials: 'include', // Include credentials if needed
+        body: JSON.stringify(requestBody)
+      });
+      if (!response.ok) throw new Error('Failed to send message');
+  
+      const now = new Date();
+      const data = await response.json();
       
-        response = await fetch(`https://mighty-dane-newly.ngrok-free.app/api/v2/messages/text/${companyId}/${selectedChatId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: newMessage,
-            quotedMessageId: replyToMessage?.id || null,
-            phoneIndex: phoneIndex,
-            userName: userName
-          }),
-        });
-    
-        if (!response.ok) {
-          throw new Error('Failed to send message');
-        }
-        const now = new Date();
-        const data = await response.json();
-        console.log('response:', data);
+  
+      // Update contacts list
+      setContacts(prevContacts => 
+        prevContacts.map(contact => 
+          contact.id === selectedContact?.id 
+            ? updateContactWithNewMessage(contact, messageText, now, phoneIndex)
+            : contact
+        )
+      );
+  
+      // Handle special case for company 0123
+      if (companyId === '0123' && selectedContact?.id) {
+        const contactRef = doc(firestore, `companies/${companyId}/contacts`, selectedContact.id);
+        const contactSnapshot = await getDoc(contactRef);
         
-        // Update the local state
-        setContacts(prevContacts => 
-          prevContacts.map(contact => 
-            contact.id === selectedContact.id 
-              ? updateContactWithNewMessage(contact, newMessage, now,phoneIndex)
-              : contact
-          )
-        );
-    
-        // Add "stop bot" tag for companyId 0123
-        if (companyId === '0123' && selectedContact?.id) {
-          const contactRef = doc(firestore, `companies/${companyId}/contacts`, selectedContact.id);
-          
-          // Get current contact data
-          const contactSnapshot = await getDoc(contactRef);
-          if (contactSnapshot.exists()) {
-            const currentTags = contactSnapshot.data().tags || [];
-            
-            // Only add "stop bot" if it's not already present
-            if (!currentTags.includes('stop bot')) {
-              await updateDoc(contactRef, {
-                tags: arrayUnion('stop bot'),
-                last_message: {
-                  text: { body: newMessage },
-                  chat_id: selectedContact.chat_id || '',
-                  timestamp: Math.floor(Date.now() / 1000),
-                  id: selectedContact.last_message?.id || `temp_${now.getTime()}`,
-                  from_me: true,
-                  type: 'text',
-                  phoneIndex: phoneIndex,
-                }
-              });
-              
-              // Update local state to reflect the new tag
-              setContacts(prevContacts =>
-                prevContacts.map(contact =>
-                  contact.id === selectedContact.id
-                    ? { ...contact, tags: [...(contact.tags || []), 'stop bot'] }
-                    : contact
-                )
-              );
-            } else {
-              // If "stop bot" tag already exists, just update the last message
-              await updateDoc(contactRef, {
-                last_message: {
-                  text: { body: newMessage },
-                  chat_id: selectedContact.chat_id || '',
-                  timestamp: Math.floor(Date.now() / 1000),
-                  id: selectedContact.last_message?.id || `temp_${now.getTime()}`,
-                  from_me: true,
-                  type: 'text',
-                  phoneIndex: phoneIndex,
-                }
-              });
-            }
-          }
-        } else {
-          // Original update for non-0123 companies
-          const contactRef = doc(firestore, `companies/${companyId}/contacts`, selectedContact.id);
-          const updatedLastMessage: Message = {
-            text: { body: newMessage },
+        if (contactSnapshot.exists()) {
+          const currentTags = contactSnapshot.data().tags || [];
+          const updatedLastMessage = {
+            text: { body: messageText },
             chat_id: selectedContact.chat_id || '',
-            timestamp: Math.floor(Date.now() / 1000),
+            timestamp: Math.floor(now.getTime() / 1000),
             id: selectedContact.last_message?.id || `temp_${now.getTime()}`,
             from_me: true,
             type: 'text',
-            phoneIndex: phoneIndex,
+            phoneIndex,
           };
-          
-          await updateDoc(contactRef, {
-            last_message: updatedLastMessage
-          });
+  
+          if (!currentTags.includes('stop bot')) {
+            await updateDoc(contactRef, {
+              tags: arrayUnion('stop bot'),
+              last_message: updatedLastMessage
+            });
+            
+            setContacts(prevContacts =>
+              prevContacts.map(contact =>
+                contact.id === selectedContact.id
+                  ? { ...contact, tags: [...(contact.tags || []), 'stop bot'] }
+                  : contact
+              )
+            );
+          } else {
+            await updateDoc(contactRef, { last_message: updatedLastMessage });
+          }
         }
-    
-        console.log('Message sent successfully:', data);
-        fetchMessagesBackground(selectedChatId!, data2.apiToken);
-      } catch (error) {
-        console.error('Error sending message:', error);
-        toast.error("Failed to send message");
+      } else {
+        // Update for non-0123 companies
+        const contactRef = doc(firestore, `companies/${companyId}/contacts`, selectedContact?.id);
+        const updatedLastMessage: Message = {
+          text: { body: messageText },
+          chat_id: selectedContact?.chat_id || '',
+          timestamp: Math.floor(now.getTime() / 1000),
+          id: selectedContact?.last_message?.id || `temp_${now.getTime()}`,
+          from_me: true,
+          type: 'text',
+          phoneIndex,
+        };
+        
+        await updateDoc(contactRef, { last_message: updatedLastMessage });
       }
-    }
+  
+      // Fetch updated messages and update local storage
+      fetchMessagesBackground(selectedChatId, data2.apiToken);
 
+      // After successful API call
+      
+
+      // Verify local storage was updated
+      const storedMessages = getMessagesFromLocalStorage(selectedChatId);
+   
+  
+    } catch (error) {
+      console.error('Error sending message:', error);
+      //toast.error("Failed to send message");
+      
+      // Remove temporary message from local storage and UI if send failed
+      
+      const currentMessages = getMessagesFromLocalStorage(selectedChatId) || [];
+      const filteredMessages = currentMessages.filter(msg => msg.id !== tempMessage.id);
+      storeMessagesInLocalStorage(selectedChatId, filteredMessages);
+      
+      // Verify removal
+      const updatedStoredMessages = getMessagesFromLocalStorage(selectedChatId);
+   
+
+      setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempMessage.id));
+    }
   };
 
   
@@ -3044,7 +3374,7 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
       from_me: true,
       type: 'text',
       from_name: contact.last_message?.from_name || '',
-      phoneIndex: phoneIndex,
+      phoneIndex,
       // Add any other required fields with appropriate default values
     };
   
@@ -3063,9 +3393,9 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
   };
 
   const handleCreateNewChat = async () => {
-    console.log('Attempting to create new chat:', { userRole });
+    
     if (userRole === "3") {
-      console.log('Permission denied for role 3 user');
+      
       toast.error("You don't have permission to create new chats.");
       return;
     }
@@ -3075,7 +3405,7 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
     try {
       const chatId = `${newContactNumber}@c.us`;
       const contactId = `+${newContactNumber}`; // This will be used as the document ID
-      console.log('contactId:', contactId);
+      
       const newContact: Contact = {
         id: contactId, // Ensure the id is set here
         chat_id: chatId,
@@ -3131,7 +3461,7 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
     if (actionPerformedRef.current) return;
     actionPerformedRef.current = true;
   
-    console.log('Toggling stop bot label for contact:', contact.id);
+    
     if (userRole === "3") {
       toast.error("You don't have permission to control the bot.");
       return;
@@ -3140,14 +3470,14 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
     try {
       const user = auth.currentUser;
       if (!user) {
-        console.log('No authenticated user');
+        
         return;
       }
   
       const docUserRef = doc(firestore, 'user', user.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
-        console.log('No such document for user!');
+        
         return;
       }
       const userData = docUserSnapshot.data();
@@ -3157,7 +3487,7 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
         const docRef = doc(firestore, 'companies', companyId, 'contacts', contact.id);
         const docSnapshot = await getDoc(docRef);
         if (!docSnapshot.exists()) {
-          console.log('No such document for contact!');
+          
           return;
         }
   
@@ -3212,10 +3542,32 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
   }, [contacts]);
 
   const handleBinaTag = async (requestType: string, phone: string, first_name: string, phoneIndex: number) => {
-    console.log('Request Payload:', JSON.stringify({ requestType, phone, first_name, phoneIndex }));
-    
+
+    const user = getAuth().currentUser;
+    if (!user) {
+      console.error("User not authenticated");
+      setError("User not authenticated");
+      return;
+    }
+    const docUserRef = doc(firestore, 'user', user?.email!);
+    const docUserSnapshot = await getDoc(docUserRef);
+    if (!docUserSnapshot.exists()) {
+      
+      return;
+    }
+    const dataUser = docUserSnapshot.data();
+    const companyId = dataUser.companyId;
+    const docRef = doc(firestore, 'companies', companyId);
+    const docSnapshot = await getDoc(docRef);
+    if (!docSnapshot.exists()) {
+      
+      return;
+    }
+    const data2 = docSnapshot.data();
+    const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+
     try {
-        const response = await fetch('https://mighty-dane-newly.ngrok-free.app/api/bina/tag', {
+        const response = await fetch(`${baseUrl}/api/bina/tag`, {
             method: 'POST', // Ensure this is set to POST
             headers: {
                 'Content-Type': 'application/json',
@@ -3233,17 +3585,37 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
         }
 
         const data = await response.json();
-        console.log('Response data:', data);
+        
     } catch (error) {
         console.error('Error:', error);
     }
 };
 
 const handleEdwardTag = async (requestType: string, phone: string, first_name: string, phoneIndex: number) => {
-  console.log('Request Payload:', JSON.stringify({ requestType, phone, first_name, phoneIndex }));
-  
+  const user = getAuth().currentUser;
+  if (!user) {
+    console.error("User not authenticated");
+    setError("User not authenticated");
+    return;
+  }
+  const docUserRef = doc(firestore, 'user', user?.email!);
+  const docUserSnapshot = await getDoc(docUserRef);
+  if (!docUserSnapshot.exists()) {
+    
+    return;
+  }
+  const dataUser = docUserSnapshot.data();
+  const companyId = dataUser.companyId;
+  const docRef = doc(firestore, 'companies', companyId);
+  const docSnapshot = await getDoc(docRef);
+  if (!docSnapshot.exists()) {
+    
+    return;
+  }
+  const data2 = docSnapshot.data();
+  const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
   try {
-      const response = await fetch('https://mighty-dane-newly.ngrok-free.app/api/edward/tag', {
+      const response = await fetch(`${baseUrl}/api/edward/tag`, {
           method: 'POST', // Ensure this is set to POST
           headers: {
               'Content-Type': 'application/json',
@@ -3261,15 +3633,15 @@ const handleEdwardTag = async (requestType: string, phone: string, first_name: s
       }
 
       const data = await response.json();
-      console.log('Response data:', data);
+      
   } catch (error) {
       console.error('Error:', error);
   }
 };
 
   const addTagBeforeQuote = (contact: Contact) => {
-    console.log('Adding tag before quote for contact:', contact.phone);
-    console.log('Adding tag before quote for contact:', contact.contactName);
+    
+    
     if (!contact.phone || !contact.contactName) {
       console.error('Phone or firstname is null or undefined');
       return;
@@ -3278,8 +3650,6 @@ const handleEdwardTag = async (requestType: string, phone: string, first_name: s
   };
 
   const addTagBeforeQuoteEnglish = (contact: Contact) => {
-    console.log('Adding tag before quote (English) for contact:', contact.phone);
-    console.log('Adding tag before quote (English) for contact:', contact.contactName);
     if (!contact.phone || !contact.contactName) {
       console.error('Phone or firstname is null or undefined');
       return;
@@ -3288,8 +3658,6 @@ const handleEdwardTag = async (requestType: string, phone: string, first_name: s
 };
 
 const addTagBeforeQuoteMalay = (contact: Contact) => {
-    console.log('Adding tag before quote (Malay) for contact:', contact.phone);
-    console.log('Adding tag before quote (Malay) for contact:', contact.contactName);
     if (!contact.phone || !contact.contactName) {
       console.error('Phone or firstname is null or undefined');
       return;
@@ -3298,8 +3666,6 @@ const addTagBeforeQuoteMalay = (contact: Contact) => {
 };
 
 const addTagBeforeQuoteChinese = (contact: Contact) => {
-    console.log('Adding tag before quote (Chinese) for contact:', contact.phone);
-    console.log('Adding tag before quote (Chinese) for contact:', contact.contactName);
     if (!contact.phone || !contact.contactName) {
       console.error('Phone or firstname is null or undefined');
       return;
@@ -3308,8 +3674,8 @@ const addTagBeforeQuoteChinese = (contact: Contact) => {
 };
   
   const addTagAfterQuote = (contact: Contact) => {
-    console.log('Adding tag after quote for contact:', contact.phone);
-    console.log('Adding tag after quote for contact:', contact.contactName);
+    
+    
     if (contact.phone && contact.contactName) {
       handleBinaTag('addAfterQuote', contact.phone, contact.contactName, contact.phoneIndex ?? 0);
     } else {
@@ -3318,8 +3684,7 @@ const addTagBeforeQuoteChinese = (contact: Contact) => {
   };
   
   const addTagAfterQuoteEnglish = (contact: Contact) => {
-    console.log('Adding tag after quote (English) for contact:', contact.phone);
-    console.log('Adding tag after quote (English) for contact:', contact.contactName);
+
     if (!contact.phone || !contact.contactName) {
       console.error('Phone or firstname is null or undefined');
       return;
@@ -3328,8 +3693,7 @@ const addTagBeforeQuoteChinese = (contact: Contact) => {
 };
 
 const addTagAfterQuoteChinese = (contact: Contact) => {
-    console.log('Adding tag after quote (Chinese) for contact:', contact.phone);
-    console.log('Adding tag after quote (Chinese) for contact:', contact.contactName);
+
     if (!contact.phone || !contact.contactName) {
       console.error('Phone or firstname is null or undefined');
       return;
@@ -3338,8 +3702,7 @@ const addTagAfterQuoteChinese = (contact: Contact) => {
 };
 
 const addTagAfterQuoteMalay = (contact: Contact) => {
-    console.log('Adding tag after quote (Malay) for contact:', contact.phone);
-    console.log('Adding tag after quote (Malay) for contact:', contact.contactName);
+
     if (!contact.phone || !contact.contactName) {
       console.error('Phone or firstname is null or undefined');
       return;
@@ -3348,8 +3711,7 @@ const addTagAfterQuoteMalay = (contact: Contact) => {
 };
 
 const removeTagBeforeQuote = (contact: Contact) => {
-    console.log('Removing tag before quote for contact:', contact.phone);
-    console.log('Removing tag before quote for contact:', contact.contactName);
+
     if (!contact.phone || !contact.contactName) {
       console.error('Phone or firstname is null or undefined');
       return;
@@ -3358,8 +3720,7 @@ const removeTagBeforeQuote = (contact: Contact) => {
 };
 
 const removeTagAfterQuote = (contact: Contact) => {
-    console.log('Removing tag after quote for contact:', contact.phone);
-    console.log('Removing tag after quote for contact:', contact.contactName);
+
     if (!contact.phone || !contact.contactName) {
       console.error('Phone or firstname is null or undefined');
       return;
@@ -3368,8 +3729,8 @@ const removeTagAfterQuote = (contact: Contact) => {
 };
 
 const removeTag5Days = (contact: Contact) => {
-    console.log('Removing tag 5 days for contact:', contact.phone);
-    console.log('Removing tag 5 days for contact:', contact.contactName);
+    
+    
     if (!contact.phone || !contact.contactName) {
       console.error('Phone or firstname is null or undefined');
       return;
@@ -3378,8 +3739,7 @@ const removeTag5Days = (contact: Contact) => {
 };
 
 const removeTagPause = (contact: Contact) => {
-    console.log('Removing tag pause for contact:', contact.phone);
-    console.log('Removing tag pause for contact:', contact.contactName);
+
     if (!contact.phone || !contact.contactName) {
       console.error('Phone or firstname is null or undefined');
       return;
@@ -3388,8 +3748,8 @@ const removeTagPause = (contact: Contact) => {
 };
 
 const removeTagEdward = (contact: Contact) => {
-  console.log('Removing tag Edward for contact:', contact.phone);
-  console.log('Removing tag Edward for contact:', contact.contactName);
+  
+  
   if (!contact.phone || !contact.contactName) {
     console.error('Phone or firstname is null or undefined');
     return;
@@ -3398,8 +3758,7 @@ const removeTagEdward = (contact: Contact) => {
 };
 
 const fiveDaysFollowUpEnglish = (contact: Contact) => {
-    console.log('5 Days Follow Up (English) for contact:', contact.phone);
-    console.log('5 Days Follow Up (English) for contact:', contact.contactName);
+
     if (!contact.phone || !contact.contactName) {
       console.error('Phone or firstname is null or undefined');
       return;
@@ -3408,8 +3767,7 @@ const fiveDaysFollowUpEnglish = (contact: Contact) => {
 };
 
 const fiveDaysFollowUpChinese = (contact: Contact) => {
-    console.log('5 Days Follow Up (Chinese) for contact:', contact.phone);
-    console.log('5 Days Follow Up (Chinese) for contact:', contact.contactName);
+
     if (!contact.phone || !contact.contactName) {
       console.error('Phone or firstname is null or undefined');
       return;
@@ -3418,8 +3776,7 @@ const fiveDaysFollowUpChinese = (contact: Contact) => {
 };
 
 const fiveDaysFollowUpMalay = (contact: Contact) => {
-    console.log('5 Days Follow Up (Malay) for contact:', contact.phone);
-    console.log('5 Days Follow Up (Malay) for contact:', contact.contactName);
+
     if (!contact.phone || !contact.contactName) {
       console.error('Phone or firstname is null or undefined');
       return;
@@ -3428,8 +3785,7 @@ const fiveDaysFollowUpMalay = (contact: Contact) => {
 };
 
 const pauseFiveDaysFollowUp = (contact: Contact) => {
-  console.log('Pausing 5 Days Follow Up for contact:', contact.phone);
-  console.log('Pausing 5 Days Follow Up for contact:', contact.contactName);
+
   if (!contact.phone || !contact.contactName) {
     console.error('Phone or firstname is null or undefined');
     return;
@@ -3454,52 +3810,117 @@ const handleAddTagToSelectedContacts = async (tagName: string, contact: Contact)
     const userData = docUserSnapshot.data();
     const companyId = userData.companyId;
 
-    // Special handling for company '0123'
-    if (companyId === '0123') {
-      // Check if the new tag is an employee name
-      const isNewTagEmployee = employeeList.some(emp => emp.name === tagName);
+    // Check if the tag is an employee name
+    const employee = employeeList.find(emp => emp.name === tagName);
+    
+    if (employee) {
+      // Handle employee assignment
+      const employeeRef = doc(firestore, `companies/${companyId}/employee/${employee.id}`);
+      const employeeDoc = await getDoc(employeeRef);
       
-      if (isNewTagEmployee) {
-        const contactRef = doc(firestore, 'companies', companyId, 'contacts', contact.id!);
-        const contactDoc = await getDoc(contactRef);
-
-        if (!contactDoc.exists()) {
-          console.error(`Contact document does not exist: ${contact.id}`);
-          toast.error(`Failed to add tag: Contact not found`);
-          return;
-        }
-
-        const currentTags = contactDoc.data().tags || [];
-        // Find and remove any existing employee tags
-        const updatedTags = currentTags.filter((tag: string) => !employeeList.some(emp => emp.name === tag));
-        
-        // Add the new employee tag
-        updatedTags.push(tagName);
-
-        // Update Firestore with the new tags
-        await updateDoc(contactRef, {
-          tags: updatedTags
-        });
-
-        // Update local state
-        setContacts(prevContacts =>
-          prevContacts.map(c =>
-            c.id === contact.id
-              ? { ...c, tags: updatedTags }
-              : c
-          )
-        );
-
-        console.log(`Employee tag updated to ${tagName} for contact ${contact.id}`);
-        toast.success(`Contact reassigned to ${tagName}`);
-
-        // Send assignment notification for the new employee
-        await sendAssignmentNotification(tagName, contact);
+      if (!employeeDoc.exists()) {
+        toast.error(`Employee document not found for ${tagName}`);
         return;
       }
+
+      const employeeData = employeeDoc.data();
+      const contactRef = doc(firestore, `companies/${companyId}/contacts/${contact.id}`);
+      const contactDoc = await getDoc(contactRef);
+
+      if (!contactDoc.exists()) {
+        toast.error('Contact not found');
+        return;
+      }
+
+      const currentTags = contactDoc.data().tags || [];
+      const oldEmployeeTag = currentTags.find((tag: string) => 
+        employeeList.some(emp => emp.name === tag)
+      );
+
+      // If contact was assigned to another employee, update their quota
+      if (oldEmployeeTag) {
+        const oldEmployee = employeeList.find(emp => emp.name === oldEmployeeTag);
+        if (oldEmployee) {
+          const oldEmployeeRef = doc(firestore, `companies/${companyId}/employee/${oldEmployee.id}`);
+          const oldEmployeeDoc = await getDoc(oldEmployeeRef);
+          
+          if (oldEmployeeDoc.exists()) {
+            const oldEmployeeData = oldEmployeeDoc.data();
+            await updateDoc(oldEmployeeRef, {
+              assignedContacts: (oldEmployeeData.assignedContacts || 1) - 1,
+              quotaLeads: (oldEmployeeData.quotaLeads || 0) + 1
+            });
+          }
+        }
+      }
+
+      // Remove any existing employee tags and add new one
+      const updatedTags = [
+        ...currentTags.filter((tag: string) => !employeeList.some(emp => emp.name === tag)),
+        tagName
+      ];
+
+      // Use batch write for atomic update
+      const batch = writeBatch(firestore);
+
+      // Update contact
+      batch.update(contactRef, {
+        tags: updatedTags,
+        assignedTo: tagName,
+        lastAssignedAt: serverTimestamp()
+      });
+
+      // Update new employee's quota and assigned contacts
+      batch.update(employeeRef, {
+        quotaLeads: Math.max(0, (employeeData.quotaLeads || 0) - 1), // Prevent negative quota
+        assignedContacts: (employeeData.assignedContacts || 0) + 1
+      });
+
+      await batch.commit();
+
+      // Update local states
+      setContacts(prevContacts =>
+        prevContacts.map(c =>
+          c.id === contact.id
+            ? { ...c, tags: updatedTags, assignedTo: tagName }
+            : c
+        )
+      );
+
+      setEmployeeList(prevList =>
+        prevList.map(emp =>
+          emp.id === employee.id
+            ? {
+                ...emp,
+                quotaLeads: Math.max(0, (emp.quotaLeads || 0) - 1), // Prevent negative quota
+                assignedContacts: (emp.assignedContacts || 0) + 1
+              }
+            : oldEmployeeTag && emp.name === oldEmployeeTag
+              ? {
+                  ...emp,
+                  quotaLeads: (emp.quotaLeads || 0) + 1,
+                  assignedContacts: (emp.assignedContacts || 1) - 1
+                }
+              : emp
+        )
+      );
+
+      toast.success(`Contact assigned to ${tagName}`);
+      await sendAssignmentNotification(tagName, contact);
+      return;
     }
 
-    // Check if tag is a trigger tag by looking up follow-up templates
+    // Handle non-employee tags
+    const docRef = doc(firestore, 'companies', companyId);
+    const docSnapshot = await getDoc(docRef);
+    if (!docSnapshot.exists()) {
+      
+      return;
+    }
+    const data2 = docSnapshot.data();
+    const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+
+    // Check for trigger tags
     const templatesRef = collection(firestore, 'companies', companyId, 'followUpTemplates');
     const templatesSnapshot = await getDocs(templatesRef);
     
@@ -3507,20 +3928,16 @@ const handleAddTagToSelectedContacts = async (tagName: string, contact: Contact)
     templatesSnapshot.forEach(doc => {
       const template = doc.data();
       if (template.triggerTags?.includes(tagName) && template.status === 'active') {
-        matchingTemplate = { 
-          id: doc.id, 
-          ...template 
-        };
+        matchingTemplate = { id: doc.id, ...template };
       }
     });
 
     // Update contact's tags
-    const contactRef = doc(firestore, 'companies', companyId, 'contacts', contact.id!);
+    const contactRef = doc(firestore, `companies/${companyId}/contacts/${contact.id}`);
     const contactDoc = await getDoc(contactRef);
 
     if (!contactDoc.exists()) {
-      console.error(`Contact document does not exist: ${contact.id}`);
-      toast.error(`Failed to add tag: Contact not found`);
+      toast.error('Contact not found');
       return;
     }
 
@@ -3531,7 +3948,6 @@ const handleAddTagToSelectedContacts = async (tagName: string, contact: Contact)
         tags: arrayUnion(tagName)
       });
 
-      // Update local state
       setContacts(prevContacts =>
         prevContacts.map(c =>
           c.id === contact.id
@@ -3540,17 +3956,12 @@ const handleAddTagToSelectedContacts = async (tagName: string, contact: Contact)
         )
       );
 
-      console.log(`Tag ${tagName} added to contact ${contact.id}`);
-      toast.success(`Tag "${tagName}" added to contact`);
-
-      // If this is a trigger tag, call the follow-up API
+      // Handle trigger tags
       if (matchingTemplate) {
         try {
-          const response = await fetch('https://mighty-dane-newly.ngrok-free.app/api/tag/followup', {
+          const response = await fetch(`${baseUrl}/api/tag/followup`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               requestType: 'startTemplate',
               phone: contact.phone,
@@ -3565,7 +3976,6 @@ const handleAddTagToSelectedContacts = async (tagName: string, contact: Contact)
             throw new Error(`Follow-up API error: ${response.statusText}`);
           }
 
-          console.log('Follow-up template started successfully');
           toast.success('Follow-up sequence started');
         } catch (error) {
           console.error('Error starting follow-up sequence:', error);
@@ -3574,26 +3984,26 @@ const handleAddTagToSelectedContacts = async (tagName: string, contact: Contact)
       }
 
       // Handle specific tags
-      if (tagName === 'Before Quote Follow Up') {
-        addTagBeforeQuote(contact);
-      } else if (tagName === 'Before Quote Follow Up EN') {
-        addTagBeforeQuoteEnglish(contact);
-      } else if (tagName === 'Before Quote Follow Up BM') {
-        addTagBeforeQuoteMalay(contact);
-      } else if (tagName === 'Before Quote Follow Up CN') {
-        addTagBeforeQuoteChinese(contact);
-      } else if (tagName === 'Pause Follow Up') {
-        pauseFiveDaysFollowUp(contact);
-      } else {
-        // Check if the tag is an employee's name and send assignment notification
-        const employee = employeeList.find(emp => emp.name === tagName);
-        if (employee) {
-          await sendAssignmentNotification(tagName, contact);
-        }
+      switch (tagName) {
+        case 'Before Quote Follow Up':
+          await addTagBeforeQuote(contact);
+          break;
+        case 'Before Quote Follow Up EN':
+          await addTagBeforeQuoteEnglish(contact);
+          break;
+        case 'Before Quote Follow Up BM':
+          await addTagBeforeQuoteMalay(contact);
+          break;
+        case 'Before Quote Follow Up CN':
+          await addTagBeforeQuoteChinese(contact);
+          break;
+        case 'Pause Follow Up':
+          await pauseFiveDaysFollowUp(contact);
+          break;
       }
 
+      toast.success(`Tag "${tagName}" added to contact`);
     } else {
-      console.log(`Tag ${tagName} already exists for contact ${contact.id}`);
       toast.info(`Tag "${tagName}" already exists for this contact`);
     }
 
@@ -3618,7 +4028,7 @@ const addNotificationToUser = async (companyId: string, employeeName: string, no
     const querySnapshot = await getDocs(q);
 
     if (querySnapshot.empty) {
-      console.log('No matching user found for:', employeeName);
+      
       return;
     }
 
@@ -3627,7 +4037,7 @@ const addNotificationToUser = async (companyId: string, employeeName: string, no
       const userRef = doc.ref;
       const notificationsRef = collection(userRef, 'notifications');
       await addDoc(notificationsRef, notificationData);
-      console.log(`Notification added for user: ${employeeName}`);
+      
     });
   } catch (error) {
     console.error('Error adding notification: ', error);
@@ -3651,7 +4061,7 @@ const sendAssignmentNotification = async (assignedEmployeeName: string, contact:
 
     const userData = docUserSnapshot.data();
     const companyId = userData.companyId;
-    console.log('Company ID:', companyId); // New log
+     // New log
 
     if (!companyId || typeof companyId !== 'string') {
       console.error('Invalid companyId:', companyId);
@@ -3663,7 +4073,7 @@ const sendAssignmentNotification = async (assignedEmployeeName: string, contact:
     const notificationSnapshot = await getDoc(notificationRef);
     
     if (notificationSnapshot.exists()) {
-      console.log('Notification already sent for this assignment');
+      
       return;
     }
 
@@ -3681,7 +4091,7 @@ const sendAssignmentNotification = async (assignedEmployeeName: string, contact:
     const adminSnapshot = await getDocs(adminQuery);
     const adminUsers = adminSnapshot.docs.map(doc => doc.data());
 
-    console.log(`Found ${adminUsers.length} admin users for notifications`);
+    
 
     const docRef = doc(firestore, 'companies', companyId);
     const docSnapshot = await getDoc(docRef);
@@ -3690,17 +4100,37 @@ const sendAssignmentNotification = async (assignedEmployeeName: string, contact:
       return;
     }
     const companyData = docSnapshot.data();
-    console.log('Company Data:', companyData); // New log
-    console.log('User Phone:', userData.phone);
-    console.log('WhatsApp API Token:', companyData.whapiToken); // New log
-    console.log('Using API v2:', companyData.v2); // New log
+     // New log
+     // New log
+     // New log
 
     // Function to send WhatsApp message
     const sendWhatsAppMessage = async (phoneNumber: string, message: string) => {
       const chatId = `${phoneNumber.replace(/[^\d]/g, '')}@c.us`;
-      console.log('Employee Phone Number:', phoneNumber); // New log
-      console.log('Formatted Chat ID:', chatId); // New log
-
+       // New log
+       // New log
+      const user = getAuth().currentUser;
+      if (!user) {
+        console.error("User not authenticated");
+        setError("User not authenticated");
+        return;
+      }
+      const docUserRef = doc(firestore, 'user', user?.email!);
+      const docUserSnapshot = await getDoc(docUserRef);
+      if (!docUserSnapshot.exists()) {
+        
+        return;
+      }
+      const dataUser = docUserSnapshot.data();
+      const companyId = dataUser.companyId;
+      const docRef = doc(firestore, 'companies', companyId);
+      const docSnapshot = await getDoc(docRef);
+      if (!docSnapshot.exists()) {
+        
+        return;
+      }
+      const data2 = docSnapshot.data();
+      const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
       let userPhoneIndex = userData?.phone >= 0 ? userData?.phone : 0;
       if (userPhoneIndex === -1) {
         userPhoneIndex = 0;
@@ -3708,18 +4138,18 @@ const sendAssignmentNotification = async (assignedEmployeeName: string, contact:
       let url;
       let requestBody;
       if (companyData.v2 === true) {
-        url = `https://mighty-dane-newly.ngrok-free.app/api/v2/messages/text/${companyId}/${chatId}`;
+        url = `${baseUrl}/api/v2/messages/text/${companyId}/${chatId}`;
         requestBody = { 
           message,
           phoneIndex: userPhoneIndex,
           userName: userData.name || ''
         };
       } else {
-        url = `https://mighty-dane-newly.ngrok-free.app/api/messages/text/${chatId}/${companyData.whapiToken}`;
+        url = `${baseUrl}/api/messages/text/${chatId}/${companyData.whapiToken}`;
         requestBody = { message };
       }
-      console.log('API URL:', url); // New log
-      console.log('Request Body:', requestBody); // New log
+       // New log
+       // New log
 
       const response = await fetch(url, {
         method: 'POST',
@@ -3745,11 +4175,13 @@ const sendAssignmentNotification = async (assignedEmployeeName: string, contact:
       await sendWhatsAppMessage(assignedEmployee.phoneNumber, employeeMessage);
     }
 
-    // Send notification to all admins
-    for (const admin of adminUsers) {
-      if (admin.phoneNumber) {
-        const adminMessage = `Admin notification: A new contact has been assigned to ${assignedEmployee.name}:\n\nName: ${contact.contactName || contact.firstName || 'N/A'}\nPhone: ${contact.phone}`;
-        await sendWhatsAppMessage(admin.phoneNumber, adminMessage);
+    // Send notification to all admins, except for companyId '042'
+    if (companyId !== '042') {
+      for (const admin of adminUsers) {
+        if (admin.phoneNumber) {
+          const adminMessage = `Admin notification: A new contact has been assigned to ${assignedEmployee.name}:\n\nName: ${contact.contactName || contact.firstName || 'N/A'}\nPhone: ${contact.phone}`;
+          await sendWhatsAppMessage(admin.phoneNumber, adminMessage);
+        }
       }
     }
 
@@ -3763,108 +4195,15 @@ const sendAssignmentNotification = async (assignedEmployeeName: string, contact:
     toast.success("Assignment notifications sent successfully!");
   } catch (error) {
     console.error('Error sending assignment notifications:', error);
-    console.log('Assigned Employee Name:', assignedEmployeeName);
-    console.log('Contact:', contact);
-    console.log('Employee List:', employeeList);
-    console.log('Company ID:', companyId);
+    
+    
+    
+    
   }
 };
 
 
 //start of sending daily summary code
-
-useEffect(() => {
-  const checkAndSendDailySummary = async () => {
-    const now = new Date();
-    const targetHour = 23; // 11 PM
-    const targetMinute = 30;
-
-    if (now.getHours() === targetHour && now.getMinutes() === targetMinute) {
-      console.log('It\'s 11:30 PM. Preparing to send daily summary...');
-      const user = auth.currentUser;
-      if (user) {
-        const docUserRef = doc(firestore, 'user', user.email!);
-        const docUserSnapshot = await getDoc(docUserRef);
-        if (docUserSnapshot.exists()) {
-          const userData = docUserSnapshot.data();
-          const companyId = userData.companyId;
-          const companyRef = doc(firestore, 'companies', companyId);
-          const companySnapshot = await getDoc(companyRef);
-          if (companySnapshot.exists()) {
-            const companyData = companySnapshot.data();
-            const companyName = companyData.name;
-            console.log(`Sending daily summary for company ${companyName} (ID: ${companyId})`);
-            await sendDailyLeadsSummary(companyId);
-          } else {
-            console.log('Company document does not exist');
-          }
-        } else {
-          console.log('User document does not exist');
-        }
-      } else {
-        console.log('No authenticated user');
-      }
-    }
-  };
-
-  // Check every minute
-  const intervalId = setInterval(checkAndSendDailySummary, 60000);
-
-  return () => clearInterval(intervalId);
-}, []);
-
-const sendDailyLeadsSummary = async (companyId: string) => {
-  try {
-    console.log('Starting to send daily leads summary');
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    // Query to get contacts created today
-    const contactsRef = collection(firestore, 'companies', companyId, 'contacts');
-    const todayQuery = query(
-      contactsRef,
-      where('createdAt', '>=', Timestamp.fromDate(today)),
-      where('createdAt', '<', Timestamp.fromDate(tomorrow))
-    );
-    const todaySnapshot = await getDocs(todayQuery);
-    const newLeadsCount = todaySnapshot.size;
-
-    console.log(`New leads count: ${newLeadsCount}`);
-
-    // Get all admin users
-    const usersRef = collection(firestore, 'user');
-    const adminQuery = query(usersRef, where('companyId', '==', companyId), where('role', '==', '1'));
-    const adminSnapshot = await getDocs(adminQuery);
-    const adminUsers = adminSnapshot.docs.map(doc => doc.data());
-
-    console.log(`Found ${adminUsers.length} admin users`);
-
-    // Get company data
-    const companyRef = doc(firestore, 'companies', companyId);
-    const companySnapshot = await getDoc(companyRef);
-    if (!companySnapshot.exists()) {
-      throw new Error('Company document not found');
-    }
-    const companyData = companySnapshot.data();
-
-    // Send summary to all admin users
-    for (const admin of adminUsers) {
-      if (admin.phoneNumber) {
-        const summaryMessage = `Daily Lead Summary\n\nDate: ${today.toLocaleDateString()}\nNew Leads: ${newLeadsCount}\n\nThis is an automated message from your CRM system.`;
-        console.log(`Sending summary to ${admin.phoneNumber}`);
-        await sendWhatsAppMessage(admin.phoneNumber, summaryMessage, companyId, companyData);
-      } else {
-        console.log(`Admin ${admin.email} has no phone number`);
-      }
-    }
-
-    console.log(`Daily lead summary sent to ${adminUsers.length} admin users.`);
-  } catch (error) {
-    console.error('Error sending daily leads summary:', error);
-  }
-};
 
 
 const sendWhatsAppMessage = async (phoneNumber: string, message: string, companyId: string, companyData: any) => {
@@ -3878,15 +4217,31 @@ const sendWhatsAppMessage = async (phoneNumber: string, message: string, company
     if (userPhoneIndex === -1) {
       userPhoneIndex = 0;
     }
+    const user = getAuth().currentUser;
+    if (!user) {
+      console.error("User not authenticated");
+      setError("User not authenticated");
+      return;
+    }
+    const docUserRef = doc(firestore, 'user', user?.email!);
+    const docUserSnapshot = await getDoc(docUserRef);
+    if (!docUserSnapshot.exists()) {
+      
+      return;
+    }
+    const dataUser = docUserSnapshot.data();
+    const companyId = dataUser.companyId;
+    const docRef = doc(firestore, 'companies', companyId);
+    const docSnapshot = await getDoc(docRef);
+    if (!docSnapshot.exists()) {
+      
+      return;
+    }
+    const data2 = docSnapshot.data();
+    const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
 
-    console.log('Sending WhatsApp message:', {
-      url: `https://mighty-dane-newly.ngrok-free.app/api/v2/messages/text/${companyId}/${chatId}`,
-      phoneIndex: userPhoneIndex, // Using adjusted phone index
-      userName,
-      chatId
-    });
 
-    const response = await fetch(`https://mighty-dane-newly.ngrok-free.app/api/v2/messages/text/${companyId}/${chatId}`, {
+    const response = await fetch(`${baseUrl}/api/v2/messages/text/${companyId}/${chatId}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -3912,13 +4267,30 @@ const sendWhatsAppMessage = async (phoneNumber: string, message: string, company
 
  
 const formatText = (text: string) => {
-  const parts = text.split(/(\*[^*]+\*|\*\*[^*]+\*\*)/g);
-  return parts.map((part: string, index: any) => {
- if (part.startsWith('*') && part.endsWith('*')) {
-      return <strong key={index}>{part.slice(1, -1)}</strong>;
-    } else {
-      return part;
+  // Split text into segments that need formatting and those that don't
+  const segments = text.split(/(\*[^*]+\*|~[^~]+~)/g);
+  
+  return segments.map((segment, index) => {
+    // Check if segment is bold (surrounded by *)
+    if (segment.startsWith('*') && segment.endsWith('*')) {
+      return (
+        <span key={index} className="font-bold">
+          {segment.slice(1, -1)}
+        </span>
+      );
     }
+    
+    // Check if segment is strikethrough (surrounded by ~)
+    if (segment.startsWith('~') && segment.endsWith('~')) {
+      return (
+        <span key={index} className="line-through">
+          {segment.slice(1, -1)}
+        </span>
+      );
+    }
+    
+    // Return regular text
+    return segment;
   });
 };
 const openEditMessage = (message: Message) => {
@@ -3958,7 +4330,7 @@ const handlePageChange = ({ selected }: { selected: number }) => {
 const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
 const [paginatedContacts, setPaginatedContacts] = useState<Contact[]>([]);
 
-useEffect(() => {
+  useEffect(() => {
   if (filteredContacts.length === 0) {
     setLoadingMessage("Fetching contacts...");
   } else {
@@ -3974,14 +4346,6 @@ useEffect(() => {
 }, [filteredContacts, paginatedContacts, activeTags]);
 
 useEffect(() => {
-  console.log('Filtering contacts', { 
-    contactsLength: contacts.length, 
-    userRole, 
-    userName: userData?.name,
-    activeTags,
-    searchQuery
-  });
-
   let filtered = contacts;
 
   // Apply role-based filtering
@@ -4027,7 +4391,7 @@ useEffect(() => {
     setCurrentPage(0); // Reset to first page when searching
   }
 
-  console.log('Filtered contacts updated:', filtered);
+  
 }, [contacts, searchQuery, activeTags, currentUserName, employeeList, userRole, userData]);
 
 // Update the pagination logic
@@ -4063,7 +4427,7 @@ const sortContacts = (contacts: Contact[]) => {
   if (userPhoneIndex === -1) {
     userPhoneIndex = 0;
   }
-  console.log("userPhoneIndex", userPhoneIndex);
+  
   
   // Filter by user's selected phone first
   if (userPhoneIndex !== -1) {
@@ -4123,7 +4487,7 @@ const sortContacts = (contacts: Contact[]) => {
   const filterTagContact = (tag: string) => {
     setActiveTags([tag.toLowerCase()]);
     setSearchQuery('');
-    console.log('active1:' + activeTags[0]);
+    
 
   };
 
@@ -4155,46 +4519,52 @@ const sortContacts = (contacts: Contact[]) => {
       const contactsRef = collection(firestore, 'companies', companyId, 'contacts');
       const contactsSnapshot = await getDocs(contactsRef);
 
-      let allResults: any[] = [];
-
-      // Search through each contact's messages
-      for (const contactDoc of contactsSnapshot.docs) {
+      // Get messages for each contact with a larger limit
+      const searchPromises = contactsSnapshot.docs.map(async (contactDoc) => {
         const messagesRef = collection(firestore, 'companies', companyId, 'contacts', contactDoc.id, 'messages');
         
-        // Simplified query that only uses orderBy
+        // Query messages with a larger limit and no text-only filter
         const messagesQuery = query(
           messagesRef,
           orderBy('timestamp', 'desc'),
-          limit(100)
+          limit(100) // Increased limit to get more messages
         );
 
         const messagesSnapshot = await getDocs(messagesQuery);
         
         // Filter messages client-side
-        const contactResults = messagesSnapshot.docs
+        return messagesSnapshot.docs
           .filter(doc => {
-            const data = doc.data() as { text?: { body?: string } };
-            const messageText = data.text?.body?.toLowerCase() || '';
-            return messageText.includes(searchQuery.toLowerCase());
+            const data = doc.data() as { text?: { body?: string }, type?: string };
+            // Only include messages with text content
+            if (data.type !== 'text' || !data.text?.body) return false;
+            
+            const messageText = data.text.body.toLowerCase();
+            const searchTerms = searchQuery.toLowerCase().split(' ');
+            
+            // Match all search terms (AND search)
+            return searchTerms.every(term => messageText.includes(term));
           })
           .map(doc => ({
-            ...(doc.data() as Record<string, any>),
+            ...(doc.data() as Message),
             id: doc.id,
             contactId: contactDoc.id
           }));
+      });
 
-        allResults = [...allResults, ...contactResults];
-      }
+      const searchResults = await Promise.all(searchPromises);
+      const allResults = searchResults.flat();
 
       // Format and sort results
       const formattedResults = allResults.map(result => ({
-        ...result,
+        id: result.id,
+        contactId: result.contactId,
         text: {
-          body: result.text?.body || result.message || result.content || '',
+          body: result.text?.body || '',
         },
-        timestamp: result.timestamp || result.created_at || Date.now(),
+        timestamp: result.timestamp || Date.now(),
         from_me: result.from_me || false,
-        chat_id: result.chat_id || result.chatId || '',
+        chat_id: result.chat_id || '',
         type: result.type || 'text'
       }));
 
@@ -4205,7 +4575,12 @@ const sortContacts = (contacts: Contact[]) => {
       });
 
       setGlobalSearchResults(sortedResults);
-      toast.success(`Found ${sortedResults.length} message${sortedResults.length === 1 ? '' : 's'}`);
+      
+      if (sortedResults.length > 0) {
+        toast.success(`Found ${sortedResults.length} message${sortedResults.length === 1 ? '' : 's'}`);
+      } else {
+        toast.info('No messages found');
+      }
 
     } catch (error) {
       console.error('Search failed:', error);
@@ -4250,7 +4625,7 @@ const sortContacts = (contacts: Contact[]) => {
     );
   };
   
-  // Modify the handleSearchChange2 function
+  // Modify the handleSearchChange function
   const handleSearchChange2 = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery2(e.target.value);
   };
@@ -4279,19 +4654,13 @@ const sortContacts = (contacts: Contact[]) => {
   const totalPages = Math.ceil(filteredContactsSearch.length / contactsPerPage);
   
   useEffect(() => {
-    console.log('Filtering contacts - Start', { 
-      contactsLength: contacts.length, 
-      activeTags,
-      searchQuery,
-      userRole,
-      userData
-    });
+
   
     const tag = activeTags[0]?.toLowerCase() || 'all';
     let filteredContacts = filterContactsByUserRole(contacts, userRole, userData?.name || '');
     setMessageMode('reply');
   
-    console.log('After filterContactsByUserRole:', filteredContacts.length);
+    
   
     // First, filter contacts based on the employee's assigned phone
     if (userData?.phone !== undefined && userData.phone !== -1) {
@@ -4302,7 +4671,7 @@ const sortContacts = (contacts: Contact[]) => {
           ? contact.phoneIndexes.includes(userPhoneIndex)
           : contact.phoneIndex === userPhoneIndex
       );
-      console.log('After phone filter:', filteredContacts.length);
+      
     }
   
     // Filtering logic
@@ -4315,7 +4684,7 @@ const sortContacts = (contacts: Contact[]) => {
         filteredContacts = filteredContacts.filter(contact => 
           contact.phoneIndex === phoneIndex
         );
-        console.log('After phone name filter:', filteredContacts.length);
+        
       }
     } else {
       // Existing filtering logic for other tags
@@ -4383,11 +4752,11 @@ const sortContacts = (contacts: Contact[]) => {
             !contact.tags?.includes('snooze')
           );
       }
-      console.log('After tag filter:', filteredContacts.length);
+      
     }
   
     filteredContacts = sortContacts(filteredContacts);
-    console.log("MESSAGE MODE", messageMode);
+    
   
     if (searchQuery) {
       filteredContacts = filteredContacts.filter((contact) => {
@@ -4399,10 +4768,10 @@ const sortContacts = (contacts: Contact[]) => {
               phone.includes(searchQuery.toLowerCase()) || 
               tags.includes(searchQuery.toLowerCase());
       });
-      console.log('After search filter:', filteredContacts.length);
+      
     }
   
-    console.log('Final filtered contacts:', filteredContacts.length);
+    
     setFilteredContacts(filteredContacts);
   
   }, [contacts, searchQuery, activeTags, showAllContacts, showUnreadContacts, showMineContacts, showUnassignedContacts, showSnoozedContacts, showGroupContacts, currentUserName, employeeList, userData, userRole]);
@@ -4595,7 +4964,15 @@ const sortContacts = (contacts: Contact[]) => {
   
       const userData = docUserSnapshot.data();
       const companyId = userData.companyId;
-  
+
+      const docRef = doc(firestore, 'companies', companyId);
+      const docSnapshot = await getDoc(docRef);
+      if (!docSnapshot.exists()) {
+        
+        return;
+      }
+      const data2 = docSnapshot.data();
+      const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
       for (const contact of selectedContactsForForwarding) {
         for (const message of selectedMessages) {
           try {
@@ -4632,7 +5009,7 @@ const sortContacts = (contacts: Contact[]) => {
               );
             } else {
               // For text messages, use the existing API call
-              const response = await fetch(`https://mighty-dane-newly.ngrok-free.app/api/v2/messages/text/${companyId}/${contact.chat_id}`, {
+              const response = await fetch(`${baseUrl}/api/v2/messages/text/${companyId}/${contact.chat_id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -4647,7 +5024,7 @@ const sortContacts = (contacts: Contact[]) => {
                 throw new Error(`Failed to forward text message: ${response.status} ${errorText}`);
               }
             }
-            console.log('Message forwarded successfully');
+            
           } catch (error) {
             console.error('Error forwarding message:', error);
             toast.error(`Failed to forward a message: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -4723,14 +5100,14 @@ const sortContacts = (contacts: Contact[]) => {
   useEffect(() => {
     const handleKeyDown = (event: { key: string; }) => {
       if (event.key === "Escape") {
-        console.log('escape');
+        
         setSelectedContact(null);
     setSelectedChatId(null);
       }
     };
   
     window.addEventListener("keydown", handleKeyDown);
-  
+
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
@@ -4762,7 +5139,7 @@ const sortContacts = (contacts: Contact[]) => {
   
   const sendImageMessage = async (chatId: string, imageUrl: string, caption?: string) => {
     try {
-      console.log(`Sending image message. ChatId: ${chatId}`);
+      
       
       const user = auth.currentUser;
       if (!user) throw new Error('No authenticated user');
@@ -4777,7 +5154,7 @@ const sortContacts = (contacts: Contact[]) => {
       // Use selectedContact's phoneIndex
       if (!selectedContact) throw new Error('No contact selected');
       const phoneIndex = selectedContact.phoneIndex ?? 0;
-      console.log(`Using contact's phoneIndex: ${phoneIndex}`);
+      
       
       const userName = userData.name || userData.email || '';
   
@@ -4786,11 +5163,11 @@ const sortContacts = (contacts: Contact[]) => {
       if (!docSnapshot.exists()) throw new Error('No company document found');
   
       const companyData = docSnapshot.data();
-  
+      const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
       let response;
       try {
-        console.log(`Attempting to send image via API. PhoneIndex: ${phoneIndex}`);
-        response = await fetch(`https://mighty-dane-newly.ngrok-free.app/api/v2/messages/image/${companyId}/${chatId}`, {
+        
+        response = await fetch(`${baseUrl}/api/v2/messages/image/${companyId}/${chatId}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -4810,17 +5187,17 @@ const sortContacts = (contacts: Contact[]) => {
       }
   
       const data = await response.json();
-      console.log('Image message sent successfully:', data);
+      
       fetchMessages(chatId, companyData.ghl_accessToken);
     } catch (error) {
       console.error('Error sending image message:', error);
-      toast.error(`Failed to send image: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    //  toast.error(`Failed to send image: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
   };
   const sendDocumentMessage = async (chatId: string, documentUrl: string, mimeType: string, fileName: string, caption?: string) => {
     try {
-      console.log(`Sending document message. ChatId: ${chatId}`);
+      
       
       const user = auth.currentUser;
       if (!user) throw new Error('No authenticated user');
@@ -4835,7 +5212,7 @@ const sortContacts = (contacts: Contact[]) => {
       // Use selectedContact's phoneIndex
       if (!selectedContact) throw new Error('No contact selected');
       const phoneIndex = selectedContact.phoneIndex ?? 0;
-      console.log(`Using contact's phoneIndex: ${phoneIndex}`);
+      
       
       const userName = userData.name || userData.email || '';
   
@@ -4844,11 +5221,11 @@ const sortContacts = (contacts: Contact[]) => {
       if (!docSnapshot.exists()) throw new Error('No company document found');
   
       const companyData = docSnapshot.data();
-  
+      const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
       let response;
       try {
-        console.log(`Attempting to send document via API. PhoneIndex: ${phoneIndex}`);
-        response = await fetch(`https://mighty-dane-newly.ngrok-free.app/api/v2/messages/document/${companyId}/${chatId}`, {
+        
+        response = await fetch(`${baseUrl}/api/v2/messages/document/${companyId}/${chatId}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -4869,11 +5246,11 @@ const sortContacts = (contacts: Contact[]) => {
       }
   
       const data = await response.json();
-      console.log('Document message sent successfully:', data);
+      
       fetchMessages(chatId, companyData.ghl_accessToken);
     } catch (error) {
       console.error('Error sending document message:', error);
-      toast.error(`Failed to send document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+     // toast.error(`Failed to send document: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
   };
@@ -4931,7 +5308,7 @@ const sortContacts = (contacts: Contact[]) => {
         )
       );
   
-      console.log(`Chat ${chatId} ${newPinnedStatus ? 'pinned' : 'unpinned'}`);
+      
       toast.success(`Conversation ${newPinnedStatus ? 'pinned' : 'unpinned'}`);
     } catch (error) {
       console.error('Error toggling chat pin state:', error);
@@ -4948,14 +5325,14 @@ const sortContacts = (contacts: Contact[]) => {
     try {
       const user = auth.currentUser;
       if (!user) {
-        console.log('No authenticated user!');
+        
         return;
       }
   
       const docUserRef = doc(firestore, 'user', user.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
-        console.log('No such document for user!');
+        
         return;
       }
       const userData = docUserSnapshot.data();
@@ -5049,17 +5426,22 @@ interface Template {
 }
 
  const handleRemoveTag = async (contactId: string, tagName: string) => {
-    try {
-      const user = auth.currentUser;
+      try {
+        const user = auth.currentUser;
       const docUserRef = doc(firestore, 'user', user?.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
-        console.log('No such document for user!');
+        
         return;
       }
       const userData = docUserSnapshot.data();
       const companyId = userData.companyId;
+      const docRef = doc(firestore, 'companies', companyId);
+      const docSnapshot = await getDoc(docRef);
+      if (!docSnapshot.exists()) throw new Error('No company document found');
   
+      const companyData = docSnapshot.data();
+      const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
       // Check if tag is a trigger tag
       const templatesRef = collection(firestore, 'companies', companyId, 'followUpTemplates');
       const templatesSnapshot = await getDocs(templatesRef);
@@ -5086,7 +5468,7 @@ interface Template {
       // If this was a trigger tag, call the follow-up API to remove the template
       if (matchingTemplate) {
         try {
-          const response = await fetch('https://mighty-dane-newly.ngrok-free.app/api/tag/followup', {
+          const response = await fetch(`${baseUrl}/api/tag/followup`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -5105,7 +5487,7 @@ interface Template {
             throw new Error(`Follow-up API error: ${response.statusText}`);
           }
   
-          console.log('Follow-up template removed successfully');
+          
           toast.success('Follow-up sequence stopped');
         } catch (error) {
           console.error('Error stopping follow-up sequence:', error);
@@ -5135,14 +5517,14 @@ interface Template {
           toast.success(`Contact unassigned from ${tagName}. Quota leads updated from ${currentQuotaLeads} to ${currentQuotaLeads + 1}.`);
         } else {
           console.error(`Employee document for ${tagName} does not exist.`);
-          console.log('Current employeeList:', employeeList);
+          
           
           // List all documents in the employee collection
           const employeeCollectionRef = collection(firestore, 'companies', companyId, 'employee');
           const employeeSnapshot = await getDocs(employeeCollectionRef);
-          console.log('All employee documents:');
+          
           employeeSnapshot.forEach(doc => {
-            console.log(doc.id, '=>', doc.data());
+          
           });
         }
       }
@@ -5234,17 +5616,22 @@ interface Template {
 
       const user = auth.currentUser;
       if (!user) throw new Error('No authenticated user');
-
-      const docUserRef = doc(firestore, 'user', user.email!);
-      const docUserSnapshot = await getDoc(docUserRef);
+  
+        const docUserRef = doc(firestore, 'user', user.email!);
+        const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) throw new Error('No such document for user');
-
-      const userData = docUserSnapshot.data();
-      const companyId = userData.companyId;
+        
+        const userData = docUserSnapshot.data();
+        const companyId = userData.companyId;
+      const docRef = doc(firestore, 'companies', companyId);
+      const docSnapshot = await getDoc(docRef);
+      if (!docSnapshot.exists()) throw new Error('No company document found');
+      const companyData = docSnapshot.data();
+      const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
       const chatId = editingMessage.id.split('_')[1];
-      console.log('editing this chat id', chatId);
+      
       const response = await axios.put(
-        `https://mighty-dane-newly.ngrok-free.app/api/v2/messages/${companyId}/${chatId}/${editingMessage.id}`,
+        `${baseUrl}/api/v2/messages/${companyId}/${chatId}/${editingMessage.id}`,
         { newMessage: editedMessageText,
           phoneIndex: userData.phoneIndex || 0
          }
@@ -5267,7 +5654,7 @@ interface Template {
       } else {
         throw new Error(response.data.error || 'Failed to edit message');
       }
-    } catch (error) {
+      } catch (error) {
       console.error('Error editing message:', error);
       toast.error('Failed to edit message. Please try again.');
     }
@@ -5282,7 +5669,7 @@ interface Template {
       }
     } catch (error) {
       console.error('Error sending document:', error);
-      toast.error('Failed to send document. Please try again.');
+      //toast.error('Failed to send document. Please try again.');
     } finally {
       setLoading(false);
       setDocumentModalOpen(false);
@@ -5295,16 +5682,16 @@ interface Template {
       const blob = await response.blob();
   
       // Check the blob content
-      console.log('Blob type:', blob.type);
-      console.log('Blob size:', blob.size);
+      
+      
   
       const storageRef = ref(getStorage(), `${Date.now()}_${blob.type.split('/')[1]}`);
       const uploadResult = await uploadBytes(storageRef, blob);
   
-      console.log('Upload result:', uploadResult);
+      
   
       const publicUrl = await getDownloadURL(storageRef);
-      console.log('Public URL:', publicUrl);
+      
       return publicUrl;
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -5312,24 +5699,19 @@ interface Template {
     }
   };
   
-  const sendImage = async (imageUrl: string | null, caption: string) => {
-    console.log('Image URL:', imageUrl);
-    console.log('Caption:', caption);
+  const sendImage = async (imageUrl: string, caption: string) => {
     setLoading(true);
     try {
-      if (imageUrl) {
-        const response = await fetch(imageUrl);
-        const blob = await response.blob();
-        const file = new File([blob], 'image.jpg', { type: blob.type });
-        
-        const uploadedImageUrl = await uploadFile(file);
-        if (uploadedImageUrl) {
-          await sendImageMessage(selectedChatId!, uploadedImageUrl, caption);
-        }
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const file = new File([blob], 'image.jpg', { type: blob.type });
+      
+      const uploadedImageUrl = await uploadFile(file);
+      if (uploadedImageUrl) {
+        await sendImageMessage(selectedChatId!, uploadedImageUrl, caption);
       }
     } catch (error) {
       console.error('Error sending image:', error);
-      toast.error('Failed to send image. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -5402,17 +5784,19 @@ interface Template {
   }, [contacts]);
 
   const [companyStopBot, setCompanyStopBot] = useState(false);
+
 // Update the useEffect that fetches company stop bot status
 useEffect(() => {
+  let isMounted = true;
   const fetchCompanyStopBot = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) return;
-
-      const docUserRef = doc(firestore, 'user', user.email!);
-      const docUserSnapshot = await getDoc(docUserRef);
-      if (!docUserSnapshot.exists()) return;
-
+      try {
+        const user = auth.currentUser;
+        if (!user) return;
+  
+        const docUserRef = doc(firestore, 'user', user.email!);
+        const docUserSnapshot = await getDoc(docUserRef);
+        if (!docUserSnapshot.exists()) return;
+  
       const userData = docUserSnapshot.data();
       const companyId = userData.companyId;
       const currentPhoneIndex = userData.phone || 0;
@@ -5422,18 +5806,29 @@ useEffect(() => {
       if (!companySnapshot.exists()) return;
 
       const companyData = companySnapshot.data();
-      const stopbots = companyData.stopbots || {};
-      setCompanyStopBot(stopbots[currentPhoneIndex] || false);
+      
+      // Update this logic to correctly set the bot status
+      if (companyData.phoneCount) {
+        const stopbots = companyData.stopbots || {};
+        if (isMounted) {
+          // true means bot is stopped, false means bot is running
+          setCompanyStopBot(!!stopbots[currentPhoneIndex]);
+        }
+      } else {
+        if (isMounted) {
+          // true means bot is stopped, false means bot is running
+          setCompanyStopBot(!!companyData.stopbot);
+        }
+      }
     } catch (error) {
       console.error('Error fetching company stopbot status:', error);
     }
   };
 
   fetchCompanyStopBot();
-}, [userData?.phone]); // Add userData?.phone as dependency
-
-const toggleBot = async () => {
-  try {
+  
+  // Set up a real-time listener for changes
+  const setupRealtimeListener = async () => {
     const user = auth.currentUser;
     if (!user) return;
 
@@ -5443,43 +5838,86 @@ const toggleBot = async () => {
 
     const userData = docUserSnapshot.data();
     const companyId = userData.companyId;
-    const currentPhoneIndex = userData.phone || 0;
-
-    const companyRef = doc(firestore, 'companies', companyId);
-    const companySnapshot = await getDoc(companyRef);
-    if (!companySnapshot.exists()) return;
-
-    const companyData = companySnapshot.data();
     
-    // Check if phoneCount exists and is not null
-    if (companyData.phoneCount) {
-      // Handle multiple phones case with stopbots
-      const currentStopbots = companyData.stopbots || {};
-      
-      if (companyData.phoneCount) {
-        // If phoneCount exists, use stopbots map
-        const newStopbots = {
-          ...currentStopbots,
-          [currentPhoneIndex]: !currentStopbots[currentPhoneIndex]
-        };
-        await updateDoc(companyRef, {
-          stopbots: newStopbots
-        });
-        setCompanyStopBot(!currentStopbots[currentPhoneIndex]);
-        toast.success(`Bot for ${phoneNames[currentPhoneIndex]} ${currentStopbots[currentPhoneIndex] ? 'enabled' : 'disabled'} successfully`);
+    const companyRef = doc(firestore, 'companies', companyId);
+    const unsubscribe = onSnapshot(companyRef, (snapshot) => {
+      if (snapshot.exists() && isMounted) {
+        const companyData = snapshot.data();
+        const currentPhoneIndex = userData.phone || 0;
+        
+        if (companyData.phoneCount) {
+          const stopbots = companyData.stopbots || {};
+          setCompanyStopBot(!!stopbots[currentPhoneIndex]);
+        } else {
+          setCompanyStopBot(!!companyData.stopbot);
+        }
       }
-    } else {
-      // Handle single phone case with stopbot
-      await updateDoc(companyRef, {
-        stopbot: !companyData.stopbot
-      });
-      setCompanyStopBot(!companyData.stopbot);
-      toast.success(`Bot ${companyData.stopbot ? 'enabled' : 'disabled'} successfully`);
-    }
+    });
 
+    return unsubscribe;
+  };
+
+  const unsubscribe = setupRealtimeListener();
+
+  return () => {
+    isMounted = false;
+    if (unsubscribe) {
+      unsubscribe.then(unsub => {
+        if (unsub) {
+          unsub();
+        }
+      }).catch(error => {
+        console.error('Error during unsubscribe:', error);
+      });
+    }
+  };
+}, [userData?.phone]);
+
+const getCompanyData = async () => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('No authenticated user');
+
+  const docUserRef = doc(firestore, 'user', user.email!);
+  const docUserSnapshot = await getDoc(docUserRef);
+  if (!docUserSnapshot.exists()) throw new Error('User document not found');
+
+  const userData = docUserSnapshot.data();
+  const companyId = userData.companyId;
+  const currentPhoneIndex = userData.phone || 0;
+
+  const companyRef = doc(firestore, 'companies', companyId);
+  const companySnapshot = await getDoc(companyRef);
+  if (!companySnapshot.exists()) throw new Error('Company document not found');
+
+  return {
+    companyRef,
+    companyData: companySnapshot.data(),
+    currentPhoneIndex,
+  };
+};
+
+const toggleBot = async () => {
+  try {
+    const { companyRef, companyData, currentPhoneIndex } = await getCompanyData();
+    
+    if (companyData.phoneCount) {
+      const currentStopbots = companyData.stopbots || {};
+      const newStopbots = {
+        ...currentStopbots,
+        [currentPhoneIndex]: !currentStopbots[currentPhoneIndex]
+      };
+      
+      await updateDoc(companyRef, { stopbots: newStopbots });
+      setCompanyStopBot(!companyStopBot); // Update local state immediately
+      toast.success(`Bot for ${phoneNames[currentPhoneIndex]} ${companyStopBot ? 'enabled' : 'disabled'} successfully`);
+    } else {
+      await updateDoc(companyRef, { stopbot: !companyData.stopbot });
+      setCompanyStopBot(!companyStopBot); // Update local state immediately
+      toast.success(`Bot ${companyStopBot ? 'enabled' : 'disabled'} successfully`);
+    }
   } catch (error) {
     console.error('Error toggling bot status:', error);
-    toast.error('Failed to toggle bot status');
+    toast.error(error instanceof Error ? error.message : 'Failed to toggle bot status');
   }
 };
 
@@ -5555,11 +5993,11 @@ const toggleBot = async () => {
     }
   };
   const sendBlastMessage = async () => {
-    console.log('Starting sendBlastMessage function');
+    
 
     // Ensure selectedChatId is valid
     if (!selectedChatId) {
-      console.log('No chat selected');
+      
       toast.error("No chat selected!");
       return;
     }
@@ -5567,7 +6005,7 @@ const toggleBot = async () => {
     const scheduledTime = blastStartTime || new Date();
     const now = new Date();
     if (scheduledTime <= now) {
-      console.log('Selected time is in the past');
+      
       toast.error("Please select a future time for the blast message.");
       return;
     }
@@ -5576,28 +6014,33 @@ const toggleBot = async () => {
       let mediaUrl = '';
       let documentUrl = '';
       if (selectedMedia) {
-        console.log('Uploading media...');
+        
         mediaUrl = await uploadFile(selectedMedia);
-        console.log(`Media uploaded. URL: ${mediaUrl}`);
+        
       }
       if (selectedDocument) {
-        console.log('Uploading document...');
+        
         documentUrl = await uploadFile(selectedDocument);
-        console.log(`Document uploaded. URL: ${documentUrl}`);
+        
       }
 
       const user = auth.currentUser;
-      console.log(`Current user: ${user?.email}`);
+      
 
       const docUserRef = doc(firestore, 'user', user?.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
-        console.log('No such document for user!');
+        
         return;
       }
-      const userData = docUserSnapshot.data();
-      const companyId = userData.companyId;
-      console.log(`Company ID: ${companyId}`);
+        const userData = docUserSnapshot.data();
+        const companyId = userData.companyId;
+  
+        const docRef = doc(firestore, 'companies', companyId);
+        const docSnapshot = await getDoc(docRef);
+      if (!docSnapshot.exists()) throw new Error('No company document found');
+      const companyData = docSnapshot.data();
+      const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
       const chatIds = [selectedChatId]; // Use selectedChatId directly
       const processedMessages = [selectedContact].map(contact => {
         let processedMessage = blastMessage;
@@ -5640,12 +6083,11 @@ const toggleBot = async () => {
         sleepDuration: activateSleep ? sleepDuration : null,
       };
 
-      console.log('Sending scheduledMessageData:', JSON.stringify(scheduledMessageData, null, 2));
 
       // Make API call to schedule the message
-      const response = await axios.post(`https://mighty-dane-newly.ngrok-free.app/api/schedule-message/${companyId}`, scheduledMessageData);
+      const response = await axios.post(`${baseUrl}/api/schedule-message/${companyId}`, scheduledMessageData);
 
-      console.log(`Scheduled message added. Document ID: ${response.data.id}`);
+      
       toast.success(`Blast message scheduled successfully.`);
       toast.info(`Message will be sent at: ${scheduledTime.toLocaleString()} (local time)`);
 
@@ -5710,7 +6152,7 @@ const toggleBot = async () => {
 
       const userData = docUserSnapshot.data();
       const companyId = userData.companyId;
-
+      
       const companyRef = doc(firestore, 'companies', companyId);
       const companySnapshot = await getDoc(companyRef);
       if (!companySnapshot.exists()) {
@@ -5719,12 +6161,13 @@ const toggleBot = async () => {
       }
 
       const companyData = companySnapshot.data();
+        const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
       const isV2 = companyData.v2 || false;
       const whapiToken = companyData.whapiToken || '';
       const phone = userData.phoneNumber.split('+')[1];
       const chatId = phone + "@s.whatsapp.net"; // The specific number you want to send the reminder to
       
-      console.log(chatId)
+      
       const reminderMessage = `*Reminder for contact:* ${selectedContact.contactName || selectedContact.firstName || selectedContact.phone}\n\n${text}`;
 
       const scheduledMessageData = {
@@ -5745,12 +6188,12 @@ const toggleBot = async () => {
         whapiToken: isV2 ? null : whapiToken,
       };
   
-      console.log('Sending scheduledMessageData:', JSON.stringify(scheduledMessageData, null, 2));
+  
   
       // Make API call to schedule the message
-      const response = await axios.post(`https://mighty-dane-newly.ngrok-free.app/api/schedule-message/${companyId}`, scheduledMessageData);
+      const response = await axios.post(`${baseUrl}/api/schedule-message/${companyId}`, scheduledMessageData);
 
-      console.log(`Reminder scheduled. Document ID: ${response.data.id}`);
+      
 
       toast.success('Reminder set successfully');
       setIsReminderModalOpen(false);
@@ -5762,20 +6205,42 @@ const toggleBot = async () => {
       toast.error("An error occurred while setting the reminder. Please try again.");
     }
   };
+
+  const formatDuration = (seconds: number): string => {
+    if (!seconds) return '0s';
+    
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = seconds % 60;
+  
+    const parts = [];
+    
+    if (hours > 0) {
+      parts.push(`${hours}h`);
+    }
+    if (minutes > 0) {
+      parts.push(`${minutes}m`);
+    }
+    if (remainingSeconds > 0 || parts.length === 0) {
+      parts.push(`${remainingSeconds}s`);
+    }
+  
+    return parts.join(' ');
+  };
   
   const handleGenerateAIResponse = async () => {
     if (messages.length === 0) return;
   
     try {
       setIsGeneratingResponse(true);
-  console.log(messages);
+  
       // Prepare the context from recent messages
         // Prepare the context from all messages in reverse order
  // Prepare the context from the last 20 messages in reverse order
  const context = messages.slice(0, 10).reverse().map(msg => 
   `${msg.from_me ? "Me" : "User"}: ${msg.text?.body || ""}`
 ).join("\n");
-console.log(context);
+
 
 const prompt = `
 Your goal is to act like you are Me, and generate a response to the last message in the conversation, if the last message is from "Me", continue or add to that message appropriately, maintaining the same language and style. Note that "Me" indicates messages I sent, and "User" indicates messages from the person I'm talking to.
@@ -5785,7 +6250,7 @@ ${context}
 
 :`;
 
-console.log(prompt);
+
   
       // Use the sendMessageToAssistant function
       const aiResponse = await sendMessageToAssistant(prompt);
@@ -5793,7 +6258,7 @@ console.log(prompt);
       // Set the AI's response as the new message
       setNewMessage(aiResponse);
   
-    } catch (error) {
+      } catch (error) {
       console.error('Error generating AI response:', error);
       toast.error("Failed to generate AI response");
     } finally {
@@ -5843,9 +6308,10 @@ console.log(prompt);
       }
   
       const companyData = companySnapshot.data();
+      const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
       const assistantId = companyData.assistantId;
   
-      const res = await axios.get(`https://mighty-dane-newly.ngrok-free.app/api/assistant-test/`, {
+      const res = await axios.get(`${baseUrl}/api/assistant-test/`, {
         params: {
           message: messageText,
           email: user.email!,
@@ -5910,9 +6376,12 @@ console.log(prompt);
       const employeeSnapshot = await getDocs(employeeRef);
       const employeeList = employeeSnapshot.docs.map(doc => ({ 
         id: doc.id, 
-        name: doc.data().name, 
-        quotaLeads: doc.data().quotaLeads || 0 
+        name: doc.data().name,
+        quotaLeads: doc.data().quotaLeads || 0,
+        assignedContacts: doc.data().assignedContacts || 0
       }));
+  
+ 
   
       // Count assignments
       contactsSnapshot.forEach((doc) => {
@@ -5921,46 +6390,46 @@ console.log(prompt);
           contact.tags.forEach((tag: string) => {
             const employee = employeeList.find(emp => emp.name.toLowerCase() === tag.toLowerCase());
             if (employee) {
-              employeeAssignments[employee.quotaLeads] = (employeeAssignments[employee.quotaLeads] || 0) + 1;
+              employeeAssignments[employee.id] = (employeeAssignments[employee.id] || 0) + 1;
+              
             }
           });
         }
       });
   
-      console.log('Employee assignments before update:', employeeAssignments);
+
   
       // Update employee documents
-      const employeeUpdates = Object.entries(employeeAssignments).map(async ([employeeId, count]) => {
-        const employeeDocRef = doc(firestore, `companies/${companyId}/employee`, employeeId);
-        const employeeDoc = await getDoc(employeeDocRef);
+      const employeeUpdates = employeeList.map(async (employee) => {
+        const newAssignedCount = employeeAssignments[employee.id] || 0;
+        const employeeDocRef = doc(firestore, `companies/${companyId}/employee`, employee.id);
+        
+        // If assigned contacts increased, decrease quota leads
+        const assignedDiff = newAssignedCount - employee.assignedContacts;
+        const newQuotaLeads = Math.max(0, employee.quotaLeads - (assignedDiff > 0 ? assignedDiff : 0));
+        
+
   
-        if (employeeDoc.exists()) {
-          const currentData = employeeDoc.data();
-          const currentQuotaLeads = currentData.quotaLeads || 0;
-          const currentAssignedContacts = currentData.assignedContacts || 0;
-          
-          // Calculate the difference in assigned contacts
-          const assignedContactsDiff = count - currentAssignedContacts;
-          
-          // Calculate new quotaLeads
-          const newQuotaLeads = Math.max(0, currentQuotaLeads - assignedContactsDiff);
-          
-          // Update assigned contacts and quotaLeads
-          await updateDoc(employeeDocRef, {
-            assignedContacts: count,
-            quotaLeads: newQuotaLeads
-          });
-          console.log(`Updated ${currentData.name}: Assigned contacts from ${currentAssignedContacts} to ${count}, Quota leads from ${currentQuotaLeads} to ${newQuotaLeads}`);
-        } else {
-          console.error(`Employee document for ID ${employeeId} not found`);
+        if (assignedDiff > 0) {
+
         }
+  
+        await updateDoc(employeeDocRef, {
+          assignedContacts: newAssignedCount,
+          quotaLeads: newQuotaLeads
+        });
+        
+        // Verify the update
+        const updatedDoc = await getDoc(employeeDocRef);
+        const updatedData = updatedDoc.data();
+ 
       });
   
       await Promise.all(employeeUpdates);
-  
-      console.log('Employee assigned contacts and quota leads updated successfully');
+      
+      
     } catch (error) {
-      console.error('Error updating employee assigned contacts and quota leads:', error);
+      console.error('❌ Error updating employee assigned contacts and quota leads:', error);
       toast.error('Failed to update employee assigned contacts and quota leads.');
     }
   };
@@ -5992,7 +6461,7 @@ console.log(prompt);
       const docUserRef = doc(firestore, 'user', user?.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
-        console.log('No such document for user!');
+        
         return;
       }
       const userData = docUserSnapshot.data();
@@ -6001,10 +6470,13 @@ console.log(prompt);
 
       const updateData: { [key: string]: any } = {};
       const fieldsToUpdate = [
-        'contactName', 'email', 'lastName', 'phone', 'address1', 'city', 
-        'state', 'postalCode', 'website', 'dnd', 'dndSettings', 'tags', 
-        'customFields', 'source', 'country', 'companyName', 'branch', 
+        'contactName', 'email', 'lastName', 'phone', 'address1', 'city',
+        'state', 'postalCode', 'website', 'dnd', 'dndSettings', 'tags',
+        'customFields', 'source', 'country', 'companyName', 'branch',
         'expiryDate', 'vehicleNumber', 'points', 'IC', 'assistantId', 'threadid',
+        // Add the new fields:
+        'nationality', 'highestEducation', 'programOfStudy', 
+        'intakePreference', 'englishProficiency', 'passport'
       ];
 
       fieldsToUpdate.forEach(field => {
@@ -6048,12 +6520,12 @@ console.log(prompt);
     };
 
     fetchTotalContacts();
-  }, []);
+}, []);
 
   return (
     <div className="flex flex-col md:flex-row overflow-y-auto bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200" style={{ height: '100vh' }}>
       <audio ref={audioRef} src={noti} />
-        <div className={`flex flex-col w-full md:min-w-[35%] md:max-w-[35%] bg-gray-100 dark:bg-gray-900 border-r border-gray-300 dark:border-gray-700 ${selectedChatId ? 'hidden md:flex' : 'flex'}`}>
+        <div className={`flex flex-col w-full md:min-w-[30%] md:max-w-[30%] bg-gray-100 dark:bg-gray-900 border-r border-gray-300 dark:border-gray-700 ${selectedChatId ? 'hidden md:flex' : 'flex'}`}>
         <div className="flex items-center justify-between pl-4 pr-4 pt-6 pb-2 sticky top-0 z-10 bg-gray-100 dark:bg-gray-900">
           <div>
             <div className="text-start text-2xl font-semibold capitalize text-gray-800 dark:text-gray-200">
@@ -6074,26 +6546,36 @@ console.log(prompt);
                   <Lucide icon="ChevronDown" className="w-4 h-4 text-gray-500" />
                 </Menu.Button>
               </div>
-           
-                <Menu.Items className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5">
-                  <div className="py-1 max-h-60 overflow-y-auto" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
-                    {Object.entries(phoneNames).map(([index, phoneName]) => (
+              <Menu.Items className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5">
+                <div className="py-1 max-h-60 overflow-y-auto" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
+                  {Object.entries(phoneNames).map(([index, phoneName]) => {
+                    const phoneStatus = qrCodes[parseInt(index)]?.status;
+                    const isConnected = phoneStatus === 'ready' || phoneStatus === 'authenticated';
+                    
+                    return (
                       <Menu.Item key={index}>
                         {({ active }) => (
                           <button
                             onClick={() => handlePhoneChange(parseInt(index))}
                             className={`${
                               active ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-200'
-                            } block w-full text-left px-4 py-2 text-sm`}
+                            } block w-full text-left px-4 py-2 text-sm flex items-center justify-between`}
                           >
-                            {phoneName}
+                            <span>{phoneName}</span>
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              isConnected 
+                                ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200'
+                                : 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-200'
+                            }`}>
+                              {isConnected ? 'Connected' : 'Not Connected'}
+                            </span>
                           </button>
                         )}
                       </Menu.Item>
-                    ))}
-                  </div>
-                </Menu.Items>
-           
+                    );
+                  })}
+                </div>
+              </Menu.Items>
             </Menu>
           )}
   
@@ -6499,84 +6981,47 @@ console.log(prompt);
     <div className="flex justify-end space-x-2 w-full mr-2">
       
     {(
-      // Replace or update the existing search input section
       <div className="relative flex-grow">
-        <input
-          type="text"
-          className="flex-grow box w-full h-9 py-1 pl-10 pr-4 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-800"
-          placeholder="Search messages..."
-          value={searchQuery}
-          onChange={handleSearchChange}
+        <button
+          onClick={() => setIsSearchModalOpen(true)}
+          className="flex items-center w-full h-9 py-1 pl-10 pr-4 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-800"
+        >
+          <Lucide
+            icon="Search"
+            className="absolute left-3 w-5 h-5"
+          />
+          <span className="ml-2">Search contacts...</span>
+        </button>
+
+        <SearchModal
+          isOpen={isSearchModalOpen}
+          onClose={() => setIsSearchModalOpen(false)}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          onSelectResult={(type, id) => {
+            if (type === 'contact' || type === 'chat') {
+              const contact = contacts.find(c => type === 'contact' ? c.id === id : c.chat_id === id);
+              if (contact) {
+                selectChat(contact.chat_id!, contact.id!, contact);
+              }
+            } else if (type === 'message') {
+              const result = globalSearchResults.find(r => r.id === id);
+              if (result) {
+                const contact = contacts.find(c => c.id === result.contactId);
+                if (contact) {
+                  selectChat(contact.chat_id!, contact.id!, contact);
+                  scrollToMessage(result.id);
+                }
+              }
+            }
+            setIsSearchModalOpen(false);
+            setSearchQuery('');
+          }}
+          contacts={contacts}
+          // messages={messages}
+          // globalSearchLoading={globalSearchLoading}
+          // globalSearchResults={globalSearchResults}
         />
-        <Lucide
-          icon="Search"
-          className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500 dark:text-gray-400"
-        />
-        
-        {/* Global Search Results Dropdown */}
-        {isGlobalSearchActive && searchQuery && (
-          <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 rounded-md shadow-lg max-h-96 overflow-y-auto">
-            {globalSearchLoading ? (
-              <div className="w-full p-4 text-center text-gray-500">
-                Searching...
-              </div>
-            ) : globalSearchResults.length > 0 ? (
-              <>
-                {globalSearchResults.map((result) => (
-                  <div
-                    key={result.id}
-                    className="p-3 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
-                    onClick={async () => {
-                      // Find and select the contact
-                      const contact = contacts.find(c => c.id === result.contactId);
-                      if (contact) {
-                        await selectChat(contact.chat_id!, contact.id!, contact);
-                        setIsGlobalSearchActive(false);
-                        setSearchQuery('');
-                      }
-                      // Scroll to the message that was clicked on in the chat
-                      scrollToMessage(result.id);
-                    }}
-                  >
-                    <div className="flex-grow w-full justify-between items-start">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium">
-                          {contacts.find(c => c.id === result.contactId)?.contactName || result.contactId}
-                        </div>
-                        <div className="text-sm text-gray-500 truncate">
-                          {result.text?.body ? (
-                            <span dangerouslySetInnerHTML={{ __html: result.text.body.replace(new RegExp(`(${searchQuery})`, 'gi'), '<mark>$1</mark>') }} />
-                          ) : (
-                            result.caption || 'Media message'
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                
-                {/* Pagination */}
-                {totalGlobalSearchPages > 1 && (
-                  <div className="pagination">
-                    {Array.from({ length: totalGlobalSearchPages }, (_, i) => i + 1).map(pageNum => (
-                      <button
-                        key={pageNum}
-                        onClick={() => loadMoreSearchResults(pageNum)}
-                        disabled={pageNum === globalSearchPage}
-                      >
-                        {pageNum}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="p-4 text-center text-gray-500">
-                No messages found
-              </div>
-            )}
-          </div>
-        )}
       </div>
     )}
     {isAssistantAvailable && (
@@ -6964,7 +7409,7 @@ console.log(prompt);
                 forcePage={currentPage}
               />
         </div>
-      <div className="flex flex-col w-full sm:w-3/4 bg-slate-300 dark:bg-gray-900 relative flext-1 overflow-hidden">
+      <div className="flex flex-col w-full sm:w-3/4  dark:bg-gray-900 relative flext-1 overflow-hidden">
   {selectedChatId ? (
     <>
       <div className="flex items-center justify-between p-3 border-b border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
@@ -6986,7 +7431,11 @@ console.log(prompt);
   )}
 </div>
           <div>
-            <div className="font-semibold text-gray-800 dark:text-gray-200 capitalize">{selectedContact.contactName || selectedContact.firstName || selectedContact.phone}</div>
+          <div className="font-semibold text-gray-800 dark:text-gray-200 capitalize">
+  {(selectedContact.contactName && selectedContact.lastName 
+    ? `${selectedContact.contactName} ${selectedContact.lastName}`
+    : selectedContact.contactName || selectedContact.firstName || selectedContact.phone)}
+</div>
             {userRole === '1' && (
               <div className="text-sm text-gray-600 dark:text-gray-400">{selectedContact.phone}</div>
             )}
@@ -7193,18 +7642,17 @@ console.log(prompt);
       <div className="flex-1 overflow-y-auto p-2" 
         style={{
           paddingBottom: "150px",
-          backgroundColor: selectedContact ? 'transparent' : 'bg-slate-400 dark:bg-gray-800',
+          backgroundColor: selectedContact ? 'transparent' : 'bg-white dark:bg-gray-800',
           backgroundSize: 'cover',
           backgroundRepeat: 'no-repeat',
         }}
         ref={messageListRef}>
-        {isLoading2 && (
-          <div className="fixed top-0 left-0 right-0 bottom-0 flex justify-center items-center bg-opacity-50">
-            <div className="items-center absolute top-1/2 left-2/2 transform -translate-x-1/3 -translate-y-1/2 bg-white dark:bg-gray-800 p-4 rounded-md shadow-lg">
+                {isLoading2 && (
+          <div className="fixed top-0 left-0 right-10 bottom-0 flex justify-center items-center bg-opacity-50">
+            <div className="items-center absolute top-1/2 left-1/2 transform translate-x-[200%] -translate-y-1/2 p-4">
               <div role="status">
                 <div className="flex flex-col items-center justify-end col-span-6 sm:col-span-3 xl:col-span-2">
-                  <LoadingIcon icon="three-dots" className="w-20 h-20 p-4 text-gray-800 dark:text-gray-200" />
-                  <div className="mt-2 text-xs text-center text-gray-800 dark:text-gray-200">Fetching Conversation...</div>
+                  <LoadingIcon icon="spinning-circles" className="w-20 h-20 p-4 text-blue-500 dark:text-blue-400" />
                 </div>
               </div>
             </div>
@@ -7216,16 +7664,17 @@ console.log(prompt);
               .filter((message) => message.type !== 'action'&& 
               message.type !== 'e2e_notification' && 
               message.type !== 'notification_template'&&
-              (userData?.company !== "0123" || 
+              (userData?.company !== "Revotrend" || 
                 (userData?.phone === undefined || 
                 phoneCount === undefined || 
-                phoneCount === 0 ||
+                phoneCount === 0 || 
                 message.phoneIndex === undefined || 
                 message.phoneIndex === null || 
-                message.phoneIndex === userData?.phone)))
+                message.phoneIndex.toString() === userData?.phone.toString())))
               .slice()
               .reverse()
               .map((message, index, array) => {
+                //
                 const previousMessage = messages[index - 1];
                 const showDateHeader =
                   index === 0 ||
@@ -7252,6 +7701,7 @@ console.log(prompt);
                   }
 
   return (
+    
                   <React.Fragment key={message.id}>
                     {showDateHeader && (
                       <div className="flex justify-center my-4">
@@ -7260,14 +7710,36 @@ console.log(prompt);
                         </div>
                       </div>
                     )}
-
+                      <div className="flex items-center gap-2 relative">
+    {/* Author Circle for Group Chats */}
+    {message.chat_id?.includes('@g.us') && (
+      <div 
+        style={{ 
+          width: '25px',
+          height: '25px',
+          borderRadius: '50%',
+          backgroundColor: getAuthorColor(message.author?.split('@')[0] || message.phoneIndex?.toString() || ''),
+          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          alignSelf: 'flex-start', // This will align it to the top
+          marginTop: '4px' // Add some spacing from the top if needed
+        }}
+      >
+        <span className="text-xs text-white font-medium">
+          {(message.author?.split('@')[0]?.charAt(0) || '').toUpperCase()}
+        </span>
+      </div>
+    )}
                     <div
                       data-message-id={message.id}
-                      className={`p-2 mr-6 ${
+                      className={`p-2 mr-6 mb-5${
                         message.type === 'privateNote'
-                          ? "bg-yellow-600 text-black rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-xl self-end ml-auto text-left mb-1 group"
+                          ? privateNoteClass
                           : messageClass
-                      }`}
+                      }relative`}
                       style={{
                         maxWidth: message.type === 'document' ? '90%' : '70%',
                         width: `${
@@ -7284,6 +7756,7 @@ console.log(prompt);
                       onMouseEnter={() => setHoveredMessageId(message.id)}
                       onMouseLeave={() => setHoveredMessageId(null)}
                     >
+
                       {/* {hoveredMessageId === message.id && (
                         <button
                           onClick={(e) => {
@@ -7368,7 +7841,7 @@ console.log(prompt);
                         </span>
                       )} */}
                       {message.type === 'privateNote' && (
-                        <div className="inline-block whitespace-pre-wrap break-words text-white">
+                        <div className="inline-block whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200">
                           {(() => {
                             const text = typeof message.text === 'string' ? message.text : message.text?.body || 'No content';
                             const parts = text.split(/(@\w+)/g);
@@ -7388,7 +7861,7 @@ console.log(prompt);
                           <div className="text-sm text-gray-300 dark:text-gray-300 mb-1 capitalize font-medium">{message.userName}</div>
                         )}
                         <div 
-                          className={`whitespace-pre-wrap break-words overflow-hidden ${
+                          className={`whitespace-pre-wrap break-words overflow-hidden text-[15px] ${
                             message.from_me ? myMessageTextClass : otherMessageTextClass
                           }`} 
                           style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
@@ -7418,28 +7891,28 @@ console.log(prompt);
                             )}
                         </div>
                       )}
-{message.type === 'order' && message.order && (
-  <div className="p-0 message-content">
-    <div className="flex items-center space-x-3 bg-emerald-800 rounded-lg p-2">
-      <img
-        src={`data:image/jpeg;base64,${message.order.thumbnail}`}
-        alt="Order"
-        className="w-12 h-12 rounded-lg object-cover"
-        onError={(e) => {
-          console.error("Error loading order image:", e.currentTarget.src);
-          e.currentTarget.src = logoImage;
-        }}
-      />
-      <div className="text-white">
-        <div className="flex items-center">
-          <Lucide icon="ShoppingCart" className="w-4 h-4 mr-1" />
-          <span className="text-sm">{message.order.itemCount} item</span>
-        </div>
-        <p className="text-sm opacity-90">MYR {(message.order.totalAmount1000 / 1000).toFixed(2)}</p>
-      </div>
-    </div>
-  </div>
-)}
+                      {message.type === 'order' && message.order && (
+                        <div className="p-0 message-content">
+                          <div className="flex items-center space-x-3 bg-emerald-800 rounded-lg p-2">
+                            <img
+                              src={`data:image/jpeg;base64,${message.order.thumbnail}`}
+                              alt="Order"
+                              className="w-12 h-12 rounded-lg object-cover"
+                              onError={(e) => {
+                                console.error("Error loading order image:", e.currentTarget.src);
+                                e.currentTarget.src = logoImage;
+                              }}
+                            />
+                            <div className="text-white">
+                              <div className="flex items-center">
+                                <Lucide icon="ShoppingCart" className="w-4 h-4 mr-1" />
+                                <span className="text-sm">{message.order.itemCount} item</span>
+                              </div>
+                              <p className="text-sm opacity-90">MYR {(message.order.totalAmount1000 / 1000).toFixed(2)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       {message.type === 'video' && message.video && (
                         <div className="video-content p-0 message-content image-message">
                           <video
@@ -7462,34 +7935,34 @@ console.log(prompt);
                           <div className="caption text-gray-800 dark:text-gray-200">{message.gif.caption}</div>
                         </div>
                       )}
-             {(message.type === 'audio' || message.type === 'ptt') && (message.audio || message.ptt) && (
-              <div className="audio-content p-0 message-content image-message">
-                <audio 
-                  controls 
-                  className="rounded-lg message-image cursor-pointer"
-                  src={(() => {
-                    const audioData = message.audio?.data || message.ptt?.data;
-                    const mimeType = message.audio?.mimetype || message.ptt?.mimetype;
-                    if (audioData && mimeType) {
-                      const byteCharacters = atob(audioData);
-                      const byteNumbers = new Array(byteCharacters.length);
-                      for (let i = 0; i < byteCharacters.length; i++) {
-                        byteNumbers[i] = byteCharacters.charCodeAt(i);
-                      }
-                      const byteArray = new Uint8Array(byteNumbers);
-                      const blob = new Blob([byteArray], { type: mimeType });
-                      return URL.createObjectURL(blob);
-                    }
-                    return '';
-                  })()}
-                />
-                {(message.audio?.caption || message.ptt?.caption) && (
-                  <div className="caption text-gray-800 dark:text-gray-200 mt-2">
-                    {message.audio?.caption || message.ptt?.caption}
-                  </div>
-                )}
-              </div>
-            )}
+                      {(message.type === 'audio' || message.type === 'ptt') && (message.audio || message.ptt) && (
+                        <div className="audio-content p-0 message-content image-message">
+                          <audio 
+                            controls 
+                            className="rounded-lg message-image cursor-pointer"
+                            src={(() => {
+                              const audioData = message.audio?.data || message.ptt?.data;
+                              const mimeType = message.audio?.mimetype || message.ptt?.mimetype;
+                              if (audioData && mimeType) {
+                                const byteCharacters = atob(audioData);
+                                const byteNumbers = new Array(byteCharacters.length);
+                                for (let i = 0; i < byteCharacters.length; i++) {
+                                  byteNumbers[i] = byteCharacters.charCodeAt(i);
+                                }
+                                const byteArray = new Uint8Array(byteNumbers);
+                                const blob = new Blob([byteArray], { type: mimeType });
+                                return URL.createObjectURL(blob);
+                              }
+                              return '';
+                            })()}
+                          />
+                          {(message.audio?.caption || message.ptt?.caption) && (
+                            <div className="caption text-gray-800 dark:text-gray-200 mt-2">
+                              {message.audio?.caption || message.ptt?.caption}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {message.type === 'voice' && message.voice && (
                         <div className="voice-content p-0 message-content image-message w-auto h-auto">
                           <audio controls src={message.voice.link} className="rounded-lg message-image cursor-pointer" />
@@ -7570,7 +8043,17 @@ console.log(prompt);
                       )}
                       {message.type === 'location' && message.location && (
                         <div className="location-content p-0 message-content image-message">
-                          <div className="text-sm text-gray-800 dark:text-gray-200">Location: {message.location.latitude}, {message.location.longitude}</div>
+                          <button
+                            className="text-white bg-blue-500 hover:bg-blue-600 rounded-md px-3 py-1"
+                            onClick={() => window.open(`https://www.google.com/maps?q=${message.location?.latitude},${message.location?.longitude}`, '_blank')}
+                          >
+                            Open Location in Google Maps
+                          </button>
+                          {message.location?.description && (
+                            <div className="text-xs text-white mt-1">
+                              {message.location.description}
+                            </div>
+                          )}
                         </div>
                       )}
                       {message.type === 'poll' && message.poll && (
@@ -7593,7 +8076,31 @@ console.log(prompt);
                           )}
                         </div>
                       )}
-
+                      {message.type === 'call_log' && (
+                        <div className="call-logs-content p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                            <div className="flex items-center space-x-2 mb-2">
+                                {message.call_log?.status === 'missed' ? (
+                                    <Lucide icon="PhoneMissed" className="w-5 h-5 text-red-500" />
+                                ) : message.call_log?.status === 'outgoing' ? (
+                                    <Lucide icon="PhoneOutgoing" className="w-5 h-5 text-green-500" />
+                                ) : (
+                                    <Lucide icon="PhoneIncoming" className="w-5 h-5 text-blue-500" />
+                                )}
+                                <span className="font-medium text-gray-800 dark:text-gray-200 capitalize">
+                                    {message.call_log?.status || 'Missed'} Call
+                                </span>
+                            </div>
+                            
+                            <div className="text-sm text-gray-600 dark:text-gray-400">
+                                {message.call_log?.duration ? (
+                                    <span>Duration: {formatDuration(message.call_log.duration)}</span>
+                                ) : (
+                                    <span>Call ended</span>
+                                )}
+                            </div>
+                        </div>
+                      )}
+                      
                       {showReactionPicker && reactionMessage?.id === message.id && (
                         <ReactionPicker
                           onSelect={(emoji) => handleReaction(message, emoji)}
@@ -7618,14 +8125,14 @@ console.log(prompt);
                           <div className="flex items-center mr-2">
                             {(hoveredMessageId === message.id || selectedMessages.includes(message)) && (
                               <>
-                                <button className="ml-2 text-white hover:text-blue-600 dark:text-white dark:hover:text-blue-300 transition-colors duration-200 mr-2" onClick={() => setReplyToMessage(message)}><Lucide icon="MessageCircleReply" className="w-6 h-6" /></button>
+                                <button className="ml-2 text-black hover:text-blue-600 dark:text-white dark:hover:text-blue-300 transition-colors duration-200 mr-2" onClick={() => setReplyToMessage(message)}><Lucide icon="MessageCircleReply" className="w-6 h-6" /></button>
                                 <button 
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setReactionMessage(message);
                                     setShowReactionPicker(true);
                                   }}
-                                  className="mr-2 p-1 text-white hover:text-blue-500 dark:text-white dark:hover:text-blue-300"
+                                  className="mr-2 p-1 text-black hover:text-blue-500 dark:text-white dark:hover:text-blue-300"
                                 ><Lucide icon="Heart" className="w-6 h-6" /></button>
                                 {showReactionPicker && reactionMessage?.id === message.id && (
                                   <ReactionPicker
@@ -7634,21 +8141,23 @@ console.log(prompt);
                                   />
                                 )}
                                 {message.from_me && message.createdAt && new Date().getTime() - new Date(message.createdAt).getTime() < 15 * 60 * 1000 && userRole !== "3" && (
-                                  <button className="ml-2 mr-2 text-white hover:text-blue-500 dark:text-white dark:hover:text-blue-300 transition-colors duration-200" onClick={() => openEditMessage(message)}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-12.15 12.15a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32L19.513 8.2z" /></svg></button>
+                                  <button className="ml-2 mr-2 text-white hover:text-blue-500 dark:text-white dark:hover:text-blue-300 transition-colors duration-200" onClick={() => openEditMessage(message)}><Lucide icon="Pencil" className="w-5 h-5" /></button>
                                 )}
                                 <input type="checkbox" className="mr-2 form-checkbox h-5 w-5 text-blue-500 transition duration-150 ease-in-out rounded-full" checked={selectedMessages.includes(message)} onChange={() => handleSelectMessage(message)} />
                               </>
                             )}
                             {message.name && <span className="ml-2 text-gray-400 dark:text-gray-600">{message.name}</span>}
                             {message.phoneIndex !== undefined && (
-                            <div className="text-xs text-white-500 dark:text-gray-400 px-2 py-1">
-                              {phoneNames[message.phoneIndex] || `Phone ${message.phoneIndex + 1}`}
-                            </div>
+                                 <div className={`text-xs px-2 py-1 ${
+                                  message.from_me ? 'text-white' : 'text-white-500 dark:text-gray-400'
+                                }`}>
+                                  {phoneNames[message.phoneIndex] || `Phone ${message.phoneIndex + 1}`}
+                                </div>
                           )}
                             {formatTimestamp(message.createdAt || message.dateAdded)}
                           
                           </div>
-                          
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -7686,6 +8195,7 @@ console.log(prompt);
                 )}
                 {replyToMessage.type === 'poll' && <div className="text-gray-800 dark:text-gray-200">Poll: {replyToMessage.poll?.title}</div>}
                 {replyToMessage.type === 'hsm' && <div className="text-gray-800 dark:text-gray-200">HSM: {replyToMessage.hsm?.title}</div>}
+                {replyToMessage.type === 'call_log' && <div className="text-gray-800 dark:text-gray-200">Call Logs: {replyToMessage.call_log?.title}</div>}
               </div>
             </div>
             <button onClick={() => setReplyToMessage(null)}>
@@ -7747,24 +8257,25 @@ console.log(prompt);
             </div>
             <Menu.Items className="absolute left-0 bottom-full mb-2 w-40 bg-white dark:bg-gray-800 shadow-lg rounded-md p-2 z-10 max-h-60 overflow-y-auto">
             <button className="flex items-center w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
-  <label htmlFor="imageUpload" className="flex items-center cursor-pointer text-gray-800 dark:text-gray-200 w-full">
-    <Lucide icon="Image" className="w-4 h-4 mr-2" />
-    Image
-    <input
-      type="file"
-      id="imageUpload"
-      accept="image/*"
-      className="hidden"
-      onChange={(e) => {
-        const file = e.target.files?.[0];
-        if (file) {
-          const imageUrl = URL.createObjectURL(file);
-          setPastedImageUrl(imageUrl);
-          setImageModalOpen2(true);
-        }
-      }}
-    />
-  </label>
+            <label htmlFor="imageUpload" className="flex items-center cursor-pointer text-gray-800 dark:text-gray-200 w-full">
+              <Lucide icon="Image" className="w-4 h-4 mr-2" />
+              Image
+              <input
+                type="file"
+                id="imageUpload"
+                accept="image/*"
+                multiple // Add this attribute
+                className="hidden"
+                onChange={(e) => {
+                  const files = e.target.files;
+                  if (files && files.length > 0) {
+                    const imageUrls = Array.from(files).map(file => URL.createObjectURL(file));
+                    setPastedImageUrl(imageUrls); // Update state type to handle array
+                    setImageModalOpen2(true);
+                  }
+                }}
+              />
+            </label>
 </button>
 <button className="flex items-center w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
     <label htmlFor="videoUpload" className="flex items-center cursor-pointer text-gray-800 dark:text-gray-200 w-full">
@@ -7806,11 +8317,6 @@ console.log(prompt);
 </button>
             </Menu.Items>
           </Menu>
-          <button className="p-2 m-0 !box" onClick={handleQR}>
-            <span className="flex items-center justify-center w-5 h-5">
-              <Lucide icon='Zap' className="w-5 h-5 text-gray-800 dark:text-gray-200" />
-            </span>
-          </button>
           <button className="p-2 m-0 !box ml-2" onClick={toggleRecordingPopup}>
         <span className="flex items-center justify-center w-5 h-5">
           <Lucide icon="Mic" className="w-5 h-5 text-gray-800 dark:text-gray-200" />
@@ -7886,7 +8392,7 @@ console.log(prompt);
               const lastAtSymbolIndex = e.target.value.lastIndexOf('@');
               if (lastAtSymbolIndex !== -1 && lastAtSymbolIndex === e.target.value.length - 1) {
                 setIsPrivateNotesMentionOpen(true);
-                console.log('Private note mention open');
+                
               } else {
                 setIsPrivateNotesMentionOpen(false);
               }
@@ -7990,184 +8496,241 @@ console.log(prompt);
             }}
             disabled={userRole === "3"}
           />
-          {isQuickRepliesOpen && (
-            <div ref={quickRepliesRef} className="absolute bottom-full left-0 mb-2 w-full max-w-md bg-gray-100 dark:bg-gray-800 p-2 rounded-md shadow-lg mt-2 z-10">
-            <div className="flex justify-between mb-4">
-              <button
-                className={`px-4 py-2 rounded-lg ${
-                  activeQuickReplyTab === 'all'
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-                }`}
-                onClick={() => setActiveQuickReplyTab('all')}
-              >
-                All
-              </button>
-              <button
-                className={`px-4 py-2 rounded-lg ${
-                  activeQuickReplyTab === 'self'
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-                }`}
-                onClick={() => setActiveQuickReplyTab('self')}
-              >
-                Self
-              </button>
-            </div>
-            <div className="max-h-60 overflow-y-auto">
-              {quickReplies
-                .filter(reply => 
-                  activeQuickReplyTab === 'all' || reply.type === 'self'
-                )
-                .filter(reply => 
-                  reply.keyword.toLowerCase().includes(quickReplyFilter.toLowerCase()) ||
-                  reply.text.toLowerCase().includes(quickReplyFilter.toLowerCase())
-                )
-                .sort((a, b) => a.keyword.localeCompare(b.keyword))
-                .map(reply => (
-                  <div key={reply.id} className="flex items-center justify-between mb-2 dark:bg-gray-800">
-                    {editingReply?.id === reply.id ? (
-                      <>
-                        <input
-                          className="flex-grow px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 mr-2"
-                          value={editingReply.keyword}
-                          onChange={(e) => setEditingReply({ ...editingReply, keyword: e.target.value })}
-                          style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-                        />
-                        <textarea
-                          className="flex-grow px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 mr-2"
-                          value={editingReply.text}
-                          onChange={(e) => setEditingReply({ ...editingReply, text: e.target.value })}
-                          placeholder="Text"
-                          rows={1}
-                        />
-                        <button className="p-2 m-1 !box" onClick={() => updateQuickReply(reply.id, editingReply.keyword, editingReply.text, editingReply.type as "all" | "self")}>
-                          <span className="flex items-center justify-center w-5 h-5">
-                            <Lucide icon="Save" className="w-5 h-5 text-gray-800 dark:text-gray-200" />
-                          </span>
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                      <span className="px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded-md text-gray-800 dark:text-gray-200 m-2">
+  {isQuickRepliesOpen && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-[90%] max-w-4xl max-h-[90vh] overflow-hidden">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-semibold">Quick Replies</h3>
+        <button
+          onClick={() => setIsQuickRepliesOpen(false)}
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+        >
+          <Lucide icon="X" className="w-6 h-6" />
+        </button>
+      </div>
+
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex space-x-4">
+          <button
+            className={`px-4 py-2 rounded-lg ${
+              activeQuickReplyTab === 'all'
+                ? 'bg-primary text-white'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+            }`}
+            onClick={() => setActiveQuickReplyTab('all')}
+          >
+            All
+          </button>
+          <button
+            className={`px-4 py-2 rounded-lg ${
+              activeQuickReplyTab === 'self'
+                ? 'bg-primary text-white'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+            }`}
+            onClick={() => setActiveQuickReplyTab('self')}
+          >
+            Personal
+          </button>
+        </div>
+        <div className="flex space-x-4">
+          <select
+            value={quickReplyCategory}
+            onChange={(e) => setQuickReplyCategory(e.target.value)}
+            className="px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+          >
+            <option value="all">All Categories</option>
+            {categories
+              .filter(cat => cat !== 'all')
+              .map(category => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+          </select>
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search quick replies..."
+              value={quickReplyFilter}
+              onChange={(e) => setQuickReplyFilter(e.target.value)}
+              className="pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            />
+            <Lucide
+              icon="Search"
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 200px)' }}>
+        {quickReplies
+          .filter(reply => activeQuickReplyTab === 'all' || reply.type === 'self')
+          .filter(reply => quickReplyCategory === 'all' || reply.category === quickReplyCategory)
+          .filter(reply => 
+            reply.keyword.toLowerCase().includes(quickReplyFilter.toLowerCase()) ||
+            reply.text?.toLowerCase().includes(quickReplyFilter.toLowerCase())
+          )
+          .sort((a, b) => a.keyword.localeCompare(b.keyword))
+          .map(reply => (
+            <div 
+              key={reply.id} 
+              className="flex items-center justify-between mb-2 bg-white dark:bg-gray-700 p-4 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer transition-colors duration-200"
+              onClick={() => {
+                if (editingReply?.id !== reply.id) {
+                  if (reply.images?.length) {
+                    setPastedImageUrl(reply.images);
+                    setDocumentCaption(reply.text || '');
+                    setImageModalOpen2(true);
+                  }
+                  if (reply.documents?.length) {
+                    reply.documents.forEach((doc) => {
+                      fetch(doc.url)
+                        .then(response => response.blob())
+                        .then(blob => {
+                          const documentFile = new File([blob], doc.name, { 
+                            type: doc.type,
+                            lastModified: doc.lastModified 
+                          });
+                          setSelectedDocument(documentFile);
+                          setDocumentModalOpen(true);
+                          setDocumentCaption(reply.text || '');
+                        })
+                        .catch(error => {
+                          console.error('Error handling document:', error);
+                          toast.error('Failed to load document');
+                        });
+                    });
+                  }
+                  if (reply.text) {
+                    setNewMessage(reply.text);
+                  }
+                  setIsQuickRepliesOpen(false);
+                }
+              }}
+            >
+              {editingReply?.id === reply.id ? (
+                <div className="flex items-center w-full space-x-4">
+                  <input
+                    className="flex-1 px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    value={editingReply.keyword}
+                    onChange={(e) => setEditingReply({ ...editingReply, keyword: e.target.value })}
+                    placeholder="Keyword"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <select
+                    className="flex-1 px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    value={editingReply.category || ""}
+                    onChange={(e) => setEditingReply({ ...editingReply, category: e.target.value })}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <option value="">Select Category</option>
+                    {categories
+                      .filter((cat: string) => cat !== 'all')
+                      .map(category => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                    ))}
+                  </select>
+                  <textarea
+                    className="flex-grow px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    value={editingReply.text || ''}
+                    onChange={(e) => setEditingReply({ ...editingReply, text: e.target.value })}
+                    placeholder="Message text (optional)"
+                    rows={1}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <div className="flex space-x-2">
+                    <button 
+                      className="p-2 bg-primary text-white rounded-lg hover:bg-primary-dark"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        updateQuickReply(reply.id, editingReply.keyword, editingReply.text || '', editingReply.type as "all" | "self");
+                      }}
+                    >
+                      <Lucide icon="Save" className="w-5 h-5" />
+                    </button>
+                    <button 
+                      className="p-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingReply(null);
+                      }}
+                    >
+                      <Lucide icon="X" className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-col flex-grow">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
                         {reply.keyword}
                       </span>
+                      {reply.category && (
+                        <span className="px-3 py-1 bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-full text-sm">
+                          {reply.category}
+                        </span>
+                      )}
+                  
+                    </div>
+                    {reply.text && (
                       <span
-                        className="px-2 py-1 flex-grow text-lg cursor-pointer text-gray-800 dark:text-gray-200"
-                        onClick={() => {
-                          handleQRClick(reply);
-                          let message = reply.text;
-                          if (reply.image) {
-                            const imageFile = new File([reply.image], "image.png", { type: "image/png" });
-                            const imageUrl = URL.createObjectURL(imageFile);
-                            console.log("reply image:", JSON.stringify(reply, null, 2));
-                            setPastedImageUrl(reply.image);
-                            setDocumentCaption(reply.text);
-                            setImageModalOpen2(true);
-                          }
-                          if (reply.document) {
-                            const documentFile = new File([reply.document], "document", { type: reply.document });
-                            setSelectedDocument(documentFile);
-                            setDocumentModalOpen(true);
-                            setDocumentCaption(reply.text);
-                          }
-                          setNewMessage(message);
-                          setIsQuickRepliesOpen(false);
-                        }}
+                        className="px-2 py-1 text-gray-800 dark:text-gray-200"
                         style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
                       >
                         {reply.text}
                       </span>
-                      {(typeof reply.document === 'string' && reply.document !== '') || (typeof reply.image === 'string' && reply.image !== '') ? (
-                        <>
-                          {typeof reply.document === 'string' && reply.document !== '' && (
-                            <a href={reply.document} target="_blank" className="p-2 m-1 !box">
-                              <span className="flex items-center justify-center w-5 h-5">
-                                <Lucide icon="File" className="w-5 h-5 text-gray-800 dark:text-gray-200" />
-                              </span>
-                            </a>
-                          )}
-                          {typeof reply.image === 'string' && reply.image !== '' && (
-                            <a href={reply.image} target="_blank" className="p-2 m-1 !box">
-                              <span className="flex items-center justify-center w-5 h-5">
-                                <Lucide icon="Image" className="w-5 h-5 text-gray-800 dark:text-gray-200" />
-                              </span>
-                            </a>
-                          )}
-                        </>
-                      ) : null}
-                      <div>
-                        <button className="p-2 m-1 !box" onClick={() => setEditingReply(reply)}>
-                          <span className="flex items-center justify-center w-5 h-5">
-                            <Lucide icon="Eye" className="w-5 h-5 text-gray-800 dark:text-gray-200" />
-                          </span>
-                        </button>
-                        <button className="p-2 m-1 !box text-red-500 dark:text-red-400" onClick={() => deleteQuickReply(reply.id, reply.type as "all" | "self")}>
-                          <span className="flex items-center justify-center w-5 h-5">
-                            <Lucide icon="Trash" className="w-5 h-5" />
-                          </span>
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
+                    )}
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      {reply.documents && reply.documents.length > 0 && reply.documents.map((doc, index) => (
+                        <div key={index} className="relative group">
+                          <a href={doc.url} target="_blank" className="p-2 bg-gray-100 dark:bg-gray-600 rounded-md flex items-center gap-2 hover:bg-gray-200 dark:hover:bg-gray-500" onClick={(e) => e.stopPropagation()}>
+                            <Lucide icon="File" className="w-4 h-4" />
+                            <span className="text-sm truncate">{doc.name}</span>
+                          </a>
+                        </div>
+                      ))}
+                      {(reply.images?.length ?? 0) > 0 && (reply.images as string[]).map((img, index) => (
+                        <div key={index} className="relative group">
+                          <img 
+                            src={img} 
+                            alt={`Preview ${index + 1}`} 
+                            className="w-16 h-16 object-cover rounded-md hover:opacity-90 transition-opacity"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2 ml-4">
+                    <button
+                      className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingReply(reply);
+                      }}
+                    >
+                      <Lucide icon="Pencil" className="w-5 h-5" />
+                    </button>
+                    <button
+                      className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteQuickReply(reply.id, reply.type as "all" | "self");
+                      }}
+                    >
+                      <Lucide icon="Trash" className="w-5 h-5" />
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
-            <div className="flex items-center mb-4">
-          {(newMessage === '/' || isQuickRepliesOpen) && !quickReplyFilter && (
-            <>
-              <input
-                className="flex-grow px-1 py-1 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 mr-2"
-                placeholder="Add new keyword"
-                value={newQuickReplyKeyword}
-                onChange={(e) => setNewQuickReplyKeyword(e.target.value)}
-                style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'Arial, sans-serif', fontSize: '14px' }}
-              />
-              <textarea
-                className="flex-grow px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
-                placeholder="Add new quick reply"
-                value={newQuickReply}
-                onChange={(e) => setNewQuickReply(e.target.value)}
-                rows={1}
-                style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'Arial, sans-serif', fontSize: '14px' }}
-              />
-              <input
-                type="file"
-                className="hidden"
-                id="quickReplyFile"
-                onChange={(e) => setSelectedDocument(e.target.files ? e.target.files[0] : null)}
-              />
-              <label htmlFor="quickReplyFile" className="p-2 m-1 !box cursor-pointer">
-                <span className="flex items-center justify-center w-5 h-5">
-                  <Lucide icon="File" className="w-5 h-5 text-gray-800 dark:text-gray-200" />  
-                </span>
-              </label>  
-              {/* <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                id="quickReplyImage"
-                onChange={(e) => setSelectedImage(e.target.files ? e.target.files[0] : null)}
-              />
-              <label htmlFor="quickReplyImage" className="p-2 m-1 !box cursor-pointer">
-                <span className="flex items-center justify-center w-5 h-5">
-                  <Lucide icon="Image" className="w-5 h-5 text-gray-800 dark:text-gray-200" />  
-                </span>
-              </label>   */}
-            </>
-          )}
-          <div className="flex flex-col ml-2">
-            {!quickReplyFilter && (
-              <button className="p-2 m-1 !box" onClick={addQuickReply}>
-                <span className="flex items-center justify-center w-5 h-5">
-                  <Lucide icon="Plus" className="w-5 h-5 text-gray-800 dark:text-gray-200" />
-                </span>
-              </button>
-            )}
-          </div>
-        </div>
+          ))}
       </div>
-    )}
+    </div>
+  </div>
+)}
         </div>
         {isEmojiPickerOpen && (
           <div className="absolute bottom-20 left-2 z-10">
@@ -8330,7 +8893,7 @@ console.log(prompt);
                           const docUserRef = doc(firestore, 'user', user?.email!);
                           getDoc(docUserRef).then((docUserSnapshot) => {
                             if (!docUserSnapshot.exists()) {
-                              console.log('No such document for user!');
+                              
                               return;
                             }
                             const userData = docUserSnapshot.data();
@@ -8390,7 +8953,7 @@ console.log(prompt);
                     const docUserRef = doc(firestore, 'user', user?.email!);
                     const docUserSnapshot = await getDoc(docUserRef);
                     if (!docUserSnapshot.exists()) {
-                      console.log('No such document for user!');
+                      
                       return;
                     }
                     const userData = docUserSnapshot.data();
@@ -8582,44 +9145,77 @@ console.log(prompt);
   initialCaption={documentCaption}
 />
       <ImageModal isOpen={isImageModalOpen} onClose={closeImageModal} imageUrl={modalImageUrl} />
-      <ImageModal2 isOpen={isImageModalOpen2} onClose={() => setImageModalOpen2(false)} imageUrl={pastedImageUrl} onSend={sendImage}  initialCaption={documentCaption} />
-      {videoModalOpen && selectedVideo && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-2xl w-full">
-      <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Send Video</h2>
-      <video
-        src={URL.createObjectURL(selectedVideo)}
-        controls
-        className="w-full mb-4 rounded"
-        style={{ maxHeight: '400px' }}
+      <ImageModal2 
+        isOpen={isImageModalOpen2} 
+        onClose={() => setImageModalOpen2(false)} 
+        imageUrl={pastedImageUrl} 
+        onSend={async (urls, caption) => {
+          if (Array.isArray(urls)) {
+            // Handle multiple images
+            for (let i = 0; i < urls.length; i++) {
+              const isLastImage = i === urls.length - 1;
+              // Only send caption with the last image
+              await sendImage(urls[i], isLastImage ? caption : '');
+            }
+          } else if (urls) {
+            // Handle single image
+            await sendImage(urls, caption);
+          }
+          setImageModalOpen2(false);
+        }}
+        initialCaption={documentCaption} 
       />
-      <textarea
-        value={videoCaption}
-        onChange={(e) => setVideoCaption(e.target.value)}
-        placeholder="Add a caption..."
-        className="w-full p-2 mb-4 border rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-      />
-      <div className="flex justify-end space-x-2">
+     {videoModalOpen && selectedVideo && (() => {
+  if (selectedVideo.size > 20 * 1024 * 1024) {
+    setVideoModalOpen(false);
+    toast.error('The video file is too big. Please select a file smaller than 20MB.');
+    return null; // Return null to render nothing
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-2xl w-full">
+        <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Send Video</h2>
+        <video
+          src={URL.createObjectURL(selectedVideo)}
+          controls
+          className="w-full mb-4 rounded"
+          style={{ maxHeight: '400px' }}
+        />
+        <textarea
+          value={videoCaption}
+          onChange={(e) => setVideoCaption(e.target.value)}
+          placeholder="Add a caption..."
+          className="w-full p-2 mb-4 border rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+        />
+        <div className="flex justify-end space-x-2">
+          <button
+            onClick={() => {
+              setVideoModalOpen(false);
+              setSelectedVideo(null);
+              setVideoCaption('');
+            }}
+            className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => handleVideoUpload(videoCaption)}
+            className="px-4 py-2 bg-primary text-white rounded"
+          >
+            Send
+          </button>
+        </div>
         <button
-          onClick={() => {
-            setVideoModalOpen(false);
-            setSelectedVideo(null);
-            setVideoCaption('');
-          }}
-          className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded"
+          onClick={() => setVideoModalOpen(false)}
+          className="absolute top-2 right-2 text-gray-800 dark:text-gray-200"
         >
-          Cancel
-        </button>
-        <button
-          onClick={() => handleVideoUpload(videoCaption)}
-          className="px-4 py-2 bg-primary text-white rounded"
-        >
-          Send
+          &times;
         </button>
       </div>
     </div>
-  </div>
-)}
+  );
+})()}
       <ToastContainer
         position="top-right"
         autoClose={5000}
@@ -8700,9 +9296,9 @@ console.log(prompt);
 interface ImageModalProps2 {
   isOpen: boolean;
   onClose: () => void;
-  imageUrl: string;
-  onSend: (url: string | null, caption: string) => void;
-  initialCaption?: string; // Add this line
+  imageUrl: string | string[] | null;
+  onSend: (url: string | string[] | null, caption: string) => void;
+  initialCaption?: string;
 }
 
 const ImageModal2: React.FC<ImageModalProps2> = ({ isOpen, onClose, imageUrl, onSend, initialCaption }) => {
@@ -8713,10 +9309,10 @@ const ImageModal2: React.FC<ImageModalProps2> = ({ isOpen, onClose, imageUrl, on
     setCaption(initialCaption || "" );
   }, [initialCaption]);
 
-
   const handleSendClick = () => {
+    if (!imageUrl) return;
+    onSend(imageUrl, caption || '');
     setCaption('');
-    onSend(imageUrl, caption || ''); // Provide empty string fallback for caption
     onClose(); // Close the modal after sending
   };
 
@@ -8729,20 +9325,33 @@ const ImageModal2: React.FC<ImageModalProps2> = ({ isOpen, onClose, imageUrl, on
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-4">
-                      <button
+          <button
             className="text-black hover:text-gray-800 dark:text-gray-200 dark:hover:text-gray-400"
             onClick={onClose}
           >
             <Lucide icon="X" className="w-6 h-6" />
           </button>
         </div>
-        <div className="bg-slate-400 dark:bg-gray-800 p-4 rounded-lg mb-4 flex justify-center items-center" style={{ height: '70%' }}>
-          <img
-            src={imageUrl}
-            alt="Modal Content"
-            className="rounded-md"
-            style={{ maxWidth: '100%', maxHeight: '100%' }}
-          />
+        <div className="bg-slate-400 dark:bg-gray-800 p-4 rounded-lg mb-4 overflow-auto" style={{ height: '70%' }}>
+          <div className="grid grid-cols-2 gap-4">
+            {Array.isArray(imageUrl) ? (
+              imageUrl.map((url, index) => (
+                <div key={index} className="relative">
+                  <img
+                    src={url}
+                    alt={`Image ${index + 1}`}
+                    className="w-full h-auto rounded-md object-contain"
+                  />
+                </div>
+              ))
+            ) : (
+              <img
+                src={imageUrl || ''}
+                alt="Modal Content"
+                className="w-full h-auto rounded-md object-contain"
+              />
+            )}
+          </div>
         </div>
         <div className="flex items-center bg-slate-500 dark:bg-gray-700 rounded-lg p-2">
           <input
@@ -8755,13 +9364,12 @@ const ImageModal2: React.FC<ImageModalProps2> = ({ isOpen, onClose, imageUrl, on
           <button
             className="ml-2 bg-primary dark:bg-blue-600 text-white p-2 rounded-lg"
             onClick={handleSendClick}
-                      >
-                        <Lucide icon="Send" className="w-5 h-5" />
-                      </button>
-         
-                  </div>
-                </div>
-              </div>
+          >
+            <Lucide icon="Send" className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
 

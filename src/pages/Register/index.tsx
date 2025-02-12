@@ -35,14 +35,22 @@ function Main() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+
+  const [employeeId, setEmployeeId] = useState("");
+  const [notes, setNotes] = useState("");
+  const [quotaLeads, setQuotaLeads] = useState(0);
+  const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
+  const [weightage, setWeightage] = useState(0);
+
+  
   const [registerResult, setRegisterResult] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<'blaster' | 'enterprise' | null>(null);
   const [verificationCode, setVerificationCode] = useState("");
   const [isVerificationSent, setIsVerificationSent] = useState(false);
   const [verificationStep, setVerificationStep] = useState(false);
   const [cooldown, setCooldown] = useState(0);
-  const navigate = useNavigate();
   const [selectedCountry, setSelectedCountry] = useState<CountryCode>('MY');
+  const navigate = useNavigate();
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -93,7 +101,7 @@ function Main() {
       const docUserRef = doc(firestore, 'user', user?.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
-        console.log('No such document!');
+        
         return;
       }
       const dataUser = docUserSnapshot.data();
@@ -101,7 +109,7 @@ function Main() {
       const docRef = doc(firestore, 'companies', companyId);
       const docSnapshot = await getDoc(docRef);
       if (!docSnapshot.exists()) {
-        console.log('No such document!');
+        
         return;
       }
       const data2 = docSnapshot.data();
@@ -152,6 +160,16 @@ function Main() {
 
   const handleRegister = async () => {
     try {
+      // Verify the code before proceeding
+     
+
+
+
+      // Validate plan selection
+      if (!selectedPlan) {
+        toast.error("Please select a plan to continue");
+        return;
+      }
 
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
@@ -181,11 +199,16 @@ function Main() {
         email: user.email!,
         role: "1",
         companyId: newCompanyId,
-        phone: formatPhoneNumber(phoneNumber),
+        phone: 0,
         phoneNumber: formatPhoneNumber(phoneNumber),
         plan: selectedPlan,
         trialStartDate: trialStartDate,
         trialEndDate: trialEndDate,
+        employeeId: employeeId || null,
+        notes: notes || null,
+        quotaLeads: quotaLeads || 0,
+        invoiceNumber: invoiceNumber || null,
+        weightage: weightage || 0,
       });
 
       // Save user data under the new company's employee collection
@@ -195,7 +218,11 @@ function Main() {
         role: "1",
         phoneNumber: formatPhoneNumber(phoneNumber),
 
-
+        employeeId: employeeId || null,
+        notes: notes || null,
+        quotaLeads: quotaLeads || 0,
+        invoiceNumber: invoiceNumber || null,
+        weightage: weightage || 0,
       });
    
       if (!user) {
@@ -204,7 +231,7 @@ function Main() {
       const docUserRef = doc(firestore, 'user', user?.email!);
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
-        console.log('No such document!');
+        
         return;
       }
       const dataUser = docUserSnapshot.data();
@@ -212,14 +239,14 @@ function Main() {
       const docRef = doc(firestore, 'companies', companyId);
       const docSnapshot = await getDoc(docRef);
       if (!docSnapshot.exists()) {
-        console.log('No such document!');
+        
         return;
       }
       const data2 = docSnapshot.data();
       const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
       const response2 = await axios.post(`${baseUrl}/api/channel/create/${newCompanyId}`);
 
-      console.log(response2);
+      
 
       // Sign in the user after successful registration
       navigate('/loading');
@@ -296,30 +323,18 @@ function Main() {
                     onChange={(e) => setCompanyName(e.target.value)}
                     onKeyDown={handleKeyDown}
                   />
-                  
-                  {/* Phone input group */}
                   <div className="flex gap-2">
-                    <select
-                      className="w-[180px] px-4 py-3 bg-white border rounded dark:bg-darkmode-600 dark:border-darkmode-400"
-                      value={selectedCountry}
-                      onChange={(e) => setSelectedCountry(e.target.value as CountryCode)}
-                    >
-                      {getCountries().map((country) => (
-                        <option key={country} value={country}>
-                          {new Intl.DisplayNames(['en'], { type: 'region' }).of(country)} (+{getCountryCallingCode(country)})
-                        </option>
-                      ))}
-                    </select>
+                  
                     <FormInput
                       type="tel"
-                      className="flex-1 px-4 py-3"
-                      placeholder="Phone Number (e.g., 123456789)"
+                      className="block px-4 py-3 mt-4 intro-x min-w-full xl:min-w-[350px]"
+                      placeholder={`Phone Number (e.g., ${getCountryCallingCode(selectedCountry)}123456789)`}
                       value={phoneNumber}
                       onChange={handlePhoneChange}
                       onKeyDown={handleKeyDown}
                     />
                   </div>
-
+                
                   <FormInput
                     type="text"
                     className="w-full px-4 py-3"
@@ -337,6 +352,27 @@ function Main() {
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyDown={handleKeyDown}
                   />
+                
+                  {/* New Plan Selection Section */}
+                  <div className="grid grid-cols-1 gap-2 mt-4 md:grid-cols-2">
+                    {[
+                      ['blaster', 'Team Inbox', '50'],
+                      ['enterprise', 'Standard AI', '168'],
+                      ['unlimited', 'Unlimited', '688']
+                    ].map(([id, name, price]) => (
+                      <div 
+                        key={id}
+                        className={clsx(
+                          "p-2 border rounded cursor-pointer",
+                          selectedPlan === id ? 'border-primary bg-primary/10' : 'border-gray-200'
+                        )}
+                        onClick={() => setSelectedPlan(id as 'blaster' | 'enterprise')}
+                      >
+                        <div className="text-sm font-bold">{name}</div>
+                
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="mt-8 flex flex-col xl:flex-row gap-3">

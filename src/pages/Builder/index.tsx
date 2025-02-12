@@ -240,14 +240,14 @@ const Main: React.FC = () => {
         const companyData = companyDoc.data();
         const tokenData = tokenDoc.data();
         
-        console.log("Company Data:", companyData); // Log company data
-        // console.log("Token Data:", tokenData); // Log token data
+         // Log company data
+        //  // Log token data
   
         setAssistantId(companyData.assistantId);
         setApiKey(tokenData.openai);
   
-        console.log("Fetched Assistant ID:",companyData.assistantId);
-        // console.log("Fetched API Key:", tokenData.openai);
+        
+        // 
       } else {
         console.error("Company or token document does not exist");
       }
@@ -258,7 +258,7 @@ const Main: React.FC = () => {
   };
 
   const fetchAssistantInfo = async (assistantId: string, apiKey: string) => {
-    console.log("Fetching assistant info with ID:", assistantId);
+    
     setLoading(true);
     try {
       const response = await axios.get(`https://api.openai.com/v1/assistants/${assistantId}`, {
@@ -289,7 +289,7 @@ const Main: React.FC = () => {
       return;
     }
 
-    console.log("Updating assistant info with ID:", assistantId);
+    
 
     const payload = {
       name: assistantInfo.name || '',
@@ -297,7 +297,7 @@ const Main: React.FC = () => {
       instructions: assistantInfo.instructions
     };
 
-    console.log("Payload being sent:", payload);
+    
 
     try {
       const response = await axios.post(`https://api.openai.com/v1/assistants/${assistantId}`, payload, {
@@ -308,7 +308,7 @@ const Main: React.FC = () => {
         }
       });
 
-      console.log('Assistant info updated successfully:', response.data);
+      
       toast.success('Assistant updated successfully');
       navigate('/inbox');
     } catch (error) {
@@ -324,6 +324,8 @@ const Main: React.FC = () => {
     }
   };
 
+
+
   const sendMessageToAssistant = async (messageText: string) => {
     const newMessage: ChatMessage = {
       from_me: true,
@@ -331,7 +333,7 @@ const Main: React.FC = () => {
       text: messageText,
       createdAt: new Date().toISOString(),
     };
-
+  
     // Add loading message
     const loadingMessage: ChatMessage = {
       from_me: false,
@@ -340,9 +342,9 @@ const Main: React.FC = () => {
       createdAt: new Date().toISOString(),
       isLoading: true,
     };
-
+  
     setMessages(prevMessages => [loadingMessage, newMessage, ...prevMessages]);
-
+  
     try {
       const user = getAuth().currentUser;
       if (!user) {
@@ -350,44 +352,62 @@ const Main: React.FC = () => {
         setError("User not authenticated");
         return;
       }
-      const realMessage = messageText + "\n\n" +'Current Instructions: ' + assistantInfo.instructions;
-      const res = await axios.get(`https://mighty-dane-newly.ngrok-free.app/api/assistant-test/`, {
+  
+      const docUserRef = doc(firestore, 'user', user.email!);
+      const docUserSnapshot = await getDoc(docUserRef);
+      if (!docUserSnapshot.exists()) return;
+  
+      const dataUser = docUserSnapshot.data();
+      const companyId = dataUser.companyId;
+      const docRef = doc(firestore, 'companies', companyId);
+      const docSnapshot = await getDoc(docRef);
+      if (!docSnapshot.exists()) return;
+  
+      const data2 = docSnapshot.data();
+      const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+  
+      const res = await axios({
+        method: 'post',
+        url: `${baseUrl}/api/prompt-engineer/`,
         params: {
-          message: realMessage,
-          email: user.email!,
-          assistantid: 'asst_zQ3klGmHLZFI9DmH0uofet0F',
+          message: messageText,
+          email: user.email!
         },
+        data: {
+          currentPrompt: assistantInfo.instructions || ''
+        }
       });
       
-      const fullResponse = res.data.answer;
-      const helpfulResponse = fullResponse.split('Formatted Prompt:')[0].replace('Helpful Response:', '').trim();
-      const formattedResponse = fullResponse
-        .split('Formatted Prompt:')[1]
-        .trim()
-        .replace(/```bash\n/, '')
-        .replace(/```$/, '')
-        .trim();
-      
+      if (!res.data.success) {
+        throw new Error(res.data.details || 'Failed to process prompt');
+      }
+  
+      const { analysis, updatedPrompt } = res.data.data;
+  
+      // Update assistant instructions with the new prompt
       setAssistantInfo(prevInfo => ({
         ...prevInfo,
-        instructions: formattedResponse
+        instructions: updatedPrompt
       }));
-
+  
+      // Create a formatted response that includes both analysis and prompt
+      const formattedResponse = `Analysis:\n${analysis}\n\nUpdated Prompt:\n${updatedPrompt}`;
+  
       const assistantResponse: ChatMessage = {
         from_me: false,
         type: 'text',
-        text: helpfulResponse,
+        text: formattedResponse,
         createdAt: new Date().toISOString(),
       };
-
+  
       // Remove loading message and add the real response
       setMessages(prevMessages => {
         const filteredMessages = prevMessages.filter(msg => !msg.isLoading);
         return [assistantResponse, ...filteredMessages];
       });
-
+  
       setThreadId(user.email!);
-
+  
     } catch (error) {
       console.error('Error:', error);
       setError("Failed to send message");
@@ -395,6 +415,8 @@ const Main: React.FC = () => {
       setMessages(prevMessages => prevMessages.filter(msg => !msg.isLoading));
     }
   };
+
+// ... existing code ...
 
   useEffect(() => {
     if (assistantId && apiKey) {
@@ -421,7 +443,7 @@ const Main: React.FC = () => {
   
       await updateDoc(docUserRef, { threadid: '' });
       setThreadId(''); // Clear threadId in state
-      console.log(`Thread ID set to empty string successfully.`);
+      
       // Clear the messages state
       setMessages([]);
     } catch (error) {
@@ -509,7 +531,7 @@ const Main: React.FC = () => {
     try {
       const updatedFiles = [...(assistantInfo.metadata?.files || []), file];
       await updateAssistantMetadata(updatedFiles);
-      console.log('Assistant updated with new file');
+      
     } catch (error) {
       if (axios.isAxiosError(error)) {
         console.error('Error updating assistant with file:', error.response?.data);
@@ -555,7 +577,7 @@ const Main: React.FC = () => {
           'OpenAI-Beta': 'assistants=v1'
         }
       });
-      console.log('Assistant metadata updated:', response.data);
+      
       
       // Update local state
       setAssistantInfo(prevInfo => ({

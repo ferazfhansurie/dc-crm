@@ -62,7 +62,7 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
         const docUserRef = doc(firestore, 'user', user?.email!);
         const docUserSnapshot = await getDoc(docUserRef);
         if (!docUserSnapshot.exists()) {
-          console.log('No such document!');
+          
           return;
         }
         const dataUser = docUserSnapshot.data();
@@ -70,15 +70,15 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
         const docRef = doc(firestore, 'companies', companyId);
         const docSnapshot = await getDoc(docRef);
         if (!docSnapshot.exists()) {
-          console.log('No such document!');
+          
           return;
         }
         const data2 = docSnapshot.data();
-  
+        const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
         if (selectedChatId.includes('@')) {
-          const response = await axios.get(`https://mighty-dane-newly.ngrok-free.app/api/messages/${selectedChatId}/${data2.whapiToken}`);
+          const response = await axios.get(`${baseUrl}/api/messages/${selectedChatId}/${data2.whapiToken}`);
           const data = response.data;
-       console.log(data);
+       
           setMessages(
             data.messages.map((message: { id: any; text: { body: any; }; from_me: any; timestamp: any; type: any; image: any; document:any}) => ({
               id: message.id,
@@ -90,7 +90,7 @@ export const MessagesProvider = ({ children }: { children: ReactNode }) => {
               document:message.document?message.document:undefined,
             }))
           );
-          console.log( data.messages);
+          
         } else {
           setMessages([
           

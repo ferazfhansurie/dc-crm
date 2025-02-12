@@ -42,7 +42,13 @@ interface AssistantInfo {
   description: string;
   instructions: string;
   metadata: {
-    files: Array<{id: string, name: string, url: string}>;
+    files: Array<{
+      id: string;
+      name: string;
+      url: string;
+      vectorStoreId?: string;
+      openAIFileId?: string;
+    }>;
   };
 }
 
@@ -53,6 +59,11 @@ interface MessageListProps {
   deleteThread: () => void;
   threadId: string; // Add this line
 }
+interface AssistantConfig {
+  id: string;
+  name: string;
+}
+
 
 const MessageList: React.FC<MessageListProps> = ({ messages, onSendMessage, assistantName, deleteThread, threadId }) => {
   const [newMessage, setNewMessage] = useState('');
@@ -158,8 +169,15 @@ const Main: React.FC = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [userRole, setUserRole] = useState<string>("");
   const [isWideScreen, setIsWideScreen] = useState(false);
-  const [files, setFiles] = useState<Array<{id: string, name: string, url: string}>>([]);
+  const [files, setFiles] = useState<Array<{
+    id: string;
+    name: string;
+    url: string;
+    vectorStoreId?: string;
+  }>>([]);
   const [uploading, setUploading] = useState(false);
+  const [assistants, setAssistants] = useState<AssistantConfig[]>([]);
+  const [selectedAssistant, setSelectedAssistant] = useState<string>('');
 
   useEffect(() => {
     fetchCompanyId();
@@ -225,20 +243,37 @@ const Main: React.FC = () => {
     try {
       const companyDoc = await getDoc(doc(firestore, "companies", companyId));
       const tokenDoc = await getDoc(doc(firestore, "setting", "token"));
+      
       if (companyDoc.exists() && tokenDoc.exists()) {
         const companyData = companyDoc.data();
         const tokenData = tokenDoc.data();
         
-        console.log("Company Data:", companyData); // Log company data
-        // console.log("Token Data:", tokenData); // Log token data
-  
-        setAssistantId(companyData.assistantId);
+        // Initialize assistants array with the primary assistant
+        const assistantConfigs: AssistantConfig[] = [
+          { id: companyData.assistantId, name: companyData.phone1 || 'Assistant 1' }
+        ];
+
+        // Check phoneCount and add additional assistants if they exist
+        const phoneCount = parseInt(companyData.phoneCount || '1');
+        if (phoneCount >= 2 && companyData.assistantId2) {
+          assistantConfigs.push({ 
+            id: companyData.assistantId2, 
+            name: companyData.phone2 || 'Assistant 2' 
+          });
+        }
+        if (phoneCount >= 3 && companyData.assistantId3) {
+          assistantConfigs.push({ 
+            id: companyData.assistantId3, 
+            name: companyData.phone3 || 'Assistant 3' 
+          });
+        }
+
+        setAssistants(assistantConfigs);
         setApiKey(tokenData.openai);
-  
-        console.log("Fetched Assistant ID:", companyData.assistantId);
-        // console.log("Fetched API Key:", tokenData.openai);
-      } else {
-        console.error("Company or token document does not exist");
+        
+        // Set default selected assistant
+        setSelectedAssistant(companyData.assistantId);
+        setAssistantId(companyData.assistantId);
       }
     } catch (error) {
       console.error("Error fetching Firebase config:", error);
@@ -247,7 +282,7 @@ const Main: React.FC = () => {
   };
 
   const fetchAssistantInfo = async (assistantId: string, apiKey: string) => {
-    console.log("Fetching assistant info with ID:", assistantId);
+    
     setLoading(true);
     try {
       const response = await axios.get(`https://api.openai.com/v1/assistants/${assistantId}`, {
@@ -278,15 +313,22 @@ const Main: React.FC = () => {
       return;
     }
 
-    console.log("Updating assistant info with ID:", assistantId);
+    
+
+    // Get all unique vector store IDs from files
+    const vectorStoreIds = [...new Set(files.map(file => file.vectorStoreId).filter(Boolean))];
 
     const payload = {
       name: assistantInfo.name || '',
       description: assistantInfo.description || '',
-      instructions: assistantInfo.instructions
+      instructions: assistantInfo.instructions,
+      tools: [{ type: "file_search" }],
+      tool_resources: {
+        file_search: {
+          vector_store_ids: vectorStoreIds
+        }
+      }
     };
-
-    console.log("Payload being sent:", payload);
 
     try {
       const response = await axios.post(`https://api.openai.com/v1/assistants/${assistantId}`, payload, {
@@ -297,15 +339,13 @@ const Main: React.FC = () => {
         }
       });
 
-      console.log('Assistant info updated successfully:', response.data);
+      
       toast.success('Assistant updated successfully');
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        // Error is an AxiosError
         console.error('Error updating assistant information:', error.response?.data);
         setError(`Failed to update assistant information: ${error.response?.data.error.message}`);
       } else {
-        // Generic error handling
         console.error('Error updating assistant information:', error);
         setError('Failed to update assistant information');
       }
@@ -329,7 +369,7 @@ const Main: React.FC = () => {
       }
     });
   
-    console.log("Sending message with Assistant ID:", assistantId); // Log assistantId
+     // Log assistantId
   
     try {
       const user = getAuth().currentUser;
@@ -338,8 +378,24 @@ const Main: React.FC = () => {
         setError("User not authenticated");
         return;
       }
-  
-      const res = await axios.get(`https://mighty-dane-newly.ngrok-free.app/api/assistant-test/`, {
+   
+      const docUserRef = doc(firestore, 'user', user?.email!);
+      const docUserSnapshot = await getDoc(docUserRef);
+      if (!docUserSnapshot.exists()) {
+        
+        return;
+      }
+      const dataUser = docUserSnapshot.data();
+      const companyId = dataUser.companyId;
+      const docRef = doc(firestore, 'companies', companyId);
+      const docSnapshot = await getDoc(docRef);
+      if (!docSnapshot.exists()) {
+        
+        return;
+      }
+      const data2 = docSnapshot.data();
+      const baseUrl = data2.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+      const res = await axios.get(`${baseUrl}/api/assistant-test/`, {
         params: {
           message: messageText,
           email: user.email!,
@@ -347,7 +403,7 @@ const Main: React.FC = () => {
         },
       });
       const data = res.data;
-      console.log(data);
+      
   
       const assistantResponse: ChatMessage = {
         from_me: false,
@@ -390,7 +446,7 @@ const Main: React.FC = () => {
   
       await updateDoc(docUserRef, { threadid: '' });
       setThreadId(''); // Clear threadId in state
-      console.log(`Thread ID set to empty string successfully.`);
+      
       // Clear the messages state
       setMessages([]);
     } catch (error) {
@@ -450,22 +506,78 @@ const Main: React.FC = () => {
     const storageRef = ref(storage, `files/${companyId}/${file.name}`);
 
     try {
+      // Upload to Firebase Storage
       await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(storageRef);
+      
+      // First, upload file to OpenAI
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('purpose', 'assistants');
+      
+      const openAIFileResponse = await axios.post('https://api.openai.com/v1/files', formData, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      // Create or get existing vector store
+      let vectorStoreId;
+      try {
+        // Try to get existing vector store
+        const vectorStoreResponse = await axios.get(`https://api.openai.com/v1/vector_stores/${companyId}-knowledge-base`, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'OpenAI-Beta': 'assistants=v2'
+          }
+        });
+        vectorStoreId = vectorStoreResponse.data.id;
+      } catch (error) {
+        // If not found, create new vector store
+        const createVectorStoreResponse = await axios.post('https://api.openai.com/v1/vector_stores', {
+          name: `${companyId}-knowledge-base`,
+        }, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'OpenAI-Beta': 'assistants=v2'
+          }
+        });
+        vectorStoreId = createVectorStoreResponse.data.id;
+      }
+
+      // Add file to vector store
+      await axios.post(`https://api.openai.com/v1/vector_stores/${vectorStoreId}/files`, {
+        file_id: openAIFileResponse.data.id
+      }, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'OpenAI-Beta': 'assistants=v2'
+        }
+      });
       
       // Add file info to Firestore
       const fileDocRef = doc(collection(firestore, 'companies', companyId, 'assistantFiles'));
       await setDoc(fileDocRef, {
         name: file.name,
-        url: downloadURL
+        url: downloadURL,
+        vectorStoreId: vectorStoreId,
+        openAIFileId: openAIFileResponse.data.id
       });
 
-      const newFile = { id: fileDocRef.id, name: file.name, url: downloadURL };
+      const newFile = { 
+        id: fileDocRef.id, 
+        name: file.name, 
+        url: downloadURL,
+        vectorStoreId: vectorStoreId
+      };
       setFiles(prevFiles => [...prevFiles, newFile]);
+
+      // Update the assistant with the new vector store
+      await updateAssistantInfo();
+      
       toast.success('File uploaded successfully');
 
-      // Update the assistant with the new file information
-      await updateAssistantWithFile(newFile);
     } catch (error) {
       console.error('Error uploading file:', error);
       toast.error('Failed to upload file');
@@ -478,7 +590,7 @@ const Main: React.FC = () => {
     try {
       const updatedFiles = [...(assistantInfo.metadata?.files || []), file];
       await updateAssistantMetadata(updatedFiles);
-      console.log('Assistant updated with new file');
+      
     } catch (error) {
       if (axios.isAxiosError(error)) {
         console.error('Error updating assistant with file:', error.response?.data);
@@ -515,16 +627,17 @@ const Main: React.FC = () => {
       const response = await axios.post(`https://api.openai.com/v1/assistants/${assistantId}`, {
         metadata: {
           ...assistantInfo.metadata,
-          files: JSON.stringify(updatedFiles) // Stringify the files array
+          files: JSON.stringify(updatedFiles)
         }
       }, {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          'OpenAI-Beta': 'assistants=v1'
+          'OpenAI-Beta': 'assistants=v2'
         }
       });
-      console.log('Assistant metadata updated:', response.data);
+      
+      
       
       // Update local state
       setAssistantInfo(prevInfo => ({
@@ -534,7 +647,7 @@ const Main: React.FC = () => {
           files: updatedFiles
         }
       }));
-  
+
       toast.success('Assistant metadata updated successfully');
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -545,6 +658,33 @@ const Main: React.FC = () => {
         toast.error('Failed to update assistant metadata: Unknown error');
       }
     }
+  };
+  const handleAssistantChange = (assistantId: string) => {
+    setSelectedAssistant(assistantId);
+    setAssistantId(assistantId);
+    setMessages([]); // Clear messages when switching assistants
+    fetchAssistantInfo(assistantId, apiKey);
+  };
+  
+  // Only show the assistant selector if there are multiple assistants
+  const renderAssistantSelector = () => {
+    if (assistants.length <= 1) return null;
+
+    return (
+      <div className="w-full mb-4">
+        <select
+          value={selectedAssistant}
+          onChange={(e) => handleAssistantChange(e.target.value)}
+          className="w-full p-2 border border-gray-300 rounded-lg bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
+        >
+          {assistants.map((assistant) => (
+            <option key={assistant.id} value={assistant.id}>
+              {assistant.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
   };
 
   return (
@@ -563,9 +703,25 @@ const Main: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  <div className="mb-4">
-                    <h1 className="text-2xl font-bold dark:text-gray-200">{assistantInfo.name || "Assistant Name"}</h1>
-                  </div>
+                 <div className="mb-4 flex items-center justify-between">
+  {assistants.length > 1 ? (
+    <select
+      value={selectedAssistant}
+      onChange={(e) => handleAssistantChange(e.target.value)}
+      className="w-full p-2 text-2xl font-bold border border-gray-300 rounded-lg bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      {assistants.map((assistant) => (
+        <option key={assistant.id} value={assistant.id}>
+          {assistant.name}
+        </option>
+      ))}
+    </select>
+  ) : (
+    <h1 className="text-2xl font-bold dark:text-gray-200">
+      {assistantInfo.name || "Assistant Name"}
+    </h1>
+  )}
+</div>
                   <div className="mb-4">
                     <label className="mb-2 text-lg font-medium capitalize dark:text-gray-200" htmlFor="name">
                       Name
