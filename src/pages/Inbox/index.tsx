@@ -1079,7 +1079,7 @@ const Main: React.FC = () => {
                         </Button>
                       </Link>
                       <a 
-                        href={`https://web.jutasoftware.co/guest-chat/${companyId}`} 
+                        href={`https://app.omniyal.com/guest-chat/${companyId}`} 
                         target="_blank" 
                         rel="noopener noreferrer"
                       >
