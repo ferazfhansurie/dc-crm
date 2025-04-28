@@ -5,7 +5,7 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import logoUrl from "@/assets/images/logo.png";
+import logoUrl from "@/assets/images/dc-login-logo.png";
 import LoadingIcon from "@/components/Base/LoadingIcon";
 import { getAuth } from "firebase/auth";
 
