@@ -813,12 +813,20 @@ const handlePayment = async () => {
         <div className="text-center p-8">
           <h2 className="text-2xl font-bold text-red-600 mb-4">Trial Period Expired</h2>
           <p className="text-gray-600 mb-4">Your trial period has ended. Please subscribe to continue using the service.</p>
-          <button
+          <a 
+          href="https://wa.link/szsmsf"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 px-6 py-3 bg-green-500 text-white text-lg font-semibold rounded hover:bg-green-600 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 w-full inline-block text-center"
+          >
+            Pay Now
+          </a>
+          {/* <button
             onClick={handlePayment}
             className="mt-4 px-6 py-3 bg-green-500 text-white text-lg font-semibold rounded hover:bg-green-600 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 w-full"
           >
             Pay Now 
-          </button>
+          </button> */}
           <button
             onClick={handleLogout}
             className="mt-6 px-6 py-3 bg-primary text-white text-lg font-semibold rounded hover:bg-blue-600 transition-colors"
