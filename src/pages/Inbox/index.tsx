@@ -185,8 +185,9 @@ const Main: React.FC = () => {
   const [files, setFiles] = useState<Array<{
     id: string;
     name: string;
-    url: string;
+    url?: string;
     vectorStoreId?: string;
+    openAIFileId?: string;
   }>>([]);
   const [uploading, setUploading] = useState(false);
   const [assistants, setAssistants] = useState<AssistantConfig[]>([]);
@@ -528,6 +529,47 @@ const Main: React.FC = () => {
     }
   };
 
+  const updateAssistantInfoWithVectorStore = async (newVectorStoreId: string) => {
+    // Get all unique vector store IDs from files and add the new one
+    const vectorStoreIds = [
+      ...new Set([
+        ...files.map(file => file.vectorStoreId).filter(Boolean),
+        newVectorStoreId
+      ])
+    ];
+
+    const payload = {
+      name: assistantInfo.name || '',
+      description: assistantInfo.description || '',
+      instructions: assistantInfo.instructions,
+      tools: [{ type: "file_search" }],
+      tool_resources: {
+        file_search: {
+          vector_store_ids: vectorStoreIds
+        }
+      }
+    };
+
+    try {
+      await axios.post(`https://api.openai.com/v1/assistants/${assistantId}`, payload, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'OpenAI-Beta': 'assistants=v2'
+        }
+      });
+      toast.success('Assistant updated with new file');
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        console.error('Error updating assistant information:', error.response?.data);
+        setError(`Failed to update assistant information: ${error.response?.data?.error?.message || 'Unknown error'}`);
+      } else {
+        console.error('Error updating assistant information:', error);
+        setError('Failed to update assistant information');
+      }
+    }
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !companyId) return;
@@ -605,7 +647,7 @@ const Main: React.FC = () => {
       setFiles(prevFiles => [...prevFiles, newFile]);
 
       // Update the assistant with the new vector store
-      await updateAssistantInfo();
+      await updateAssistantInfoWithVectorStore(vectorStoreId);
       
       toast.success('File uploaded successfully');
 
@@ -936,6 +978,67 @@ const Main: React.FC = () => {
     }
   };
 
+  const fetchAssistantFilesFromOpenAI = async (assistantId: string, apiKey: string) => {
+    try {
+      // Fetch assistant config to get vector store IDs
+      const assistantRes = await axios.get(`https://api.openai.com/v1/assistants/${assistantId}`, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'OpenAI-Beta': 'assistants=v2'
+        }
+      });
+      const toolResources = assistantRes.data.tool_resources;
+      const vectorStoreIds = toolResources?.file_search?.vector_store_ids || [];
+      let openAIFiles: Array<{id: string, name: string, url?: string, vectorStoreId?: string, openAIFileId?: string}> = [];
+      for (const vectorStoreId of vectorStoreIds) {
+        // Get files in the vector store
+        const vsFilesRes = await axios.get(`https://api.openai.com/v1/vector_stores/${vectorStoreId}/files`, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'OpenAI-Beta': 'assistants=v2'
+          }
+        });
+        const fileIds = vsFilesRes.data.data.map((f: any) => f.id);
+        // For each file, get its details
+        for (const fileId of fileIds) {
+          const fileRes = await axios.get(`https://api.openai.com/v1/files/${fileId}`, {
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'OpenAI-Beta': 'assistants=v2'
+            }
+          });
+          openAIFiles.push({
+            id: fileId,
+            name: fileRes.data.filename,
+            openAIFileId: fileId,
+            vectorStoreId
+          });
+        }
+      }
+      // Merge with Firestore files (by id or name)
+      setFiles(prevFiles => {
+        const merged = [...prevFiles];
+        for (const openAIFile of openAIFiles) {
+          if (!merged.some(f => f.openAIFileId === openAIFile.openAIFileId || f.name === openAIFile.name)) {
+            merged.push(openAIFile);
+          }
+        }
+        return merged;
+      });
+    } catch (error) {
+      console.error('Error fetching assistant files from OpenAI:', error);
+      toast.error('Failed to fetch assistant files from OpenAI');
+    }
+  };
+
+  // In useEffect after fetching assistant info, also fetch assistant files from OpenAI
+  useEffect(() => {
+    if (assistantId && apiKey) {
+      fetchAssistantInfo(assistantId, apiKey);
+      fetchAssistantFilesFromOpenAI(assistantId, apiKey);
+    }
+  }, [assistantId, apiKey]);
+
   return (
     <div className="flex justify-center h-screen bg-gray-100 dark:bg-gray-900">
       <div className={`w-full ${isWideScreen ? 'max-w-6xl flex' : 'max-w-lg'}`}>
@@ -1035,20 +1138,60 @@ const Main: React.FC = () => {
                     />
                     {uploading && <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Uploading...</p>}
                   </div>
-                  <div className="mb-4">
-                    <ul className="list-disc list-inside">
-                      {files.map((file) => (
-                        <li key={file.id} className="text-sm text-blue-500 flex items-center justify-between">
-                          <a href={file.url} target="_blank" rel="noopener noreferrer">{file.name}</a>
-                          <button 
+                  <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {files.map((file) => (
+                      <div
+                        key={file.id}
+                        className="flex items-center p-4 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow border border-gray-200 dark:border-gray-700"
+                      >
+                        <div className="flex-shrink-0 mr-4">
+                          {/* File icon */}
+                          <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M7 7V3a1 1 0 011-1h6a1 1 0 011 1v4m-8 0h8m-8 0v12a1 1 0 001 1h6a1 1 0 001-1V7m-8 0h8" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{file.name}</div>
+                          <div className="mt-1 flex items-center gap-2">
+                            <span className="inline-block px-2 py-0.5 text-xs rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                              {file.url ? 'Firestore' : 'OpenAI'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="ml-4 flex items-center gap-2">
+                          {file.url ? (
+                            <a
+                              href={file.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center px-3 py-1.5 bg-blue-500 text-white text-xs font-semibold rounded hover:bg-blue-600 transition-colors"
+                              title="View or Download"
+                            >
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                              </svg>
+                              View
+                            </a>
+                          ) : (
+                            <span className="inline-flex items-center px-3 py-1.5 bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs font-semibold rounded cursor-not-allowed" title="No download available">
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                              </svg>
+                              No Link
+                            </span>
+                          )}
+                          <button
                             onClick={() => deleteFile(file.id)}
-                            className="text-red-500 hover:text-red-700"
+                            className="inline-flex items-center px-2 py-1 bg-red-500 text-white text-xs font-semibold rounded hover:bg-red-600 transition-colors ml-2"
+                            title="Delete file"
                           >
-                            Delete
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
                           </button>
-                        </li>
-                      ))}
-                    </ul>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                   
                   <div className="mt-2 mb-4">
@@ -1334,20 +1477,60 @@ const Main: React.FC = () => {
                       />
                       {uploading && <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Uploading...</p>}
                     </div>
-                    <div className="mb-4">
-                      <ul className="list-disc list-inside">
-                        {files.map((file) => (
-                          <li key={file.id} className="text-sm text-blue-500 flex items-center justify-between">
-                            <a href={file.url} target="_blank" rel="noopener noreferrer">{file.name}</a>
-                            <button 
+                    <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {files.map((file) => (
+                        <div
+                          key={file.id}
+                          className="flex items-center p-4 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow border border-gray-200 dark:border-gray-700"
+                        >
+                          <div className="flex-shrink-0 mr-4">
+                            {/* File icon */}
+                            <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 7V3a1 1 0 011-1h6a1 1 0 011 1v4m-8 0h8m-8 0v12a1 1 0 001 1h6a1 1 0 001-1V7m-8 0h8" />
+                            </svg>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{file.name}</div>
+                            <div className="mt-1 flex items-center gap-2">
+                              <span className="inline-block px-2 py-0.5 text-xs rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                {file.url ? 'Firestore' : 'OpenAI'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="ml-4 flex items-center gap-2">
+                            {file.url ? (
+                              <a
+                                href={file.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center px-3 py-1.5 bg-blue-500 text-white text-xs font-semibold rounded hover:bg-blue-600 transition-colors"
+                                title="View or Download"
+                              >
+                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                                </svg>
+                                View
+                              </a>
+                            ) : (
+                              <span className="inline-flex items-center px-3 py-1.5 bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs font-semibold rounded cursor-not-allowed" title="No download available">
+                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                </svg>
+                                No Link
+                              </span>
+                            )}
+                            <button
                               onClick={() => deleteFile(file.id)}
-                              className="text-red-500 hover:text-red-700"
+                              className="inline-flex items-center px-2 py-1 bg-red-500 text-white text-xs font-semibold rounded hover:bg-red-600 transition-colors ml-2"
+                              title="Delete file"
                             >
-                              Delete
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
                             </button>
-                          </li>
-                        ))}
-                      </ul>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                     
                     <div className="mt-8 mb-4">
