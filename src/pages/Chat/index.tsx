@@ -876,10 +876,20 @@ function Main() {
   
     return () => clearInterval(intervalId);
 }, []);
-
+  // Add this useEffect to update filteredContacts when contacts change
+  useEffect(() => {
+ 
+    setFilteredContacts(contacts);
+  }, [contacts]);
   useEffect(() => {
     let filteredResults = contacts;
-  
+    // 1. Role 2 filter: Only show assigned contacts
+   // 1. Role 2 filter: Only show assigned contacts
+   if (userRole === '2' && currentUserName) {
+    filteredResults = filteredResults.filter(contact =>
+      contact.tags?.map(t => t.toLowerCase()).includes(currentUserName.toLowerCase())
+    );
+  }
     // Only keep filtering logic
     if (searchQuery) {
       filteredResults = filteredResults.filter((contact) => {
@@ -916,7 +926,7 @@ function Main() {
     }
 
     setFilteredContacts(filteredResults);
-  }, [contacts, searchQuery, activeTags, currentUserName, employeeList, phoneNames]);
+  }, [contacts, searchQuery, activeTags, currentUserName, employeeList, phoneNames,userRole]);
 
   // Initial chat selection from URL
 
@@ -1274,41 +1284,7 @@ const ReactionPicker = ({ onSelect, onClose }: { onSelect: (emoji: string) => vo
     }
   }, [userData]);
 
-  useEffect(() => {
-    const fetchCompanyData = async () => {
-      const user = auth.currentUser;
-      if (user) {
-        const docUserRef = doc(firestore, 'user', user.email!);
-        const docUserSnapshot = await getDoc(docUserRef);
-        if (docUserSnapshot.exists()) {
-          const userData = docUserSnapshot.data();
-          const companyId = userData.companyId;
-          setCurrentCompanyId(companyId);
 
-          const companyRef = doc(firestore, 'companies', companyId);
-          const companySnapshot = await getDoc(companyRef);
-          if (companySnapshot.exists()) {
-            const companyData = companySnapshot.data();
-            if (companyData) {
-              setIsAssistantAvailable(!!companyData.assistantId);
-            }
-            if(companyData.plan === 'blaster'){
-              setIsAssistantAvailable(false);
-            }
-            const phoneCount = companyData.phoneCount || 0;
-            const newPhoneNames: Record<number, string> = {};
-            for (let i = 0; i < phoneCount; i++) {
-              newPhoneNames[i] = companyData[`phone${i + 1}`] || `Phone ${i + 1}`;
-            }
-            setPhoneNames(newPhoneNames);
-            setPhoneCount(phoneCount);
-          }
-        }
-      }
-    };
-  
-    fetchCompanyData();
-  }, []);
 
   useEffect(() => {
     if (messageSearchQuery) {
@@ -1449,17 +1425,17 @@ const ReactionPicker = ({ onSelect, onClose }: { onSelect: (emoji: string) => vo
   // }, []);
 
   const filterContactsByUserRole = useCallback((contacts: Contact[], userRole: string, userName: string) => {
-    
+console.log('test');
     switch (userRole) {
       case '1': // Admin
         return contacts; // Admin sees all contacts
-      case '2': // Sales
-      case '3': // Observer
-      case '4': // Manager
-        // Sales, Observer, and Manager see only contacts assigned to them
-        return contacts.filter(contact => 
-          contact.tags?.some(tag => tag.toLowerCase() === userName.toLowerCase())
-        );
+        case '2': // Sales
+        case '3': // Observer
+        case '4': // Manager
+          // Sales, Observer, and Manager see only contacts assigned to them
+          return contacts.filter(contact =>
+            contact.tags?.some(tag => tag.toLowerCase() === userName.toLowerCase())
+          );
       case '5': // Other role
         return contacts;
       default:
@@ -1500,117 +1476,178 @@ const handlePhoneChange = async (newPhoneIndex: number) => {
     toast.error('Failed to update phone');
   }
 };
-  const filterAndSetContacts = useCallback((contactsToFilter: Contact[]) => {
-    // Check for viewEmployee first
-    if (userData?.viewEmployee) {
-      let filteredByEmployee: Contact[] = [];
+const filterAndSetContacts = useCallback((contactsToFilter: Contact[]) => {
+  // Check for viewEmployee first
+
+  if (userData?.viewEmployee) {
+    let filteredByEmployee: Contact[] = [];
+    
+    if (Array.isArray(userData.viewEmployee)) {
+      // If it's an array of employee IDs
+      const viewEmployeeNames = employeeList
+        .filter(emp => userData.viewEmployee.includes(emp.id))
+        .map(emp => emp.name.toLowerCase());
       
-      if (Array.isArray(userData.viewEmployee)) {
-        // If it's an array of employee IDs
-        const viewEmployeeNames = employeeList
-          .filter(emp => userData.viewEmployee.includes(emp.id))
-          .map(emp => emp.name.toLowerCase());
-        
-        filteredByEmployee = contactsToFilter.filter(contact => 
-          viewEmployeeNames.some(empName => 
-            (Array.isArray(contact.assignedTo) && contact.assignedTo.some(assignedTo => assignedTo.toLowerCase() === empName)) ||
-            contact.tags?.some(tag => tag.toLowerCase() === empName)
-          )
-        );
-      } else if (typeof userData.viewEmployee === 'object' && userData.viewEmployee.name) {
-        // If it's an object with a name property
-        const empName = userData.viewEmployee.name.toLowerCase();
+      filteredByEmployee = contactsToFilter.filter(contact => 
+        viewEmployeeNames.some(empName => 
+          (Array.isArray(contact.assignedTo) && contact.assignedTo.some(assignedTo => assignedTo.toLowerCase() === empName)) ||
+          contact.tags?.some(tag => tag.toLowerCase() === empName)
+        )
+      );
+    } else if (typeof userData.viewEmployee === 'object' && userData.viewEmployee.name) {
+      // If it's an object with a name property
+      const empName = userData.viewEmployee.name.toLowerCase();
+      filteredByEmployee = contactsToFilter.filter(contact => 
+        (Array.isArray(contact.assignedTo) && contact.assignedTo.some(assignedTo => assignedTo.toLowerCase() === empName)) ||
+        contact.tags?.some(tag => tag.toLowerCase() === empName)
+      );
+    } else if (typeof userData.viewEmployee === 'string') {
+      // If it's a single employee ID string
+      const employee = employeeList.find(emp => emp.id === userData.viewEmployee);
+      if (employee) {
+        const empName = employee.name.toLowerCase();
         filteredByEmployee = contactsToFilter.filter(contact => 
           (Array.isArray(contact.assignedTo) && contact.assignedTo.some(assignedTo => assignedTo.toLowerCase() === empName)) ||
           contact.tags?.some(tag => tag.toLowerCase() === empName)
         );
-      } else if (typeof userData.viewEmployee === 'string') {
-        // If it's a single employee ID string
-        const employee = employeeList.find(emp => emp.id === userData.viewEmployee);
-        if (employee) {
-          const empName = employee.name.toLowerCase();
-          filteredByEmployee = contactsToFilter.filter(contact => 
-            (Array.isArray(contact.assignedTo) && contact.assignedTo.some(assignedTo => assignedTo.toLowerCase() === empName)) ||
-            contact.tags?.some(tag => tag.toLowerCase() === empName)
-          );
-        }
       }
-      
-      // Filter out group chats
-      filteredByEmployee = filteredByEmployee.filter(contact => 
-        contact.chat_id && !contact.chat_id.includes('@g.us')
-      );
-      
-      setFilteredContacts(filteredByEmployee);
-      return;
     }
     
-    // Apply role-based filtering first
-    let filtered = filterContactsByUserRole(contactsToFilter, userRole, userData?.name || '');
-    
     // Filter out group chats
-    filtered = filtered.filter(contact => 
+    filteredByEmployee = filteredByEmployee.filter(contact => 
       contact.chat_id && !contact.chat_id.includes('@g.us')
     );
     
-    // Apply employee-based filtering if an employee is selected
-    if (selectedEmployee) {
-      filtered = filtered.filter(contact => 
-        Array.isArray(contact.assignedTo) && contact.assignedTo.some(assignedTo => assignedTo === selectedEmployee)
+    setFilteredContacts(filteredByEmployee);
+    return;
+  }
+  
+  // Apply role-based filtering first
+  let filtered = filterContactsByUserRole(contactsToFilter, userRole, userData?.name || '');
+
+  // Filter out group chats
+  filtered = filtered.filter(contact => 
+    contact.chat_id && !contact.chat_id.includes('@g.us')
+  );
+  
+  // Apply employee-based filtering if an employee is selected
+  if (selectedEmployee) {
+    filtered = filtered.filter(contact => 
+      Array.isArray(contact.assignedTo) && contact.assignedTo.some(assignedTo => assignedTo === selectedEmployee)
+    );
+  }
+  
+  // Apply tag-based filtering only if activeTags is not empty and doesn't include 'all'
+  if (activeTags.length > 0 && !activeTags.includes('all')) {
+    filtered = filtered.filter(contact => 
+      contact.tags?.some(tag => activeTags.includes(tag))
+    );
+  }
+  if (userData?.phone !== undefined && userData.phone !== -1) {
+    const userPhoneIndex = parseInt(userData.phone, 10);
+    filtered = filtered.filter(contact => 
+      contact.phoneIndexes 
+        ? contact.phoneIndexes.includes(userPhoneIndex)
+        : contact.phoneIndex === userPhoneIndex
+    );
+  }
+  
+  setFilteredContacts(filtered);
+}, [userRole, userData, activeTags, filterContactsByUserRole, selectedEmployee, employeeList]);
+
+  // Update this useEffect
+  useEffect(() => {
+    filterAndSetContacts(contacts);
+  }, [contacts, filterAndSetContacts]);
+
+// ... existing code ...
+
+
+// Add a function to load more contacts
+const loadMoreContacts = async () => {
+  if (!userData?.companyId || contactsState.isLoading || !contactsState.hasMore) {
+    return;
+  }
+
+  setContactsState(prev => ({ ...prev, isLoading: true }));
+
+  try {
+    const contactsRef = collection(firestore, `companies/${userData.companyId}/contacts`);
+    
+    let q = query(
+      contactsRef,
+      orderBy("last_message.timestamp", "desc"),
+      startAfter(contactsState.lastVisible),
+      limit(CONTACTS_PER_PAGE)
+    );
+
+    // Apply the same filters as initial load
+    if (activeTags.length > 0 && !activeTags.includes('all') && activeTags.length <= 10) {
+      q = query(
+        contactsRef,
+        where("tags", "array-contains-any", activeTags),
+        orderBy("last_message.timestamp", "desc"),
+        startAfter(contactsState.lastVisible),
+        limit(CONTACTS_PER_PAGE)
       );
     }
+
+    if (selectedEmployee) {
+      q = query(
+        contactsRef,
+        where("assignedTo", "array-contains", selectedEmployee),
+        orderBy("last_message.timestamp", "desc"),
+        startAfter(contactsState.lastVisible),
+        limit(CONTACTS_PER_PAGE)
+      );
+    }
+
+    const snapshot = await getDocs(q);
+    const newContacts = snapshot.docs.map(doc => {
+      const contactData = doc.data();
+      
+      if (contactData.tags) {
+        contactData.tags = contactData.tags.filter((tag: any) => 
+          tag && tag.trim() !== '' && tag !== null && tag !== undefined
+        );
+      }
+      
+      return { ...contactData, id: doc.id } as Contact;
+    });
+
+    // Apply client-side filtering
+    let filteredNewContacts = newContacts;
     
-    // Apply tag-based filtering only if activeTags is not empty and doesn't include 'all'
-    if (activeTags.length > 0 && !activeTags.includes('all')) {
-      filtered = filtered.filter(contact => 
+    if (activeTags.length > 0 && !activeTags.includes('all') && activeTags.length > 10) {
+      filteredNewContacts = filteredNewContacts.filter(contact => 
         contact.tags?.some(tag => activeTags.includes(tag))
       );
     }
-  
-    setFilteredContacts(filtered);
-  }, [userRole, userData, activeTags, filterContactsByUserRole, selectedEmployee, employeeList]);
 
-    // Update this useEffect
-    useEffect(() => {
-      filterAndSetContacts(contacts);
-    }, [contacts, filterAndSetContacts]);
+    if (userRole && userData) {
+      filteredNewContacts = filterContactsByUserRole(filteredNewContacts, userRole, userData.name);
+    }
 
-  useEffect(() => {
-    const fetchContacts = async () => {
-      if (!userData?.companyId) {
-        
-        return;
-      }
-  
-      
-      const contactsRef = collection(firestore, `companies/${userData.companyId}/contacts`);
-      const q = query(contactsRef, orderBy("last_message.timestamp", "desc"));
-  
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const updatedContacts = snapshot.docs.map(doc => {
-          const contactData = doc.data();
-          
-          // Filter out empty tags
-          if (contactData.tags) {
-            contactData.tags = contactData.tags.filter((tag: any) => 
-              tag && tag.trim() !== '' && tag !== null && tag !== undefined
-            );
-          }
-          
-          return { ...contactData, id: doc.id } as Contact;
-        });
-        
-        setContacts(updatedContacts);
-        filterAndSetContacts(updatedContacts);
-      }, (error) => {
-        console.error('Error fetching contacts:', error);
-      });
-  
-      return () => unsubscribe();
-    };
-  
-    fetchContacts();
-  }, [userData, filterAndSetContacts]);
+    // Merge with existing contacts
+    const allContacts = [...contacts, ...filteredNewContacts];
+    setContacts(allContacts);
+    setFilteredContacts(allContacts);
+    
+    setContactsState(prev => ({
+      ...prev,
+      items: allContacts,
+      hasMore: snapshot.docs.length === CONTACTS_PER_PAGE,
+      lastVisible: snapshot.docs[snapshot.docs.length - 1],
+      isLoading: false
+    }));
+  } catch (error) {
+    console.error('Error loading more contacts:', error);
+    setContactsState(prev => ({ ...prev, isLoading: false }));
+  }
+};
+
+// Update the scroll handler to use the new loadMoreContacts function
+
 
   // useEffect(() => {
   //   if (initialContacts.length > 0) {
@@ -1632,7 +1669,7 @@ useEffect(() => {
       contactListRef.current.scrollTop + contactListRef.current.clientHeight >=
         contactListRef.current.scrollHeight
     ) {
-      // loadMoreContacts();
+       loadMoreContacts();
     }
     
     // Store the current scroll position when user scrolls
@@ -1726,7 +1763,7 @@ const sendWhatsAppAlert = async (employeeName: string, chatId: string) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        message: `You've been mentioned in a chat. Click here to view: https://web.jutasoftware.co/chat?chatId=${chatId}`,
+        message: `You've been mentioned in a chat. Click here to view: https://web.jutateknologi.com/chat?chatId=${chatId}`,
       }),
     });
 
@@ -2621,7 +2658,7 @@ const updateFirebaseUnreadCount = async (contact: Contact) => {
       }
 
       // Pagination settings
-    const batchSize = 4000;
+    const batchSize = 500;
     let lastVisible: QueryDocumentSnapshot<DocumentData> | null = null;
     const phoneSet = new Set<string>();
     let allContacts: Contact[] = [];
@@ -2727,10 +2764,6 @@ const updateFirebaseUnreadCount = async (contact: Contact) => {
 
     // Set all contacts to state instead of just the first 200
     setContacts(allContacts);
-
-    // Store all contacts in localStorage
-    localStorage.setItem('contacts', LZString.compress(JSON.stringify(allContacts)));
-      sessionStorage.setItem('contactsFetched', 'true');
       
     // If you need to limit the displayed contacts, implement pagination in the UI component
     // For example, you could add a state variable for the current page:
@@ -2743,8 +2776,58 @@ const updateFirebaseUnreadCount = async (contact: Contact) => {
     }
   };
 
+// ... existing code ...
 
+useEffect(() => {
+  let isMounted = true; // To avoid setting state on unmounted component
 
+  const fetchAll = async () => {
+    setLoading(true);
+    console.log('fetching all');
+    
+    // 1. Fetch company data
+    const fetchCompanyData = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        const docUserRef = doc(firestore, 'user', user.email!);
+        const docUserSnapshot = await getDoc(docUserRef);
+        if (docUserSnapshot.exists()) {
+          const userData = docUserSnapshot.data();
+          const companyId = userData.companyId;
+          setCurrentCompanyId(companyId);
+
+          const companyRef = doc(firestore, 'companies', companyId);
+          const companySnapshot = await getDoc(companyRef);
+          if (companySnapshot.exists()) {
+            const companyData = companySnapshot.data();
+            if (companyData) {
+              setIsAssistantAvailable(!!companyData.assistantId);
+            }
+            if(companyData.plan === 'blaster'){
+              setIsAssistantAvailable(false);
+            }
+            const phoneCount = companyData.phoneCount || 0;
+            const newPhoneNames: Record<number, string> = {};
+            for (let i = 0; i < phoneCount; i++) {
+              newPhoneNames[i] = companyData[`phone${i + 1}`] || `Phone ${i + 1}`;
+            }
+            setPhoneNames(newPhoneNames);
+            setPhoneCount(phoneCount);
+          }
+        }
+      }
+    };
+
+    await fetchCompanyData();
+    setLoading(false);
+  };
+
+  fetchAll();
+
+  return () => {
+    isMounted = false;
+  };
+}, []); // Empty dependency array - only run once on mount
 useEffect(() => {
   const fetchUserRole = async () => {
     const user = auth.currentUser;
@@ -3013,9 +3096,17 @@ useEffect(() => {
                   console.warn('Unexpected timestamp format for private note:', message.timestamp);
                   formattedMessage.createdAt = message.timestamp; // Keep the original value
               }
-          }else {
-                // For regular messages, multiply timestamp by 1000
-                formattedMessage.createdAt = new Date(message.timestamp * 1000).toISOString();
+          } else {
+                // For regular messages, handle both seconds and milliseconds
+                let timestampInMs = message.timestamp;
+                
+                // If timestamp is less than 1e12 (13 digits), it's likely in seconds
+                // If timestamp is 1e12 or greater (13+ digits), it's likely in milliseconds
+                if (typeof message.timestamp === 'number' && message.timestamp < 1e12) {
+                    timestampInMs = message.timestamp * 1000;
+                }
+                
+                formattedMessage.createdAt = new Date(timestampInMs).toISOString();
             }
         
                 // Include message-specific content
@@ -3151,14 +3242,7 @@ useEffect(() => {
         storeMessagesInLocalStorage(selectedChatId, formattedMessages);
         
         setMessages(formattedMessages);
-        fetchContactsBackground(
-          data2.whapiToken,
-          data2.ghl_location,
-          data2.ghl_accessToken,
-          user_name,
-          dataUser.role,
-          dataUser.email
-        );
+      
     } catch (error) {
         console.error('Failed to fetch messages:', error);
     } finally {
@@ -3884,10 +3968,6 @@ async function fetchMessagesBackground(selectedChatId: string, whapiToken: strin
     }
   }, [contacts, userRole]);
   
-  // Add this useEffect to update filteredContacts when contacts change
-  useEffect(() => {
-    setFilteredContacts(contacts);
-  }, [contacts]);
 
   const handleBinaTag = async (requestType: string, phone: string, first_name: string, phoneIndex: number) => {
 
@@ -4564,7 +4644,7 @@ const sendAssignmentNotification = async (assignedEmployeeName: string, contact:
 
     // Send notification to assigned employee
     if (assignedEmployee.phoneNumber) {
-      let employeeMessage = `Hello ${assignedEmployee.name}, a new contact has been assigned to you:\n\nName: ${contact.contactName || contact.firstName || 'N/A'}\nPhone: ${contact.phone}\n\nKindly login to https://web.jutasoftware.co/login \n\nThank you.\n\nJuta Teknologi`;
+      let employeeMessage = `Hello ${assignedEmployee.name}, a new contact has been assigned to you:\n\nName: ${contact.contactName || contact.firstName || 'N/A'}\nPhone: ${contact.phone}\n\nKindly login to https://web.jutateknologi.com/login \n\nThank you.\n\nJuta Teknologi`;
       if(companyId == '042'){
         employeeMessage = `Hi ${assignedEmployee.employeeId || assignedEmployee.phoneNumber} ${assignedEmployee.name}.\n\nAnda telah diberi satu prospek baharu\n\nSila masuk ke https://zahintravel.chat/login untuk melihat perbualan di antara Zahin Travel dan prospek.\n\nTerima kasih.\n\nIkhlas,\nZahin Travel Sdn. Bhd. (1276808-W)\nNo. Lesen Pelancongan: KPK/LN 9159\nNo. MATTA: MA6018\n\n#zahintravel - Nikmati setiap detik..\n#diyakini\n#responsif\n#budibahasa`;
       }
@@ -4895,10 +4975,6 @@ const getSortedContacts = useCallback((contactsToSort: Contact[]) => {
   });
 }, []);
 
-useEffect(() => {
-  const sortedAndFilteredContacts = getSortedContacts(filteredContactsSearch);
-  setFilteredContacts(sortedAndFilteredContacts);
-}, [filteredContactsSearch, getSortedContacts]);
 
 const sortContacts = (contacts: Contact[]) => {
   let fil = contacts;
@@ -5137,136 +5213,7 @@ const sortContacts = (contacts: Contact[]) => {
   // Update the total pages calculation
   const totalPages = Math.ceil(filteredContactsSearch.length / contactsPerPage);
   
-  useEffect(() => {
 
-  
-    const tag = activeTags[0]?.toLowerCase() || 'all';
-    let filteredContacts = filterContactsByUserRole(contacts, userRole, userData?.name || '');
-    setMessageMode('reply');
-  
-    
-  
-    // First, filter contacts based on the employee's assigned phone
-    if (userData?.phone !== undefined && userData.phone !== -1) {
-      const userPhoneIndex = parseInt(userData.phone, 10);
-      setMessageMode(`phone${userPhoneIndex + 1}`);
-      filteredContacts = filteredContacts.filter(contact => 
-        contact.phoneIndexes 
-          ? contact.phoneIndexes.includes(userPhoneIndex)
-          : contact.phoneIndex === userPhoneIndex
-      );
-      
-    }
-  
-    // Filter by selected employee
-    if (selectedEmployee) {
-      filteredContacts = filteredContacts.filter(contact => 
-        contact.tags?.some(tag => tag.toLowerCase() === selectedEmployee.toLowerCase())
-      );
-    }
-  
-    // Filtering logic
-    if (Object.values(phoneNames).map(name => name.toLowerCase()).includes(tag)) {
-      const phoneIndex = Object.entries(phoneNames).findIndex(([_, name]) => 
-        name.toLowerCase() === tag
-      );
-      if (phoneIndex !== -1) {
-        setMessageMode(`phone${phoneIndex + 1}`);
-        filteredContacts = filteredContacts.filter(contact => 
-          contact.phoneIndex === phoneIndex
-        );
-        
-      }
-    } else {
-      // Existing filtering logic for other tags
-      switch (tag) {
-        case 'all':
-          if(currentCompanyId?.includes('042')){
-            filteredContacts = filteredContacts.filter(contact => 
-              !contact.chat_id?.endsWith('@g.us') && 
-              !contact.tags?.includes('snooze')
-            );
-          } else {
-            filteredContacts = filteredContacts.filter(contact => 
-              !contact.tags?.includes('snooze')
-            );
-          }
-          break;
-        case 'unread':
-          filteredContacts = filteredContacts.filter(contact => contact.unreadCount && contact.unreadCount > 0 && 
-          !contact.tags?.includes('snooze'));
-          break;
-        case 'mine':
-          filteredContacts = filteredContacts.filter(contact => 
-            contact.tags?.some(t => t.toLowerCase() === currentUserName.toLowerCase())&& 
-            !contact.tags?.includes('snooze')
-          );
-          break;
-        case 'unassigned':
-          filteredContacts = filteredContacts.filter(contact => 
-            !contact.tags?.some(t => employeeList.some(e => e.name.toLowerCase() === t.toLowerCase())) && 
-            !contact.tags?.includes('snooze')
-          );
-          break;
-        case 'snooze':
-          filteredContacts = filteredContacts.filter(contact => 
-            contact.tags?.includes('snooze')
-          );
-          break;
-        case 'group':
-          filteredContacts = filteredContacts.filter(
-            (contact) =>
-              contact.chat_id?.endsWith("@g.us") && !contact.tags?.includes("snooze")
-          );
-          break;
-        case "stop bot":
-          filteredContacts = filteredContacts.filter(contact => 
-            contact.tags?.includes('stop bot') && 
-            !contact.tags?.includes('snooze')
-          );
-          break;
-        case 'resolved':
-          filteredContacts = filteredContacts.filter(contact => 
-            contact.tags?.includes('resolved') && 
-            !contact.tags?.includes('snooze')
-          );
-          break;
-        case 'active bot':
-          filteredContacts = filteredContacts.filter(contact => 
-            !contact.tags?.includes('stop bot') && 
-            !contact.tags?.includes('snooze')
-          );
-          break;
-        default:
-          filteredContacts = filteredContacts.filter(contact => 
-            contact.tags?.some(t => t.toLowerCase() === tag.toLowerCase()) && 
-            !contact.tags?.includes('snooze')
-          );
-      }
-      
-    }
-  
-    filteredContacts = sortContacts(filteredContacts);
-    
-  
-    if (searchQuery) {
-      filteredContacts = filteredContacts.filter((contact) => {
-        const name = (contact.contactName || contact.firstName || '').toLowerCase();
-        const phone = (contact.phone || '').toLowerCase();
-        const tags = (contact.tags || []).join(' ').toLowerCase();
-        
-        return name.includes(searchQuery.toLowerCase()) || 
-              phone.includes(searchQuery.toLowerCase()) || 
-              tags.includes(searchQuery.toLowerCase());
-      });
-      
-    }
-  
-    
-    setFilteredContacts(filteredContacts);
-  
-  }, [contacts, searchQuery, activeTags, showAllContacts, showUnreadContacts, showMineContacts, showUnassignedContacts, showSnoozedContacts, showGroupContacts, currentUserName, employeeList, userData, userRole, selectedEmployee]);
-  
   const handleSnoozeContact = async (contact: Contact) => {
     try {
       const user = auth.currentUser;
@@ -5557,18 +5504,20 @@ const sortContacts = (contacts: Contact[]) => {
     );
   };
   const formatTimestamp = (timestamp: number | string | undefined): string => {
-
     if (!timestamp) {
       return 'Invalid date';
     }
-    
+  
     let date: Date;
   
     if (typeof timestamp === 'number') {
       if (isNaN(timestamp)) {
         return 'Invalid date';
       }
-      date = new Date(timestamp * 1000);
+      // If timestamp is less than 1e12 (13 digits), it's likely in seconds
+      // If timestamp is 1e12 or greater (13+ digits), it's likely in milliseconds
+      const timestampInMs = timestamp < 1e12 ? timestamp * 1000 : timestamp;
+      date = new Date(timestampInMs);
     } else if (typeof timestamp === 'string') {
       date = new Date(timestamp);
       if (isNaN(date.getTime())) {
@@ -8498,7 +8447,16 @@ const toggleBot = async () => {
                             }}
                           />
                             {message.image?.caption && (
-                              <p className="mt-2 text-sm text-black dark:text-gray-200">{message.image.caption}</p>
+                              <div
+                                className="mt-2 text-sm font-medium text-gray-200 dark:text-gray-200 break-words"
+                                style={{
+                                  maxWidth: '100%',
+                                  wordBreak: 'break-word',
+                                }}
+                                data-testid="image-caption"
+                              >
+                                {message.image.caption}
+                              </div>
                             )}
                         </div>
                       )}
@@ -9566,85 +9524,256 @@ const toggleBot = async () => {
                     >
                       Edit
                     </button>
+                    <Menu as="div" className="relative inline-block text-left">
+                      <Menu.Button className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-200">
+                        Sync
+                      </Menu.Button>
+                      <Menu.Items className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 shadow-lg rounded-md p-2 z-10">
+                        <Menu.Item>
+                          {({ active }) => (
+                            <button
+                              className={`w-full text-left px-3 py-1 rounded-md ${active ? 'bg-blue-100 dark:bg-blue-700' : ''}`}
+                              onClick={async () => {
+                                try {
+                                  const user = auth.currentUser;
+                                  const docUserRef = doc(firestore, 'user', user?.email!);
+                                  const docUserSnapshot = await getDoc(docUserRef);
+                                  if (!docUserSnapshot.exists()) {
+                                    toast.error("User document not found");
+                                    return;
+                                  }
+                                  const userData = docUserSnapshot.data();
+                                  const companyId = userData.companyId;
+                                  const docRef = doc(firestore, 'companies', companyId);
+                                  const docSnapshot = await getDoc(docRef);
+                                  if (!docSnapshot.exists()) throw new Error('No company document found');
+                                  const companyData = docSnapshot.data();
+                                  const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+
+                                  if (!selectedContact.phone) {
+                                    toast.error("Contact phone number is required for syncing");
+                                    return;
+                                  }
+
+                                  const phoneNumber = selectedContact.phone.replace(/\D/g, '');
+                                  const response = await fetch(`${baseUrl}/api/sync-a-contact-name/${companyId}`, {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                      companyId: companyId,
+                                      phoneNumber: phoneNumber,
+                                      phoneIndex: selectedContact.phoneIndex ?? 0
+                                    }),
+                                  });
+
+                                  if (response.ok) {
+                                    toast.success("Contact name synced successfully!");
+                                  } else {
+                                    const errorText = await response.text();
+                                    console.error('Sync failed:', errorText);
+                                    toast.error("Failed to sync contact name");
+                                  }
+                                } catch (error) {
+                                  console.error('Error syncing contact:', error);
+                                  toast.error("An error occurred while syncing contact name");
+                                }
+                              }}
+                            >
+                              Sync Name
+                            </button>
+                          )}
+                        </Menu.Item>
+                        <Menu.Item>
+                          {({ active }) => (
+                            <button
+                              className={`w-full text-left px-3 py-1 rounded-md ${active ? 'bg-blue-100 dark:bg-blue-700' : ''}`}
+                              onClick={async () => {
+                                try {
+                                  const user = auth.currentUser;
+                                  const docUserRef = doc(firestore, 'user', user?.email!);
+                                  const docUserSnapshot = await getDoc(docUserRef);
+                                  if (!docUserSnapshot.exists()) {
+                                    toast.error("User document not found");
+                                    return;
+                                  }
+                                  const userData = docUserSnapshot.data();
+                                  const companyId = userData.companyId;
+                                  const docRef = doc(firestore, 'companies', companyId);
+                                  const docSnapshot = await getDoc(docRef);
+                                  if (!docSnapshot.exists()) throw new Error('No company document found');
+                                  const companyData = docSnapshot.data();
+                                  const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
+
+                                  if (!selectedContact.phone) {
+                                    toast.error("Contact phone number is required for sync");
+                                    return;
+                                  }
+
+                                  const phoneNumber = selectedContact.phone.replace(/\D/g, '');
+                                  const response = await fetch(`${baseUrl}/api/sync-a-contact/${companyId}`, {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                      companyId: companyId,
+                                      phoneNumber: phoneNumber,
+                                      phoneIndex: selectedContact.phoneIndex ?? 0
+                                    }),
+                                  });
+
+                                  if (response.ok) {
+                                    toast.success("Contact messages synced successfully!");
+                                  } else {
+                                    const errorText = await response.text();
+                                    console.error('Sync failed:', errorText);
+                                    toast.error("Failed to sync contact messages");
+                                  }
+                                } catch (error) {
+                                  console.error('Error syncing contact:', error);
+                                  toast.error("An error occurred while syncing contact messages");
+                                }
+                              }}
+                            >
+                              Sync Messages
+                            </button>
+                          )}
+                        </Menu.Item>
+                      </Menu.Items>
+                    </Menu>
                     <button
-                      onClick={async () => {
+                     // ... existing code ...
+                     onClick={async () => {
+                      if (window.confirm('Are you sure you want to delete this contact? This action cannot be undone.')) {
                         try {
                           const user = auth.currentUser;
-                          const docUserRef = doc(firestore, 'user', user?.email!);
-                          const docUserSnapshot = await getDoc(docUserRef);
-                          if (!docUserSnapshot.exists()) {
-                            toast.error("User document not found");
+                          if (!user) {
+                            console.error('No authenticated user');
                             return;
                           }
+                          toast.success('Deleting contact...');
+                          setIsTabOpen(false);
+                          setSelectedContact(null);
+                          setSelectedChatId(null);
+                          const docUserRef = doc(firestore, 'user', user.email!);
+                          const docUserSnapshot = await getDoc(docUserRef);
+                          
+                          if (!docUserSnapshot.exists()) {
+                            console.error('No such document for user!');
+                            return;
+                          }
+
                           const userData = docUserSnapshot.data();
                           const companyId = userData.companyId;
+
+                          // Get company data for base URL
                           const docRef = doc(firestore, 'companies', companyId);
                           const docSnapshot = await getDoc(docRef);
                           if (!docSnapshot.exists()) throw new Error('No company document found');
                           const companyData = docSnapshot.data();
                           const baseUrl = companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app';
-                          
-                          if (!selectedContact.phone) {
-                            toast.error("Contact phone number is required for sync");
-                            return;
-                          }
 
-                          const phoneNumber = selectedContact.phone.replace(/\D/g, '');
-                          const response = await fetch(`${baseUrl}/api/sync-a-contact/${companyId}`, {
-                            method: 'POST',
-                            headers: {
-                              'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                              companyId: companyId,
-                              phoneNumber: phoneNumber,
-                              phoneIndex: selectedContact.phoneIndex ?? 0
-                            }),
-                          });
+                          // Format the contact's phone number for comparison with chatIds
+                          const contactChatId = selectedContact.phone?.replace(/\D/g, '') + "@s.whatsapp.net";
 
-                          if (response.ok) {
-                            const responseData = await response.json();
-                            toast.success("Contact synced successfully!");
-                            // Optionally refresh contact data here
-                          } else {
-                            const errorText = await response.text();
-                            console.error('Sync failed:', errorText);
-                            toast.error("Failed to sync contact");
-                          }
-                        } catch (error) {
-                          console.error('Error syncing contact:', error);
-                          toast.error("An error occurred while syncing contact");
-                        }
-                      }}
-                      className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-200"
-                    >
-                      Sync
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (window.confirm('Are you sure you want to delete this contact? This action cannot be undone.')) {
-                          const user = auth.currentUser;
-                          const docUserRef = doc(firestore, 'user', user?.email!);
-                          getDoc(docUserRef).then((docUserSnapshot) => {
-                            if (!docUserSnapshot.exists()) {
-                              
-                              return;
+                          // Check and delete scheduled messages containing this contact
+                          const scheduledMessagesRef = collection(firestore, `companies/${companyId}/scheduledMessages`);
+                          const scheduledSnapshot = await getDocs(scheduledMessagesRef);
+
+                          const deletePromises = scheduledSnapshot.docs.map(async (doc) => {
+                            const messageData = doc.data();
+                            if (messageData.chatIds?.includes(contactChatId)) {
+                              if (messageData.chatIds.length === 1) {
+                                // If this is the only recipient, delete the entire scheduled message
+                                try {
+                                  await axios.delete(`${baseUrl}/api/schedule-message/${companyId}/${doc.id}`);
+                                } catch (error) {
+                                  console.error(`Error deleting scheduled message ${doc.id}:`, error);
+                                }
+                              } else {
+                                // If there are other recipients, remove this contact from the recipients list
+                                const updatedChatIds = messageData.chatIds.filter((id: string) => id !== contactChatId);
+                                const updatedMessages = messageData.messages?.filter((msg: any) => msg.chatId !== contactChatId) || [];
+                                try {
+                                  await axios.put(
+                                    `${baseUrl}/api/schedule-message/${companyId}/${doc.id}`,
+                                    {
+                                      ...messageData,
+                                      chatIds: updatedChatIds,
+                                      messages: updatedMessages
+                                    }
+                                  );
+                                } catch (error) {
+                                  console.error(`Error updating scheduled message ${doc.id}:`, error);
+                                }
+                              }
                             }
-                            const userData = docUserSnapshot.data();
-                            const companyId = userData.companyId;
-                            const contactRef = doc(firestore, `companies/${companyId}/contacts`, selectedContact.id);
-                            deleteDoc(contactRef).then(() => {
-                              toast.success('Contact deleted successfully');
-                              setIsTabOpen(false);
-                              setContacts(contacts.filter(contact => contact.id !== selectedContact.id));
-                              navigate('/chat');
-                            }).catch((error) => {
-                              console.error('Error deleting contact:', error);
-                              toast.error('Failed to delete contact');
-                            });
                           });
+
+                          // Wait for all scheduled message updates/deletions to complete
+                          await Promise.all(deletePromises);
+
+                          // Check for active templates
+                          const templatesRef = collection(firestore, `companies/${companyId}/followUpTemplates`);
+                          const templatesSnapshot = await getDocs(templatesRef);
+
+                          // Get all active templates
+                          const activeTemplates = templatesSnapshot.docs
+                            .filter(doc => doc.data().status === 'active')
+                            .map(doc => ({
+                              id: doc.id,
+                              ...doc.data()
+                            }));
+
+                          // Remove templates for this contact
+                          if (activeTemplates.length > 0) {
+                            const phoneNumber = selectedContact.phone?.replace(/\D/g, '');
+                            for (const template of activeTemplates) {
+                              try {
+                                const response = await fetch(`${baseUrl}/api/tag/followup`, {
+                                  method: 'POST',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                  },
+                                  body: JSON.stringify({
+                                    requestType: 'removeTemplate',
+                                    phone: phoneNumber,
+                                    first_name: selectedContact.contactName || phoneNumber,
+                                    phoneIndex: userData.phone || 0,
+                                    templateId: template.id,
+                                    idSubstring: companyId
+                                  }),
+                                });
+                                if (!response.ok) {
+                                  const errorText = await response.text();
+                                  console.error('Failed to remove template messages:', errorText);
+                                }
+                              } catch (error) {
+                                console.error('Error removing template messages:', error);
+                              }
+                            }
+                          }
+
+                          // Delete the contact from Firestore
+                          const contactRef = doc(firestore, `companies/${companyId}/contacts`, selectedContact.id);
+                          await deleteDoc(contactRef);
+
+                          // Update local state
+                          toast.success('Contact and associated scheduled messages deleted successfully');
+                 
+                          setContacts(contacts.filter(contact => contact.id !== selectedContact.id));
+                          setScheduledMessages(prev => prev.filter(msg => !msg.chatIds.includes(contactChatId)));
+
+
+                        } catch (error) {
+                          console.error('Error deleting contact:', error);
+                          toast.error('Failed to delete contact');
                         }
-                      }}
+                      }
+                    }}
+
                       className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition duration-200"
                     >
                       Delete
@@ -9678,32 +9807,41 @@ const toggleBot = async () => {
               <div className="mb-4 flex justify-between items-center">
                 <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">Active Phone:</p>
                 <select
-                  value={selectedContact.phoneIndex ?? 0}
-                  onChange={async (e) => {
-                    const newPhoneIndex = parseInt(e.target.value);
-                    // Update local state
-                    setSelectedContact({ ...selectedContact, phoneIndex: newPhoneIndex });
-                    const user = auth.currentUser;
-                    const docUserRef = doc(firestore, 'user', user?.email!);
-                    const docUserSnapshot = await getDoc(docUserRef);
-                    if (!docUserSnapshot.exists()) {
-                      
-                      return;
-                    }
-                    const userData = docUserSnapshot.data();
-                    const companyId = userData.companyId;
-                    // Update Firestore
-                    try {
-                      const contactRef = doc(firestore, `companies/${companyId}/contacts`, selectedContact.id);
-                      await updateDoc(contactRef, { phoneIndex: newPhoneIndex });
-                      toast.success('Phone updated successfully');
-                    } catch (error) {
-                      console.error('Error updating phone:', error);
-                      toast.error('Failed to update phone');
-                      // Revert local state on error
-                      setSelectedContact({ ...selectedContact });
-                    }
-                  }}
+  value={selectedContact.phoneIndex ?? 0}
+  onChange={async (e) => {
+    const newPhoneIndex = parseInt(e.target.value);
+    // Update local state
+    setSelectedContact({ ...selectedContact, phoneIndex: newPhoneIndex });
+    const user = auth.currentUser;
+    const docUserRef = doc(firestore, 'user', user?.email!);
+    const docUserSnapshot = await getDoc(docUserRef);
+    if (!docUserSnapshot.exists()) {
+      return;
+    }
+    const userData = docUserSnapshot.data();
+    const companyId = userData.companyId;
+    // Update Firestore
+    try {
+      const contactRef = doc(firestore, `companies/${companyId}/contacts`, selectedContact.id);
+      await updateDoc(contactRef, { phoneIndex: newPhoneIndex });
+      
+      // Update the user's phone preference
+      await updateDoc(docUserRef, { phone: newPhoneIndex });
+      
+      // Update local userData state
+      setUserData(prev => prev ? { ...prev, phone: newPhoneIndex } : prev);
+      
+      // Trigger contact filtering
+      filterAndSetContacts(contacts);
+      
+      toast.success('Phone updated successfully');
+    } catch (error) {
+      console.error('Error updating phone:', error);
+      toast.error('Failed to update phone');
+      // Revert local state on error
+      setSelectedContact({ ...selectedContact });
+    }
+  }}
                   className="px-2 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 ml-4 w-32"
                 >
                   {Object.entries(phoneNames).map(([index, name]) => (
