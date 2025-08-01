@@ -1070,7 +1070,9 @@ const handleVideoUpload = async (caption: string = '') => {
     await ffmpeg.exec(['-i', inputFileName, '-c:a', 'libopus', outputFileName]);
   
     const data = await ffmpeg.readFile(outputFileName);
-    return new Blob([data as Uint8Array], { type: 'audio/ogg; codecs=opus' });
+    // Convert to proper Uint8Array to satisfy TypeScript's BlobPart requirements
+    const uint8Array = data instanceof Uint8Array ? new Uint8Array(data) : new TextEncoder().encode(data as string);
+    return new Blob([uint8Array], { type: 'audio/ogg; codecs=opus' });
   };
   
 const sendVoiceMessage = async () => {
