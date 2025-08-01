@@ -1070,7 +1070,7 @@ const handleVideoUpload = async (caption: string = '') => {
     await ffmpeg.exec(['-i', inputFileName, '-c:a', 'libopus', outputFileName]);
   
     const data = await ffmpeg.readFile(outputFileName);
-    return new Blob([data], { type: 'audio/ogg; codecs=opus' });
+    return new Blob([data as Uint8Array], { type: 'audio/ogg; codecs=opus' });
   };
   
 const sendVoiceMessage = async () => {
