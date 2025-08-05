@@ -1472,7 +1472,7 @@ console.log(companyData);
                 <MessageList 
                   messages={messages} 
                   onSendMessage={sendMessageToAssistant} 
-                  assistantName={assistantInfo?.name || 'Juta Assistant'} 
+                  assistantName={assistantInfo?.name || 'OmniyalAssistant'} 
                   deleteThread={deleteThread} 
                   threadId={threadId}
                 />

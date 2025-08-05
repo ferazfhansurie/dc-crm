@@ -117,7 +117,7 @@ const firebaseConfig = {
                   <img
                     alt="Juta Software Logo"
                     className="w-[80%] -mt-16 -ml-64"
-                    src={logoUrl2}
+                    src={logoUrl}
                   />
                 </div>
               </div>
@@ -166,14 +166,7 @@ const firebaseConfig = {
                     </Button>
                     
                   </div>
-                  <div className="mt-4 text-center intro-x">
-                    <button 
-                      onClick={() => setShowResetModal(true)} 
-                      className="text-primary hover:underline"
-                    >
-                      Forgot Password?
-                    </button>
-                  </div>
+                 
                   {error && (
                     <div className="mt-5 text-center text-red-500">{error}</div>
                   )}

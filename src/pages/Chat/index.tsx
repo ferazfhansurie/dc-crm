@@ -10771,7 +10771,7 @@ console.log(baseUrl);
                     </div>
                   </div>
                 )}
-                {userData?.company === "Juta Software" && (
+                {userData?.company === "OmniyalSoftware" && (
                   <button
                     className="p-2 m-0 !box ml-2"
                     onClick={handleGenerateAIResponse}
