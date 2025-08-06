@@ -1,4 +1,4 @@
-import logoUrl from "@/assets/images/logo.png";
+import logoUrl from "@/assets/images/dc-login-logo.png";
 import logoUrl2 from "@/assets/images/logo3.png";
 import illustrationUrl from "@/assets/images/illustration.svg";
 import { FormInput, FormCheck } from "@/components/Base/Form";
@@ -7,7 +7,7 @@ import clsx from "clsx";
 import { Link, useNavigate } from "react-router-dom";
 import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth"; // Import Firebase authentication methods
 import { initializeApp } from 'firebase/app';
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { co } from "@fullcalendar/core/internal-common";
 const firebaseConfig = {
     apiKey: "AIzaSyCc0oSHlqlX7fLeqqonODsOIC3XA8NI7hc",
@@ -24,6 +24,9 @@ const firebaseConfig = {
   const app = initializeApp(firebaseConfig);
 
   function Main() {
+    useEffect(() => {
+      localStorage.clear();
+    }, []);
     const [email, setEmail] = useState(""); // State for email input
     const [password, setPassword] = useState(""); // State for password input
     const [error, setError] = useState("");
@@ -115,8 +118,8 @@ const firebaseConfig = {
               <div className="flex-col hidden min-h-screen xl:flex">
               <div className="my-auto flex flex-col items-center w-full">
                   <img
-                    alt="Juta Software Logo"
-                    className="w-[80%] -mt-16 -ml-64"
+                    alt="Omniyal Logo"
+                    className="w-[50%] -mt-16 -ml-64"
                     src={logoUrl}
                   />
                 </div>
