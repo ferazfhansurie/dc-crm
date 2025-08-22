@@ -1,5 +1,7 @@
 import ThemeSwitcher from "@/components/ThemeSwitcher";
+
 import logoUrl from "@/assets/images/logo.png";
+import logoUrl2 from "@/assets/images/logo3.png";
 import { FormInput } from "@/components/Base/Form";
 import Button from "@/components/Base/Button";
 import clsx from "clsx";
@@ -45,7 +47,6 @@ function Main() {
 
   
   const [registerResult, setRegisterResult] = useState<string | null>(null);
-  const [selectedPlan, setSelectedPlan] = useState<'blaster' | 'enterprise' | null>(null);
   const [verificationCode, setVerificationCode] = useState("");
   const [isVerificationSent, setIsVerificationSent] = useState(false);
   const [verificationStep, setVerificationStep] = useState(false);
@@ -114,7 +115,7 @@ function Main() {
         return;
       }
       const data2 = docSnapshot.data();
-      const baseUrl = data2.apiUrl || 'https://juta.ngrok.app';
+      const baseUrl = data2.apiUrl || 'https://juta-dev.ngrok.dev';
       const response = await fetch(`${baseUrl}/api/v2/messages/text/001/${formattedPhone}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -159,35 +160,54 @@ function Main() {
     }
   };
 
+
   const handleRegister = async () => {
     try {
       setIsLoading(true);
       // Validate plan selection
-      if (!selectedPlan) {
-        toast.error("Please select a plan to continue");
-        setIsLoading(false);
-        return;
-      }
+      // The plan selection is now automatic for all users
+  
+      // Generate a unique company ID with proper padding
+      const timestamp = Date.now().toString().slice(-6);
+      const randomPart = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      const newCompanyId = `${randomPart}${timestamp.slice(-3)}`;
 
-      // Call the localhost API endpoint to create user
-      const userResponse = await axios.post(`https://juta-dev.ngrok.dev/api/create-user/${encodeURIComponent(email)}/${encodeURIComponent(formatPhoneNumber(phoneNumber))}/${encodeURIComponent(password)}/1`);
-
-      if (userResponse.data) {
-        // Generate a unique company ID with proper padding
-        const timestamp = Date.now().toString().slice(-6);
-        const randomPart = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-        const newCompanyId = `${randomPart}${timestamp.slice(-3)}`;
-
-        // Call the channel create endpoint
-        const channelResponse = await axios.post(`https://juta-dev.ngrok.dev/api/channel/create/${newCompanyId}`);
-
+      // Call the localhost API endpoint to create user with companyId
+      const userResponse = await axios.post(`https://juta-dev.ngrok.dev/api/create-user/${encodeURIComponent(email)}/${encodeURIComponent(formatPhoneNumber(phoneNumber))}/${encodeURIComponent(password)}/1/${newCompanyId}`);
+  
+            if (userResponse.data) {
+        // Call the channel create endpoint with additional data
+        const channelResponse = await axios.post(`https://juta-dev.ngrok.dev/api/channel/create/${newCompanyId}`, {
+          name: name,
+          companyName: companyName,
+          phoneNumber: formatPhoneNumber(phoneNumber),
+          email: email,
+          password: password,
+          plan: 'free', // All users are now free
+          country: selectedCountry
+        });
+  
         if (channelResponse.data) {
+            const response = await fetch('https://juta-dev.ngrok.dev/api/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await response.json();
+  console.log('Login response:', data);
           // Sign in the user after successful registration
-          navigate('/loading');
-          toast.success("Registration successful!");
+          if (response.ok) {
+            localStorage.setItem('userEmail', email);
+            localStorage.setItem('userData', JSON.stringify(data.user));
+            navigate('/loading');
+            toast.success("Registration successful!");
+          } else {
+           
+          }
+        
         }
       }
-
+  
     } catch (error) {
       if (axios.isAxiosError(error)) {
         console.error("Axios error:", error.response?.data || error.message);
@@ -220,136 +240,156 @@ function Main() {
 
   return (
     <>
-      <div
-        className={clsx([
-          "p-3 sm:px-8 relative h-screen overflow-hidden bg-primary xl:bg-white dark:bg-darkmode-800 xl:dark:bg-darkmode-600", // Changed lg:overflow-y-auto to overflow-hidden
-          "before:hidden before:xl:block before:content-[''] before:w-[57%] before:-mt-[28%] before:-mb-[16%] before:-ml-[13%] before:absolute before:inset-y-0 before:left-0 before:transform before:rotate-[-4.5deg] before:bg-primary/20 before:rounded-[100%] before:dark:bg-darkmode-400",
-          "after:hidden after:xl:block after:content-[''] after:w-[57%] after:-mt-[20%] after:-mb-[13%] after:-ml-[13%] after:absolute after:inset-y-0 after:left-0 after:transform after:rotate-[-4.5deg] after:bg-primary after:rounded-[100%] after:dark:bg-darkmode-700",
-        ])}
-      >
-        <ThemeSwitcher />
-        <div className="container relative z-10 sm:px-10">
-          <div className="block grid-cols-2 gap-4 xl:grid">
-            {/* BEGIN: Register Info */}
-            <div className="flex-col hidden min-h-screen xl:flex">
-            <div className="my-auto flex flex-col items-center w-full">
-                  <img
-                    alt="Juta Software Logo"
-                    className="w-[80%] -mt-16 -ml-64"
-                    src={logoUrl}
-                  />
-                </div>
-              </div>
-            {/* END: Register Info */}
-            {/* BEGIN: Register Form */}
-            <div className="flex h-screen py-5 my-10 xl:h-auto xl:py-0 xl:my-0">
-              <div className="w-full px-5 py-8 mx-auto my-auto bg-white rounded-md shadow-md xl:ml-20 dark:bg-darkmode-600 xl:bg-transparent sm:px-8 xl:p-0 xl:shadow-none sm:w-3/4 lg:w-2/4 xl:w-auto">
-                <h2 className="text-2xl font-bold text-center intro-x xl:text-3xl xl:text-left">
-                  Sign Up
-                </h2>
-                <div className="mt-2 text-center intro-x text-slate-400 dark:text-slate-400 xl:hidden">
-                  Start your 7 days free trial now!
-                </div>
-                <div className="mt-8 intro-x">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 py-4">
+        <div className="flex flex-col items-center w-full max-w-2xl text-center px-3 py-4">
+          
+          {/* Main Title and Logo */}
+          <div className="mb-4">
+      
+            <div className="mb-3 flex justify-center">
+              <img
+                alt="Juta Software Logo"
+                className="w-20 h-auto object-contain"
+                src={logoUrl}
+                onError={(e) => {
+                  console.error('Logo failed to load:', logoUrl2);
+                  // Fallback to logo2 if logo fails
+                  e.currentTarget.src = logoUrl2;
+                }}
+              />
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Create your account to start managing your business
+            </p>
+          </div>
+
+          {/* Main Content Card */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 w-full max-w-lg">
+            
+            {/* Sign Up Form */}
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
+                    Full Name
+                  </label>
                   <FormInput
                     type="text"
-                    className="block px-4 py-3 intro-x min-w-full xl:min-w-[350px]"
-                    placeholder="Name"
+                    className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-all duration-200 text-sm"
+                    placeholder="Enter your full name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     onKeyDown={handleKeyDown}
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
+                    Company Name
+                  </label>
                   <FormInput
                     type="text"
-                    className="block px-4 py-3 mt-4 intro-x min-w-full xl:min-w-[350px]"
-                    placeholder="Company Name"
+                    className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-all duration-200 text-sm"
+                    placeholder="Enter company name"
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
                     onKeyDown={handleKeyDown}
                   />
-                  <div className="flex gap-2">
-                  
-                    <FormInput
-                      type="tel"
-                      className="block px-4 py-3 mt-4 intro-x min-w-full xl:min-w-[350px]"
-                      placeholder={`Phone Number (e.g., ${getCountryCallingCode(selectedCountry)}123456789)`}
-                      value={phoneNumber}
-                      onChange={handlePhoneChange}
-                      onKeyDown={handleKeyDown}
-                    />
-                  </div>
-                
-                  <FormInput
-                    type="text"
-                    className="block px-4 py-3 mt-4 intro-x min-w-full xl:min-w-[350px]"
-                    placeholder="Email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                  />
-                
-                  <FormInput
-                    type="password"
-                    className="block px-4 py-3 mt-4 intro-x min-w-full xl:min-w-[350px]"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                  />
-                
-                  {/* New Plan Selection Section */}
-                  <div className="grid grid-cols-1 gap-2 mt-4 md:grid-cols-2">
-                    {[
-                      ['blaster', 'Team Inbox', '50'],
-                      ['enterprise', 'Standard AI', '168'],
-                      ['unlimited', 'Unlimited', '688']
-                    ].map(([id, name, price]) => (
-                      <div 
-                        key={id}
-                        className={clsx(
-                          "p-2 border rounded cursor-pointer",
-                          selectedPlan === id ? 'border-primary bg-primary/10' : 'border-gray-200'
-                        )}
-                        onClick={() => setSelectedPlan(id as 'blaster' | 'enterprise')}
-                      >
-                        <div className="text-sm font-bold">{name}</div>
-                
-                      </div>
-                    ))}
-                  </div>
                 </div>
-                <div className="mt-5 text-center intro-x xl:mt-8 xl:text-left">
-                  <Button
-                    variant="primary"
-                    className="w-full px-4 py-3 align-top xl:w-32 xl:mr-3"
-                    onClick={handleRegister}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <div className="flex items-center justify-center">
-                        <div className="w-5 h-5 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Loading...
-                      </div>
-                    ) : (
-                      "Start Free Trial"
-                    )}
-                  </Button>
-                  <Link to="/login">
-                    <Button
-                      variant="outline-secondary"
-                      className="w-full px-4 py-3 mt-3 align-top xl:w-32 xl:mt-0"
-                    >
-                      Back to Login
-                    </Button>
-                  </Link>
-                </div>
-                {registerResult && (
-                  <div className="mt-5 text-center text-red-500">{registerResult}</div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
+                  Phone Number
+                </label>
+                <FormInput
+                  type="tel"
+                  className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-all duration-200 text-sm"
+                  placeholder={`Phone Number (e.g., ${getCountryCallingCode(selectedCountry)}123456789)`}
+                  value={phoneNumber}
+                  onChange={handlePhoneChange}
+                  onKeyDown={handleKeyDown}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
+                  Email Address
+                </label>
+                <FormInput
+                  type="email"
+                  className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-all duration-200 text-sm"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
+                  Password
+                </label>
+                <FormInput
+                  type="password"
+                  className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-all duration-200 text-sm"
+                  placeholder="Create a password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                />
+              </div>
+
+           
+
+              {/* Register Button */}
+              <Button
+                variant="primary"
+                className="w-full px-3 py-1.5 text-sm font-semibold rounded-md hover:shadow-md transition-all duration-200"
+                onClick={handleRegister}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <div className="flex items-center justify-center">
+                    <div className="w-4 h-4 mr-1 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Creating Account...
+                  </div>
+                ) : (
+                  "Create Account"
                 )}
+              </Button>
+
+              {/* Error Message */}
+              {registerResult && (
+                <div className="p-1.5 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-red-700 text-xs">{registerResult}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Divider */}
+            <div className="relative my-3">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="px-1 bg-white dark:bg-gray-800 text-gray-500">Already have an account?</span>
               </div>
             </div>
-            {/* END: Register Form */}
+
+            {/* Back to Login Button */}
+            <Link to="/login">
+              <Button
+                variant="outline-secondary"
+                className="w-full px-3 py-1.5 text-sm font-semibold rounded-md border-2 border-gray-300 hover:border-gray-400 transition-all duration-200 bg-gray-50 hover:bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+              >
+                Back to Login
+              </Button>
+            </Link>
           </div>
+
+          {/* Additional Info */}
+
         </div>
       </div>
       <ToastContainer />

@@ -6,7 +6,7 @@ import React, {
   useMemo,
   Fragment,
 } from "react";
-import logoImage from "@/assets/images/placeholder.svg";
+import logoImage from "@/assets/images/logo.png";
 import axios, { AxiosError } from "axios";
 import Lucide from "@/components/Base/Lucide";
 import Button from "@/components/Base/Button";
@@ -685,18 +685,18 @@ function Main() {
   >([]);
   const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
   const baseMessageClass =
-    "flex flex-col max-w-[auto] min-w-[auto] p-1 text-white";
-  const myMessageClass = `${baseMessageClass} bg-primary self-end ml-auto text-left mb-1 mr-6 group`;
-  const otherMessageClass = `${baseMessageClass} bg-white dark:bg-gray-800 self-start text-left mt-1 ml-2 group`;
-  const myFirstMessageClass = `${myMessageClass} rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-xl mt-4`;
-  const myMiddleMessageClass = `${myMessageClass} rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-xl`;
-  const myLastMessageClass = `${myMessageClass} rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-xl mb-4`;
-  const otherFirstMessageClass = `${otherMessageClass} rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-xl mt-4`;
-  const otherMiddleMessageClass = `${otherMessageClass} rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-xl`;
-  const otherLastMessageClass = `${otherMessageClass} rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-xl mb-4`;
-  const privateNoteClass = `${baseMessageClass} bg-yellow-500 dark:bg-yellow-900 self-start text-left mt-1 ml-2 group rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-xl`;
+    "flex flex-col max-w-[auto] min-w-[auto] px-2 py-1.5 text-white";
+  const myMessageClass = `flex flex-col max-w-[auto] min-w-[auto] px-2 py-1.5 self-end ml-auto text-left mb-0.5 mr-6 group`;
+  const otherMessageClass = `${baseMessageClass} bg-white dark:bg-gray-800 self-start text-left mt-0.5 ml-2 group`;
+  const myFirstMessageClass = `${myMessageClass} rounded-tr-2xl rounded-tl-2xl rounded-br-2xl rounded-bl-2xl mt-1`;
+  const myMiddleMessageClass = `${myMessageClass} rounded-tr-2xl rounded-tl-2xl rounded-br-2xl rounded-bl-2xl`;
+  const myLastMessageClass = `${myMessageClass} rounded-tr-2xl rounded-tl-2xl rounded-br-2xl rounded-bl-2xl mb-1`;
+  const otherFirstMessageClass = `${otherMessageClass} rounded-tr-2xl rounded-tl-2xl rounded-br-2xl rounded-bl-2xl mt-1`;
+  const otherMiddleMessageClass = `${otherMessageClass} rounded-tr-2xl rounded-tl-2xl rounded-br-2xl rounded-bl-2xl`;
+  const otherLastMessageClass = `${otherMessageClass} rounded-tr-2xl rounded-tl-2xl rounded-br-2xl rounded-bl-2xl mb-1`;
+  const privateNoteClass = `${baseMessageClass} bg-yellow-500 dark:bg-yellow-900 self-start text-left mt-1 ml-2 group rounded-tr-2xl rounded-tl-2xl rounded-br-2xl rounded-bl-2xl`;
   const [messageMode, setMessageMode] = useState("reply");
-  const myMessageTextClass = "text-white";
+  const myMessageTextClass = "text-black";
   const otherMessageTextClass = "text-black dark:text-white";
   const [activeTags, setActiveTags] = useState<string[]>(["all"]);
   const [tagList, setTagList] = useState<Tag[]>([]);
@@ -833,6 +833,7 @@ function Main() {
   const [isInitialLoading, setIsInitialLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadedPages, setLoadedPages] = useState<Set<number>>(new Set());
+  const [isTagFiltering, setIsTagFiltering] = useState(false);
 
   // Real progress tracking for loading contacts
   const [realLoadingProgress, setRealLoadingProgress] = useState(0);
@@ -865,8 +866,18 @@ function Main() {
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false);
   const [globalSearchPage, setGlobalSearchPage] = useState(1);
   const [totalGlobalSearchPages, setTotalGlobalSearchPages] = useState(1);
-  const [messageUsage, setMessageUsage] = useState<number>(0);
+  const [aiMessageUsage, setAiMessageUsage] = useState<number>(0);
+  const [blastedMessageUsage, setBlastedMessageUsage] = useState<number>(0);
+  const [quotaAIMessage, setQuotaAIMessage] = useState<number>(0);
+  const [quotaBlastedMessage, setQuotaBlastedMessage] = useState<number>(0);
   const [companyPlan, setCompanyPlan] = useState<string>("");
+
+  // Usage Dashboard states
+  const [isUsageDashboardOpen, setIsUsageDashboardOpen] =
+    useState<boolean>(false);
+  const [isTopUpModalOpen, setIsTopUpModalOpen] = useState<boolean>(false);
+  const [dailyUsageData, setDailyUsageData] = useState<any[]>([]);
+  const [isLoadingUsageData, setIsLoadingUsageData] = useState<boolean>(false);
   const [selectedVideo, setSelectedVideo] = useState<File | null>(null);
   const [videoModalOpen, setVideoModalOpen] = useState(false);
   const [videoCaption, setVideoCaption] = useState("");
@@ -906,7 +917,29 @@ function Main() {
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [employeeSearch, setEmployeeSearch] = useState("");
-
+  const planConfig = {
+    free: {
+      aiMessages: 100,
+      contacts: 100,
+      title: "Free Plan"
+    },
+    enterprise: {
+      aiMessages: 5000,
+      contacts: 10000,
+      title: "Enterprise Plan"
+    },
+    pro: {
+      aiMessages: 20000,
+      contacts: 50000,
+      title: "Pro Plan"
+    }
+  };
+  const getCurrentPlanLimits = () => {
+    const plan = companyPlan.toLowerCase();
+    return planConfig[plan as keyof typeof planConfig] || planConfig.free;
+  };
+  
+  const currentPlanLimits = getCurrentPlanLimits();
   // Initialize user context from localStorage and NeonDB
   useEffect(() => {
     // Use user info from localStorage (set during API login)
@@ -980,6 +1013,86 @@ function Main() {
       fetchCategories();
     }
   }, [companyId]);
+
+  // Fetch daily usage data for the dashboard
+  const fetchDailyUsageData = async () => {
+    try {
+      setIsLoadingUsageData(true);
+      const email = getCurrentUserEmail();
+      if (!email || !companyId) return;
+
+      // Fix API endpoint to match backend expectations
+      const response = await fetch(`${baseUrl}/api/daily-usage/${companyId}`);
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch usage data");
+      }
+
+      const data = await response.json();
+
+      // Process actual API data
+      const processedDailyData = [];
+
+      // Get the last 7 days
+      const today = new Date();
+      const last7Days = [];
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        last7Days.push(date.toISOString().split("T")[0]);
+      }
+
+      // Process each day
+      for (const dateStr of last7Days) {
+        const aiData = data.aiMessages?.find(
+          (item: { date: string | number | Date }) =>
+            new Date(item.date).toISOString().split("T")[0] === dateStr
+        );
+        const blastData = data.blastedMessages?.find(
+          (item: { date: string | number | Date }) =>
+            new Date(item.date).toISOString().split("T")[0] === dateStr
+        );
+
+        processedDailyData.push({
+          date: dateStr,
+          aiMessages: aiData?.usage_count || 0,
+          blastMessages: blastData?.usage_count || 0,
+        });
+      }
+
+      console.log("📊 [USAGE] Daily usage data:", processedDailyData);
+
+      setDailyUsageData(processedDailyData);
+    } catch (error) {
+      console.error("Error fetching daily usage data:", error);
+      toast.error("Failed to load usage data");
+
+      // Fallback to mock data if API fails
+      const mockDailyData = [];
+      const today = new Date();
+
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+
+        mockDailyData.push({
+          date: date.toISOString().split("T")[0],
+          aiMessages: Math.floor(Math.random() * 50) + 10,
+          blastMessages: Math.floor(Math.random() * 100) + 20,
+        });
+      }
+
+      setDailyUsageData(mockDailyData);
+    } finally {
+      setIsLoadingUsageData(false);
+    }
+  };
+
+  // Open usage dashboard and fetch data
+  const openUsageDashboard = () => {
+    setIsUsageDashboardOpen(true);
+    fetchDailyUsageData();
+  };
 
   // Sync userPhone with userData.phone
   useEffect(() => {
@@ -2027,13 +2140,13 @@ function Main() {
     }
   };
 
-  // Delete contact function
+  // Delete contact function with dependency handling
   const handleDeleteContact = async () => {
     if (deleteLoading) return;
 
     if (
       !window.confirm(
-        "Are you sure you want to delete this contact? This action cannot be undone."
+        "Are you sure you want to delete this contact? This will also remove all assignments and related data. This action cannot be undone."
       )
     ) {
       return;
@@ -2049,10 +2162,37 @@ function Main() {
         return;
       }
 
+      toast.info("Preparing to delete contact...");
+
+      // Step 1: Remove assignments first using the dedicated endpoint
+      try {
+        const assignmentsResponse = await fetch(
+          `${apiUrl}/api/assignments/contact/${selectedContact.contact_id}?companyId=${companyId}`,
+          {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+          }
+        );
+
+        if (assignmentsResponse.ok) {
+          console.log("Assignments removed successfully");
+        } else if (assignmentsResponse.status === 404) {
+          console.log("No assignments found for this contact");
+        } else {
+          console.warn(
+            "Failed to remove assignments:",
+            assignmentsResponse.status
+          );
+        }
+      } catch (error) {
+        console.warn("Error removing assignments:", error);
+      }
+
+      // Step 2: Delete the contact
       toast.info("Deleting contact...");
-      setIsTabOpen(false);
-      setSelectedContact(null);
-      setSelectedChatId(null);
 
       const response = await fetch(
         `${apiUrl}/api/contacts/${selectedContact.contact_id}?companyId=${companyId}`,
@@ -2073,20 +2213,143 @@ function Main() {
           contacts.filter((contact) => contact.id !== selectedContact.id)
         );
 
-        // Remove from scheduled messages if needed
+        // Comprehensive cleanup of related data
         const contactChatId =
           selectedContact.phone?.replace(/\D/g, "") + "@s.whatsapp.net";
+
+        // Remove from scheduled messages
         setScheduledMessages((prev) =>
           prev.filter((msg) => !msg.chatIds.includes(contactChatId))
         );
+
+        // Remove from notifications (if they have contactId property)
+        setNotifications((prev) =>
+          prev.filter(
+            (notification: any) =>
+              !notification.contactId ||
+              notification.contactId !== selectedContact.id
+          )
+        );
+
+        // Remove from quick replies if they were specific to this contact
+        setQuickReplies((prev) =>
+          prev.filter(
+            (reply: any) =>
+              !reply.contactSpecific || reply.contactId !== selectedContact.id
+          )
+        );
+
+        // Clear any cached messages for this contact (if messageCache exists)
+        if ((window as any).messageCache?.has(selectedContact.contact_id!)) {
+          (window as any).messageCache.delete(selectedContact.contact_id!);
+        }
+
+        // Close the contact view
+        setIsTabOpen(false);
+        setSelectedContact(null);
+        setSelectedChatId(null);
       } else {
-        const errorText = await response.text();
-        console.error("Delete failed:", errorText);
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Delete failed:", errorData);
+
+        // Check if this is a constraint error that can be resolved with force delete
+        const canForceDelete =
+          errorData.message &&
+          (errorData.message.includes("active assignments") ||
+            errorData.message.includes("associated messages") ||
+            errorData.message.includes("Use /api/contacts/{contactId}/force"));
+
+        if (canForceDelete) {
+          // Offer to force delete with cascade
+          if (
+            window.confirm(
+              "This contact has database dependencies. Would you like to force delete it and remove all related data? This is irreversible."
+            )
+          ) {
+            try {
+              const forceDeleteResponse = await fetch(
+                `${apiUrl}/api/contacts/${selectedContact.contact_id}/force?companyId=${companyId}`,
+                {
+                  method: "DELETE",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  credentials: "include",
+                }
+              );
+
+              if (forceDeleteResponse.ok) {
+                toast.success("Contact force deleted successfully!");
+
+                // Perform the same cleanup as successful deletion
+                setContacts(
+                  contacts.filter(
+                    (contact) => contact.id !== selectedContact.id
+                  )
+                );
+                const contactChatId =
+                  selectedContact.phone?.replace(/\D/g, "") + "@s.whatsapp.net";
+                setScheduledMessages((prev) =>
+                  prev.filter((msg) => !msg.chatIds.includes(contactChatId))
+                );
+                setNotifications((prev) =>
+                  prev.filter(
+                    (notification: any) =>
+                      !notification.contactId ||
+                      notification.contactId !== selectedContact.id
+                  )
+                );
+                setQuickReplies((prev) =>
+                  prev.filter(
+                    (reply: any) =>
+                      !reply.contactSpecific ||
+                      reply.contactId !== selectedContact.id
+                  )
+                );
+                // Clear any cached messages for this contact (if messageCache exists)
+                if (
+                  (window as any).messageCache?.has(selectedContact.contact_id!)
+                ) {
+                  (window as any).messageCache.delete(
+                    selectedContact.contact_id!
+                  );
+                }
+                setIsTabOpen(false);
+                setSelectedContact(null);
+                setSelectedChatId(null);
+                return;
+              } else {
+                toast.error(
+                  "Force delete also failed. Please contact support."
+                );
+              }
+            } catch (forceError) {
+              console.error("Force delete error:", forceError);
+              toast.error("Force delete failed. Please contact support.");
+            }
+          }
+        } else if (response.status === 409) {
+          // Handle conflict status - contact has dependencies
+          toast.error(
+            "Cannot delete contact: Contact has associated data. Please remove dependencies first."
+          );
+        } else {
         toast.error("Failed to delete contact");
+        }
+
+        // Revert the UI state
+        setIsTabOpen(true);
+        setSelectedContact(selectedContact);
+        setSelectedChatId(selectedContact.contact_id);
       }
     } catch (error) {
       console.error("Error deleting contact:", error);
       toast.error("An error occurred while deleting contact");
+
+      // Revert the UI state
+      setIsTabOpen(true);
+      setSelectedContact(selectedContact);
+      setSelectedChatId(selectedContact.contact_id);
     } finally {
       setDeleteLoading(false);
     }
@@ -2597,13 +2860,17 @@ function Main() {
         case "user": // User
           return contacts.filter((contact) =>
             contact.tags?.some(
-              (tag) => (typeof tag === "string" ? tag : String(tag)).toLowerCase() === userName.toLowerCase()
+              (tag) =>
+                (typeof tag === "string" ? tag : String(tag)).toLowerCase() ===
+                userName.toLowerCase()
             )
           );
         case "2": // Sales
           return contacts.filter((contact) =>
             contact.tags?.some(
-              (tag) => (typeof tag === "string" ? tag : String(tag)).toLowerCase() === userName.toLowerCase()
+              (tag) =>
+                (typeof tag === "string" ? tag : String(tag)).toLowerCase() ===
+                userName.toLowerCase()
             )
           );
 
@@ -2612,7 +2879,9 @@ function Main() {
           // Sales, Observer, and Manager see only contacts assigned to them
           return contacts.filter((contact) =>
             contact.tags?.some(
-              (tag) => (typeof tag === "string" ? tag : String(tag)).toLowerCase() === userName.toLowerCase()
+              (tag) =>
+                (typeof tag === "string" ? tag : String(tag)).toLowerCase() ===
+                userName.toLowerCase()
             )
           );
         case "5": // Other role
@@ -2744,8 +3013,17 @@ function Main() {
       setMessageMode(`phone${currentPhoneIndex + 1}`);
     }
 
+    // For tag filtering, always use ALL contacts to ensure we find all tagged contacts
+    // For regular browsing, use loaded contacts for performance
+    const contactsToFilter =
+      activeTags.length > 0 && activeTags[0] !== "all"
+        ? contacts // Use all contacts when filtering by tags
+        : loadedContacts.length > 0
+        ? loadedContacts
+        : contacts; // Use loaded contacts for regular browsing
+    
     let fil = filterContactsByUserRole(
-      loadedContacts.length > 0 ? loadedContacts : contacts,
+      contactsToFilter,
       userRole,
       userData?.name || ""
     );
@@ -2878,7 +3156,9 @@ function Main() {
             searchQuery.toLowerCase()
           ) ||
           contact.tags?.some((tag) =>
-            (typeof tag === "string" ? tag : String(tag)).toLowerCase().includes(searchQuery.toLowerCase())
+            (typeof tag === "string" ? tag : String(tag))
+              .toLowerCase()
+              .includes(searchQuery.toLowerCase())
           )
       );
     }
@@ -2887,7 +3167,9 @@ function Main() {
     if (selectedEmployee) {
       fil = fil.filter((contact) =>
         contact.tags?.some(
-          (tag) => (typeof tag === "string" ? tag : String(tag)).toLowerCase() === selectedEmployee.toLowerCase()
+          (tag) =>
+            (typeof tag === "string" ? tag : String(tag)).toLowerCase() ===
+            selectedEmployee.toLowerCase()
         )
       );
     }
@@ -2895,9 +3177,24 @@ function Main() {
     // Tag filtering
     if (activeTags.length > 0) {
       const tag = activeTags[0]?.toLowerCase() || "all";
+      console.log("🔍 Filtering by tag:", tag);
+      console.log("🔍 Active tags:", activeTags);
 
       fil = fil.filter((contact) => {
         const isGroup = contact.chat_id?.endsWith("@g.us");
+        const contactTags =
+          contact.tags?.map((t: string) =>
+            (typeof t === "string" ? t : String(t)).toLowerCase()
+          ) || [];
+
+        console.log(
+          "🔍 Contact:",
+          contact.contactName || contact.phone,
+          "Tags:",
+          contact.tags,
+          "Lowercase tags:",
+          contactTags
+        );
 
         const matchesTag =
           tag === "all"
@@ -2909,7 +3206,9 @@ function Main() {
             : tag === "unassigned"
             ? !contact.tags?.some((t: string) =>
                 employeeList.some(
-                  (e) => (e.name?.toLowerCase() || "") === (typeof t === "string" ? t : String(t)).toLowerCase()
+                  (e) =>
+                    (e.name?.toLowerCase() || "") ===
+                    (typeof t === "string" ? t : String(t)).toLowerCase()
                 )
               )
             : tag === "snooze"
@@ -2920,10 +3219,13 @@ function Main() {
             ? isGroup
             : tag === "stop bot"
             ? contact.tags?.includes("stop bot")
-            : contact.tags?.map((t: string) => (typeof t === "string" ? t : String(t)).toLowerCase()).includes(tag);
+            : contactTags.includes(tag);
 
+        console.log("🔍 Contact matches tag:", matchesTag);
         return matchesTag;
       });
+      
+      console.log("🔍 After tag filtering, contacts count:", fil.length);
     }
 
     // Sort by timestamp (works for both APIs)
@@ -2956,6 +3258,23 @@ function Main() {
       "📊 RESULT - Filtered contacts:",
       filteredContactsSearch.length
     );
+    
+    // Debug: Log all available tags from contacts
+    const allTags = new Set<string>();
+    contacts.forEach((contact) => {
+      if (contact.tags && Array.isArray(contact.tags)) {
+        contact.tags.forEach((tag) => {
+          if (typeof tag === "string") {
+            allTags.add(tag.toLowerCase());
+          }
+        });
+      }
+    });
+    console.log(
+      "🔍 All available tags in contacts:",
+      Array.from(allTags).sort()
+    );
+    
     if (filteredContactsSearch.length > 0) {
       console.log("📊 SORTING - First 10 contacts sorted by timestamp:");
       filteredContactsSearch.slice(0, 10).forEach((contact, index) => {
@@ -3048,7 +3367,8 @@ function Main() {
       const employees = activeTags.filter((tag) =>
         employeeList.some(
           (employee) =>
-            (employee.name?.toLowerCase() || "") === (typeof tag === "string" ? tag : String(tag)).toLowerCase()
+            (employee.name?.toLowerCase() || "") ===
+            (typeof tag === "string" ? tag : String(tag)).toLowerCase()
         )
       );
       const others = activeTags.filter(
@@ -3991,10 +4311,15 @@ function Main() {
       }
       setToken(data.companyData.whapiToken);
 
-      // Set message usage for enterprise plan
-      if (data.companyData.plan === "enterprise") {
-        setMessageUsage(data.messageUsage);
+      // Set message usage for all plans (including free plan)
+      if (data.companyData.plan === "enterprise" || data.companyData.plan === "free") {
+        setAiMessageUsage(data.messageUsage.aiMessages || 0);
+        setBlastedMessageUsage(data.messageUsage.blastedMessages || 0);
+        setQuotaAIMessage(data.usageQuota.aiMessages || 0);
       }
+      console.log("AI Message Usage:", data.messageUsage.aiMessages);
+      console.log("Blasted Message Usage:", data.messageUsage.blastedMessages);
+      console.log("Quota AI Message:", data.usageQuota.aiMessages);
 
       // Set employee list
       setEmployeeList(data.employeeList);
@@ -4011,7 +4336,9 @@ function Main() {
             const emailUsername = data.userData.viewEmployee.split("@")[0];
             const employeeByUsername = data.employeeList.find(
               (emp: { id: string }) =>
-                (typeof emp.id === "string" ? emp.id : String(emp.id)).toLowerCase().includes(emailUsername.toLowerCase())
+                (typeof emp.id === "string" ? emp.id : String(emp.id))
+                  .toLowerCase()
+                  .includes(emailUsername.toLowerCase())
             );
             if (employeeByUsername) {
               setSelectedEmployee(employeeByUsername.name);
@@ -4031,7 +4358,9 @@ function Main() {
             const emailUsername = viewEmployeeEmail.split("@")[0];
             const employeeByUsername = data.employeeList.find(
               (emp: { id: string }) =>
-                (typeof emp.id === "string" ? emp.id : String(emp.id)).toLowerCase().includes(emailUsername.toLowerCase())
+                (typeof emp.id === "string" ? emp.id : String(emp.id))
+                  .toLowerCase()
+                  .includes(emailUsername.toLowerCase())
             );
             if (employeeByUsername) {
               setSelectedEmployee(employeeByUsername.name);
@@ -4153,7 +4482,10 @@ function Main() {
             Array.isArray(contactSelect.assignedTo) &&
             contactSelect.assignedTo.some(
               (assignedTo) =>
-                (typeof assignedTo === "string" ? assignedTo : String(assignedTo)).toLowerCase() === userData?.name?.toLowerCase()
+                (typeof assignedTo === "string"
+                  ? assignedTo
+                  : String(assignedTo)
+                ).toLowerCase() === userData?.name?.toLowerCase()
             )
           )
         ) {
@@ -5567,17 +5899,17 @@ function Main() {
 
     // Update UI immediately for instant feedback
     setMessages((prevMessages) => [
-      ...prevMessages,
-      {
-        ...tempMessage,
-      } as unknown as Message,
+        ...prevMessages,
+        {
+          ...tempMessage,
+        } as unknown as Message,
     ]);
 
     // Also update allMessages to ensure consistency
     setAllMessages((prevAllMessages) => [
-      ...prevAllMessages,
-      {
-        ...tempMessage,
+        ...prevAllMessages,
+        {
+          ...tempMessage,
       } as unknown as Message,
     ]);
 
@@ -7081,16 +7413,35 @@ function Main() {
   }, [filteredContactsSearch, loadedContacts]);
 
   const filterTagContact = (tag: string) => {
+    console.log("🔍 filterTagContact called with tag:", tag);
+    console.log("🔍 Current employeeList:", employeeList);
+    
+    // Set loading state for tag filtering
+    setIsTagFiltering(true);
+    
     if (
       employeeList.some(
-        (employee) => (employee.name?.toLowerCase() || "") === (typeof tag === "string" ? tag : String(tag)).toLowerCase()
+        (employee) =>
+          (employee.name?.toLowerCase() || "") ===
+          (typeof tag === "string" ? tag : String(tag)).toLowerCase()
       )
     ) {
+      console.log("🔍 Tag is an employee, setting selectedEmployee:", tag);
       setSelectedEmployee(tag === selectedEmployee ? null : tag);
     } else {
-      setActiveTags([(typeof tag === "string" ? tag : String(tag)).toLowerCase()]);
+      console.log("🔍 Tag is not an employee, setting activeTags:", [
+        tag.toLowerCase(),
+      ]);
+      setActiveTags([
+        (typeof tag === "string" ? tag : String(tag)).toLowerCase(),
+      ]);
     }
     setSearchQuery("");
+    
+    // Reset loading state after a short delay to allow filtering to complete
+    setTimeout(() => {
+      setIsTagFiltering(false);
+    }, 1000);
   };
 
   const filterForwardDialogContacts = (tag: string) => {
@@ -7535,6 +7886,7 @@ function Main() {
   useEffect(() => {
     const handleKeyDown = (event: { key: string }) => {
       if (event.key === "Escape") {
+        setIsTabOpen(false);
         setSelectedContact(null);
         setSelectedChatId(null);
       }
@@ -8541,20 +8893,125 @@ function Main() {
       const companyId = userData.userData.companyId;
       console.log("contact_id", contact.contact_id);
 
-      // Call the reset unread API
-      await fetch(
-        `${baseUrl}/api/contacts/${contact.contact_id}/reset-unread`,
+      // Call the mark as unread API
+      const response = await fetch(
+        `${baseUrl}/api/contacts/${contact.contact_id}/mark-unread`,
         {
-          method: "PUT",
+          method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ companyId }),
+          body: JSON.stringify({ company_id: companyId, increment: 1 }),
         }
       );
 
-      toast.success("Marked as unread");
+      if (!response.ok) {
+        throw new Error("Failed to mark contact as unread");
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        // Update the contact's unread count in the local state
+        setContacts(prevContacts => 
+          prevContacts.map(c => 
+            c.contact_id === contact.contact_id 
+              ? { ...c, unreadCount: (c.unreadCount || 0) + 1 }
+              : c
+          )
+        );
+        
+        setLoadedContacts(prevLoadedContacts => 
+          prevLoadedContacts.map(c => 
+            c.contact_id === contact.contact_id 
+              ? { ...c, unreadCount: (c.unreadCount || 0) + 1 }
+              : c
+          )
+        );
+        
+        setFilteredContacts(prevFilteredContacts => 
+          prevFilteredContacts.map(c => 
+            c.contact_id === contact.contact_id 
+              ? { ...c, unreadCount: (c.unreadCount || 0) + 1 }
+              : c
+          )
+        );
+
+        toast.success("Marked as unread");
+      } else {
+        throw new Error(result.error || "Failed to mark contact as unread");
+      }
     } catch (error) {
-      console.error("Failed to reset unread count:", error);
+      console.error("Failed to mark contact as unread:", error);
       toast.error("Failed to mark as unread");
+    }
+  };
+
+  const markAsRead = async (contact: Contact) => {
+    if (!contact?.contact_id) return;
+
+    try {
+      const userEmail = localStorage.getItem("userEmail");
+      if (!userEmail) return;
+
+      // Get user/company info
+      const userResponse = await fetch(
+        `${baseUrl}/api/user-company-data?email=${encodeURIComponent(
+          userEmail
+        )}`
+      );
+      if (!userResponse.ok) return;
+      const userData = await userResponse.json();
+      const companyId = userData.userData.companyId;
+      console.log("contact_id", contact.contact_id);
+
+      // Call the mark as read API
+      const response = await fetch(
+        `${baseUrl}/api/contacts/${contact.contact_id}/mark-read`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ company_id: companyId }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to mark contact as read");
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        // Update the contact's unread count in the local state
+        setContacts(prevContacts => 
+          prevContacts.map(c => 
+            c.contact_id === contact.contact_id 
+              ? { ...c, unreadCount: 0 }
+              : c
+          )
+        );
+        
+        setLoadedContacts(prevLoadedContacts => 
+          prevLoadedContacts.map(c => 
+            c.contact_id === contact.contact_id 
+              ? { ...c, unreadCount: 0 }
+              : c
+          )
+        );
+        
+        setFilteredContacts(prevFilteredContacts => 
+          prevFilteredContacts.map(c => 
+            c.contact_id === contact.contact_id 
+              ? { ...c, unreadCount: 0 }
+              : c
+          )
+        );
+
+        toast.success("Marked as read");
+      } else {
+        throw new Error(result.error || "Failed to mark contact as read");
+      }
+    } catch (error) {
+      console.error("Failed to mark contact as read:", error);
+      toast.error("Failed to mark as read");
     }
   };
   const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -8973,7 +9430,9 @@ function Main() {
         if (contact.tags) {
           contact.tags.forEach((tag: string) => {
             const employee = employeeList.find(
-              (emp: any) => emp.name.toLowerCase() === (typeof tag === "string" ? tag : String(tag)).toLowerCase()
+              (emp: any) =>
+                emp.name.toLowerCase() ===
+                (typeof tag === "string" ? tag : String(tag)).toLowerCase()
             );
             if (employee) {
               employeeAssignments[employee.id] =
@@ -9136,7 +9595,7 @@ function Main() {
 
   return (
     <div
-      className="flex flex-col md:flex-row overflow-y-auto bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200"
+      className="flex flex-col md:flex-row overflow-y-auto bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2"
       style={{ height: "100vh" }}
     >
       <audio ref={audioRef} src={noti} />
@@ -9145,20 +9604,20 @@ function Main() {
           selectedChatId ? "hidden md:flex" : "flex"
         }`}
       >
-        <div className="flex items-center justify-between pl-4 pr-4 pt-6 pb-2 sticky top-0 z-10 bg-gray-100 dark:bg-gray-900">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between pl-3 pr-3 pt-4 pb-2 sticky top-0 z-10 bg-gray-100 dark:bg-gray-900">
+          <div className="flex items-center gap-3">
             <div>
-              <div className="text-start text-2xl font-semibold capitalize text-gray-800 dark:text-gray-200">
+              <div className="text-start text-xl font-bold capitalize text-gray-800 dark:text-gray-200 mb-1">
                 {companyName}
               </div>
-              <div className="flex items-center gap-3">
-                <div className="text-start text-lg font-medium text-gray-600 dark:text-gray-400">
+              <div className="flex items-center gap-2">
+                <div className="text-start text-sm font-semibold text-gray-600 dark:text-gray-400">
                   Total Contacts: {totalContacts}
                 </div>
 
                 {/* Error Message - Show below if there's an error */}
                 {wsError && (
-                  <div className="text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded">
+                  <div className="text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-1.5 py-1 rounded-md font-medium">
                     {wsError}
                   </div>
                 )}
@@ -9166,16 +9625,16 @@ function Main() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
             {
               <Menu as="div" className="relative inline-block text-left">
                 <div>
-                  <Menu.Button className="flex items-center space-x-2 text-lg font-semibold opacity-75 bg-white dark:bg-gray-800 px-3 py-2 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-blue-500">
+                  <Menu.Button className="flex items-center space-x-1.5 text-sm font-bold opacity-75 bg-white dark:bg-gray-800 px-2 py-1.5 rounded-md shadow-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-blue-500 transition-all duration-200">
                     <Lucide
                       icon="Phone"
-                      className="w-5 h-5 text-gray-800 dark:text-white"
+                      className="w-3 h-3 text-gray-800 dark:text-white"
                     />
-                    <span className="text-gray-800 font-medium dark:text-white">
+                    <span className="text-gray-800 font-bold dark:text-white">
                       {userData?.phone !== undefined &&
                       phoneNames[userData.phone]
                         ? phoneNames[userData.phone]
@@ -9183,17 +9642,17 @@ function Main() {
                         ? Object.values(phoneNames)[0]
                         : Object.keys(phoneNames).length > 1
                         ? "Select phone"
-                        : `Loading phones...`}
+                        : ``}
                     </span>
                     <Lucide
                       icon="ChevronDown"
-                      className="w-4 h-4 text-gray-500"
+                      className="w-2.5 h-2.5 text-gray-500"
                     />
                   </Menu.Button>
                 </div>
-                <Menu.Items className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5">
+                <Menu.Items className="absolute right-0 mt-1.5 w-32 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5">
                   <div
-                    className="py-1 max-h-60 overflow-y-auto"
+                    className="py-1 max-h-30 overflow-y-auto"
                     role="menu"
                     aria-orientation="vertical"
                     aria-labelledby="options-menu"
@@ -9214,11 +9673,11 @@ function Main() {
                                 active
                                   ? "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"
                                   : "text-gray-700 dark:text-gray-200"
-                              } block w-full text-left px-4 py-2 text-sm flex items-center justify-between`}
+                              } block w-full text-left px-2.5 py-1.5 text-sm flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200`}
                             >
-                              <span>{phoneName}</span>
+                              <span className="font-medium">{phoneName}</span>
                               <span
-                                className={`text-xs px-2 py-1 rounded-full ${
+                                className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
                                   isConnected
                                     ? "bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200"
                                     : "bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-200"
@@ -9237,7 +9696,7 @@ function Main() {
             }
 
             {/* WebSocket Status - Clickable to disconnect */}
-            <div className="flex items-center gap-2 w-full">
+            <div className="flex items-center gap-1.5 w-full">
               <button
                 onClick={() => {
                   if (wsConnection && wsConnected) {
@@ -9247,7 +9706,7 @@ function Main() {
                     setWsError(null);
                   }
                 }}
-                className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-md shadow-sm border transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer w-full ${
+                className={`flex items-center justify-center gap-1 px-2 py-1.5 rounded-md shadow-md border transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer w-full ${
                   wsConnected
                     ? "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
                     : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600"
@@ -9257,11 +9716,11 @@ function Main() {
                 {wsConnected ? (
                   <>
                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span className="text-xs font-medium text-green-600 dark:text-green-400">
+                    <span className="text-xs font-bold text-green-600 dark:text-green-400">
                       Live
                     </span>
                     <svg
-                      className="w-3 h-3 text-gray-400"
+                      className="w-2 h-2 text-gray-400"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -9277,7 +9736,7 @@ function Main() {
                 ) : (
                   <>
                     <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                    <span className="text-xs font-medium text-red-600 dark:text-red-400">
+                    <span className="text-xs font-bold text-red-600 dark:text-red-400">
                       Offline
                     </span>
                   </>
@@ -9298,11 +9757,11 @@ function Main() {
                     // This will trigger the useEffect to re-run and create a new connection
                     setWsVersion((prev) => prev + 1);
                   }}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-md hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none w-full"
+                  className="flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-bold bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-md hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none w-full"
                   disabled={wsReconnectAttempts >= maxReconnectAttempts}
                 >
                   <svg
-                    className="w-3 h-3"
+                    className="w-2 h-2"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -9322,31 +9781,107 @@ function Main() {
             </div>
           </div>
         </div>
-        {companyPlan === "enterprise" && (
-          <div className="px-4 py-2">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                Monthly Message Usage
-              </span>
-              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                {messageUsage}/500
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-              <div
-                className={`h-2.5 rounded-full ${
-                  messageUsage > 450
-                    ? "bg-red-600"
-                    : messageUsage > 350
-                    ? "bg-yellow-400"
-                    : "bg-green-600"
-                }`}
-                style={{
-                  width: `${Math.min((messageUsage / 500) * 100, 100)}%`,
+        {(companyPlan === "enterprise" || companyPlan === "free") && (
+          <div
+            className="px-2 py-1.5 rounded-lg bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 mb-1.5 cursor-pointer hover:shadow-md transition-all duration-200"
+            onClick={openUsageDashboard}
+            title="Click to view detailed usage analytics"
+          >
+           <div className="flex items-center justify-between mb-1">
+  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
+    <Lucide icon="Sparkles" className="w-2.5 h-2.5 text-primary" />
+    AI Messages
+  </span>
+
+</div>
+
+<div className="w-full h-1.5 rounded-full bg-gradient-to-r from-primary/10 to-gray-200 dark:from-primary/20 dark:to-gray-700 mb-1 overflow-hidden">
+  <div
+    className={`h-1.5 rounded-full transition-all duration-500 ease-in-out ${
+      aiMessageUsage > currentPlanLimits.aiMessages
+        ? "bg-gradient-to-r from-red-600 to-red-800"
+        : aiMessageUsage > currentPlanLimits.aiMessages * 0.9
+        ? "bg-gradient-to-r from-red-500 to-red-700"
+        : aiMessageUsage > currentPlanLimits.aiMessages * 0.7
+        ? "bg-gradient-to-r from-yellow-400 to-yellow-600"
+        : "bg-gradient-to-r from-green-500 to-green-700"
+    }`}
+    style={{
+      width: `${Math.min(
+        (aiMessageUsage / currentPlanLimits.aiMessages) * 100,
+        120
+      )}%`,
+    }}
+  ></div>
+  {aiMessageUsage > currentPlanLimits.aiMessages && (
+    <div className="text-xs text-red-600 dark:text-red-400 text-center mt-0.5 font-medium">
+      ⚠️ Limit exceeded by {aiMessageUsage - currentPlanLimits.aiMessages} responses
+    </div>
+  )}
+</div>
+<div className="flex items-center justify-between mb-1">
+  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
+  <Lucide icon="Contact" className="w-2.5 h-2.5 text-primary" />
+    Contacts
+  </span>
+  <div className="flex items-center gap-2">
+    <span className="text-xs font-bold text-gray-900 dark:text-gray-100">
+      {contacts.length}
+      <span className="opacity-70 font-normal">
+        /{currentPlanLimits.contacts}
+      </span> 
+    </span>
+
+  </div>
+</div>
+
+
+<div className="w-full h-1.5 rounded-full bg-gradient-to-r from-emerald-400/10 to-gray-200 dark:from-emerald-400/20 dark:to-gray-700 overflow-hidden">
+  <div
+    className={`h-1.5 rounded-full transition-all duration-500 ease-in-out ${
+      contacts.length > currentPlanLimits.contacts
+        ? "bg-gradient-to-r from-red-600 to-red-800"
+        : contacts.length > currentPlanLimits.contacts * 0.9
+        ? "bg-gradient-to-r from-red-500 to-red-700"
+        : contacts.length > currentPlanLimits.contacts * 0.7
+        ? "bg-gradient-to-r from-yellow-400 to-yellow-600"
+        : "bg-gradient-to-r from-emerald-500 to-emerald-700"
+    }`}
+    style={{
+      width: `${Math.min(
+        (contacts.length / currentPlanLimits.contacts) * 100,
+        120
+      )}%`,
+    }}
+  ></div>
+</div>
+<div className="flex items-center justify-between mt-1">
+  
+
+ 
+</div>
+{contacts.length > currentPlanLimits.contacts && (
+  <div className="mt-1 text-center">
+    <span className="text-xs text-orange-600 dark:text-orange-400 font-medium bg-orange-100 dark:bg-orange-900/30 px-2 py-0.5 rounded-full">
+      ⚠️ Contact limit exceeded - upgrade plan for more contacts
+    </span>
+  </div>
+)}
+
+            {/* Analytics button */}
+            <div className="flex items-center justify-center mt-1 pt-1 border-t border-gray-200 dark:border-gray-600">
+                              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openUsageDashboard();
                 }}
-              ></div>
-            </div>
-          </div>
+                className="text-xs text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary flex items-center gap-1 transition-all duration-200 hover:scale-105 active:scale-95 font-medium"
+              >
+                <Lucide icon="BarChart3" className="w-3 h-3" />
+                View Analytics
+                              </button>
+                          </div>
+                        </div>
         )}
         <div className="sticky top-20 bg-gray-100 dark:bg-gray-900 p-2">
           <div className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-900">
@@ -9354,566 +9889,14 @@ function Main() {
               <NotificationPopup notifications={notifications} />
             )}
 
-            <Dialog
-              open={isDeletePopupOpen}
-              onClose={closeDeletePopup}
-              className="fixed inset-0 z-100 overflow-y-auto"
-            >
-              <div className="flex items-center justify-center min-h-screen">
-                <div className="fixed inset-0 bg-black opacity-30" />
-                <div className="bg-white dark:bg-gray-800 rounded-lg text-left shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full">
-                  <Dialog.Title
-                    as="h3"
-                    className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-200 px-4 pt-5"
-                  >
-                    Delete Messages
-                  </Dialog.Title>
-                  <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Are you sure you want to delete {selectedMessages.length}{" "}
-                      message(s)? This action cannot be undone.
-                    </p>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse rounded-b-lg">
-                    <Button
-                      type="button"
-                      className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
-                      onClick={deleteMessages}
-                    >
-                      Delete
-                    </Button>
-                    <Button
-                      type="button"
-                      className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 sm:mt-0 sm:w-auto sm:text-sm"
-                      onClick={closeDeletePopup}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </Dialog>
-            <Dialog
-              open={blastMessageModal}
-              onClose={() => setBlastMessageModal(false)}
-            >
-              <div className="fixed inset-0 flex items-center justify-center p-4 bg-black bg-opacity-50">
-                <Dialog.Panel className="w-full max-w-md p-6 bg-white dark:bg-gray-800 rounded-md mt-40 text-gray-900 dark:text-white">
-                  <div className="mb-4 text-lg font-semibold">
-                    Schedule Blast Message
-                  </div>
-                  <textarea
-                    className="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder="Type your message here..."
-                    value={blastMessage}
-                    onChange={(e) => setBlastMessage(e.target.value)}
-                    rows={3}
-                    style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
-                  ></textarea>
-                  <div className="mt-2">
-                    <button
-                      type="button"
-                      className="text-sm text-blue-500 hover:text-blue-400"
-                      onClick={() => setShowPlaceholders(!showPlaceholders)}
-                    >
-                      {showPlaceholders
-                        ? "Hide Placeholders"
-                        : "Show Placeholders"}
-                    </button>
-                    {showPlaceholders && (
-                      <div className="mt-2 space-y-1">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Click to insert:
-                        </p>
-                        {[
-                          "contactName",
-                          "firstName",
-                          "lastName",
-                          "email",
-                          "phone",
-                          "vehicleNumber",
-                          "branch",
-                          "expiryDate",
-                        ].map((field) => (
-                          <button
-                            key={field}
-                            type="button"
-                            className="mr-2 mb-2 px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
-                            onClick={() => insertPlaceholder(field)}
-                          >
-                            @{"{"}${field}
-                            {"}"}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Attach Media (Image or Video)
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/*,video/*"
-                      onChange={(e) => handleMediaUpload(e)}
-                      className="block w-full mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Attach Document
-                    </label>
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                      onChange={(e) => handleDocumentUpload(e)}
-                      className="block w-full mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Start Date & Time
-                    </label>
-                    <div className="flex space-x-2">
-                      <DatePickerComponent
-                        selected={blastStartDate}
-                        onChange={(date: Date) => setBlastStartDate(date)}
-                        dateFormat="MMMM d, yyyy"
-                        className="w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
-                      <DatePickerComponent
-                        selected={blastStartTime}
-                        onChange={(date: Date) => setBlastStartTime(date)}
-                        showTimeSelect
-                        showTimeSelectOnly
-                        timeIntervals={15}
-                        timeCaption="Time"
-                        dateFormat="h:mm aa"
-                        className="w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Batch Quantity
-                    </label>
-                    <input
-                      type="number"
-                      value={batchQuantity}
-                      onChange={(e) =>
-                        setBatchQuantity(parseInt(e.target.value))
-                      }
-                      min={1}
-                      className="block w-full mt-1 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Delay Between Batches
-                    </label>
-                    <div className="flex items-center">
-                      <input
-                        type="number"
-                        value={repeatInterval}
-                        onChange={(e) =>
-                          setRepeatInterval(parseInt(e.target.value))
-                        }
-                        min={0}
-                        className="w-20 mr-2 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
-                      <select
-                        value={repeatUnit}
-                        onChange={(e) =>
-                          setRepeatUnit(
-                            e.target.value as "minutes" | "hours" | "days"
-                          )
-                        }
-                        className="border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      >
-                        <option value="minutes">Minutes</option>
-                        <option value="hours">Hours</option>
-                        <option value="days">Days</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Delay between messages
-                    </label>
-                    <div className="flex items-center space-x-2 mt-1">
-                      <div className="flex items-center">
-                        <span className="text-sm text-gray-600 dark:text-gray-400 mr-2">
-                          Wait between:
-                        </span>
-                        <input
-                          type="number"
-                          value={minDelay}
-                          onChange={(e) =>
-                            setMinDelay(parseInt(e.target.value))
-                          }
-                          min={1}
-                          className="w-20 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        />
-                      </div>
-                      <div className="flex items-center">
-                        <span className="text-sm text-gray-600 dark:text-gray-400 mx-2">
-                          and
-                        </span>
-                        <input
-                          type="number"
-                          value={maxDelay}
-                          onChange={(e) =>
-                            setMaxDelay(parseInt(e.target.value))
-                          }
-                          min={1}
-                          className="w-20 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        />
-                        <span className="text-sm text-gray-600 dark:text-gray-400 ml-2">
-                          Seconds
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-4">
-                      <label className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={activateSleep}
-                          onChange={(e) => setActivateSleep(e.target.checked)}
-                          className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-                        />
-                        <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">
-                          Activate Sleep between sending
-                        </span>
-                      </label>
-                      {activateSleep && (
-                        <div className="flex items-center space-x-2 mt-2 ml-6">
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                            After:
-                          </span>
-                          <input
-                            type="number"
-                            value={sleepAfterMessages}
-                            onChange={(e) =>
-                              setSleepAfterMessages(parseInt(e.target.value))
-                            }
-                            min={1}
-                            className="w-20 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          />
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                            Messages
-                          </span>
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                            for:
-                          </span>
-                          <input
-                            type="number"
-                            value={sleepDuration}
-                            onChange={(e) =>
-                              setSleepDuration(parseInt(e.target.value))
-                            }
-                            min={1}
-                            className="w-20 border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          />
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                            Seconds
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Phone
-                    </label>
-                    <Menu
-                      as="div"
-                      className="relative inline-block text-left w-full"
-                    >
-                      <div>
-                        <Menu.Button className="flex items-center justify-between w-full text-left px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                          <span className="text-sm">
-                            {userData?.phone !== undefined &&
-                            phoneNames[userData.phone]
-                              ? phoneNames[userData.phone].replace(
-                                  /\s+(Connected|Not Connected)$/,
-                                  ""
-                                )
-                              : Object.keys(phoneNames).length === 1
-                              ? Object.values(phoneNames)[0].replace(
-                                  /\s+(Connected|Not Connected)$/,
-                                  ""
-                                )
-                              : Object.keys(phoneNames).length > 1
-                              ? "Select phone"
-                              : `Loading phones...`}
-                          </span>
-                          <Lucide
-                            icon="ChevronDown"
-                            className="w-4 h-4 text-gray-500"
-                          />
-                        </Menu.Button>
-                      </div>
-                      <Menu.Items className="absolute right-0 mt-2 w-full rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 z-50">
-                        <div
-                          className="py-1 max-h-60 overflow-y-auto"
-                          role="menu"
-                          aria-orientation="vertical"
-                          aria-labelledby="options-menu"
-                        >
-                          {Object.entries(phoneNames).map(
-                            ([index, phoneName]) => {
-                              const phoneStatus =
-                                qrCodes[parseInt(index)]?.status || "unknown";
-                              const isConnected =
-                                phoneStatus === "ready" ||
-                                phoneStatus === "authenticated";
-
-                              // Clean up phone name to remove connection status if it's included
-                              const cleanPhoneName = phoneName.replace(
-                                /\s+(Connected|Not Connected)$/,
-                                ""
-                              );
-
-                              return (
-                                <Menu.Item key={index}>
-                                  {({ active }) => (
-                                    <button
-                                      onClick={() =>
-                                        setUserPhone(parseInt(index))
-                                      }
-                                      className={`${
-                                        active
-                                          ? "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"
-                                          : "text-gray-700 dark:text-gray-200"
-                                      } block w-full text-left px-4 py-2 text-sm flex items-center justify-between`}
-                                    >
-                                      <span>{cleanPhoneName}</span>
-                                      <span
-                                        className={`text-xs px-2 py-1 rounded-full ${
-                                          isConnected
-                                            ? "bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200"
-                                            : "bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-200"
-                                        }`}
-                                      >
-                                        {isConnected
-                                          ? "Connected"
-                                          : "Not Connected"}
-                                      </span>
-                                    </button>
-                                  )}
-                                </Menu.Item>
-                              );
-                            }
-                          )}
-                        </div>
-                      </Menu.Items>
-                    </Menu>
-                  </div>
-                  <div className="flex justify-end mt-4">
-                    <button
-                      className="px-4 py-2 mr-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
-                      onClick={() => setBlastMessageModal(false)}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={sendBlastMessage}
-                      disabled={isScheduling}
-                    >
-                      {isScheduling ? "Scheduling..." : "Send Blast Message"}
-                    </button>
-                  </div>
-                </Dialog.Panel>
-              </div>
-            </Dialog>
-            <PDFModal
-              isOpen={isPDFModalOpen}
-              onClose={closePDFModal}
-              pdfUrl={pdfUrl}
-            />
-            <Dialog
-              open={editingMessage !== null}
-              onClose={cancelEditMessage}
-              className="fixed inset-0 z-100 overflow-y-auto"
-            >
-              <div className="flex items-center justify-center min-h-screen">
-                <div className="fixed inset-0 bg-black opacity-30" />
-                <div className="bg-white dark:bg-gray-800 rounded-lg text-left shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full">
-                  <Dialog.Title
-                    as="h3"
-                    className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-200 px-4 pt-5"
-                  >
-                    Edit message
-                  </Dialog.Title>
-                  <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                    <textarea
-                      className="w-full h-24 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-info text-md resize-none overflow-hidden bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-                      placeholder="Edit your message"
-                      value={editedMessageText}
-                      onChange={(e) => setEditedMessageText(e.target.value)}
-                      style={{
-                        whiteSpace: "pre-wrap",
-                        wordBreak: "break-word",
-                      }}
-                    />
-                  </div>
-                  <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                    <Button
-                      type="button"
-                      className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-500 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
-                      onClick={handleEditMessage}
-                    >
-                      Save
-                    </Button>
-                    <Button
-                      type="button"
-                      className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 sm:mt-0 sm:w-auto sm:text-sm"
-                      onClick={cancelEditMessage}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </Dialog>
-
-            <Dialog
-              open={isForwardDialogOpen}
-              onClose={() => handleCloseForwardDialog()}
-              className="fixed inset-0 z-50 overflow-y-auto"
-            >
-              <div className="flex items-center justify-center min-h-screen">
-                <div className="fixed inset-0 bg-gray-500 bg-opacity-75" />
-                <div className="bg-white dark:bg-gray-800 rounded-lg text-left shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full relative z-10">
-                  <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                    <div className="sm:flex sm:items-start">
-                      <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                        <Dialog.Title
-                          as="h3"
-                          className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-200 mb-4"
-                        >
-                          Forward message to
-                        </Dialog.Title>
-                        <div className="relative mb-4">
-                          <input
-                            type="text"
-                            className="w-full py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-                            placeholder="Search..."
-                            value={searchQuery2}
-                            onChange={handleSearchChange2}
-                          />
-                          <Lucide
-                            icon="Search"
-                            className="absolute top-2 right-3 w-5 h-5 text-gray-500 dark:text-gray-400"
-                          />
-                        </div>
-                        <div className="mb-4">
-                          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Filter by tags:
-                          </h4>
-                          <div className="flex flex-wrap gap-2">
-                            {visibleForwardTags.map((tag) => (
-                              <button
-                                key={tag.id}
-                                onClick={() =>
-                                  filterForwardDialogContacts(tag.name)
-                                }
-                                className={`px-3 py-1 rounded-full text-sm flex-shrink-0 ${
-                                  forwardDialogTags.includes(tag.name)
-                                    ? "bg-primary text-white dark:bg-primary dark:text-white"
-                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
-                                } transition-colors duration-200`}
-                              >
-                                {tag.name}
-                              </button>
-                            ))}
-                          </div>
-                          {tagList.length > 5 && (
-                            <button
-                              onClick={toggleForwardTagsVisibility}
-                              className="mt-2 text-sm text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
-                            >
-                              {showAllForwardTags ? "Show Less" : "Show More"}
-                            </button>
-                          )}
-                        </div>
-                        <div className="max-h-60 overflow-y-auto">
-                          {getFilteredForwardingContacts().map(
-                            (contact, index) => (
-                              <div
-                                key={contact.id || `${contact.phone}-${index}`}
-                                className="flex items-center p-2 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"
-                              >
-                                <input
-                                  type="checkbox"
-                                  className="mr-3"
-                                  checked={selectedContactsForForwarding.includes(
-                                    contact
-                                  )}
-                                  onChange={() =>
-                                    handleSelectContactForForwarding(contact)
-                                  }
-                                />
-                                <div className="flex items-center">
-                                  <div className="w-8 h-8 flex items-center justify-center bg-gray-300 dark:bg-gray-600 rounded-full mr-3 text-white">
-                                    {contact.contactName
-                                      ? contact.contactName
-                                          .charAt(0)
-                                          .toUpperCase()
-                                      : "?"}
-                                  </div>
-                                  <div className="flex-grow">
-                                    <div className="font-semibold capitalize">
-                                      {contact.contactName ||
-                                        contact.firstName ||
-                                        contact.phone}
-                                    </div>
-                                    {contact.tags &&
-                                      contact.tags.length > 0 && (
-                                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                                          Tags: {contact.tags.join(", ")}
-                                        </div>
-                                      )}
-                                  </div>
-                                </div>
-                              </div>
-                            )
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                    <Button
-                      type="button"
-                      className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary text-base font-medium text-white hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
-                      onClick={handleForwardMessage}
-                    >
-                      Forward
-                    </Button>
-                    <Button
-                      type="button"
-                      className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white dark:bg-gray-600 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:w-auto sm:text-sm"
-                      onClick={() => handleCloseForwardDialog()}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </Dialog>
-
-            <div className="flex justify-end space-x-2 w-full mr-2">
-              {
+            {/* WhatsApp Web-style search bar */}
                 <div className="relative flex-grow">
                   <button
                     onClick={() => setIsSearchModalOpen(true)}
-                    className="flex items-center w-full h-9 py-1 pl-10 pr-4 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-800"
+                className="flex items-center w-full h-7 py-1.5 pl-6 pr-3 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200"
                   >
-                    <Lucide icon="Search" className="absolute left-3 w-5 h-5" />
-                    <span className="ml-2">Search contacts...</span>
+                <Lucide icon="Search" className="absolute left-2 w-3 h-3" />
+                <span className="ml-1.5 text-sm">Search contacts...</span>
                   </button>
 
                   <SearchModal
@@ -9934,16 +9917,14 @@ function Main() {
                           (c) => c.contact_id === contactId
                         );
                         if (contact) {
-                          // First select the chat
                           selectChat(
                             contact.contact_id!,
                             contact.id!,
                             contact
                           ).then(() => {
-                            // After chat is loaded and messages are fetched, scroll to the message
                             setTimeout(() => {
                               scrollToMessage(id);
-                            }, 5000); // Give time for messages to load
+                        }, 5000);
                           });
                         }
                       }
@@ -9953,46 +9934,41 @@ function Main() {
                     contacts={contacts}
                   />
                 </div>
-              }
+
+            {/* Action buttons with WhatsApp Web styling */}
+            <div className="flex items-center space-x-1.5">
               {isAssistantAvailable && (
                 <button
-                  className={`flex items-center justify-start p-2 !box ${
+                  className={`flex items-center justify-center p-1.5 rounded-md transition-all duration-200 hover:scale-105 active:scale-95 ${
                     companyStopBot
-                      ? "bg-red-500 hover:bg-red-600"
-                      : "bg-green-500 hover:bg-green-600"
+                      ? "bg-red-500 hover:bg-red-600 text-white"
+                      : "bg-green-500 hover:bg-green-600 text-white"
                   } ${userRole === "3" ? "opacity-50 cursor-not-allowed" : ""}`}
                   onClick={toggleBot}
                   disabled={userRole === "3"}
+                  title={companyStopBot ? "Stop Bot" : "Start Bot"}
                 >
                   <Lucide
                     icon={companyStopBot ? "PowerOff" : "Power"}
-                    className={`w-5 h-5 ${
-                      companyStopBot ? "text-red-500" : "text-green-500"
-                    }`}
+                    className="w-3 h-3"
                   />
                 </button>
               )}
+
+              {/* Employee assignment button */}
               <Menu as="div" className="relative inline-block text-left">
-                <div className="flex items-right space-x-3">
-                  <Menu.Button
-                    as={Button}
-                    className="p-2 !box m-0"
-                    onClick={handleTagClick}
-                  >
-                    <span className="flex items-center justify-center w-5 h-5">
+                <Menu.Button className="flex items-center justify-center p-1.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-all duration-200">
                       <Lucide
                         icon="Users"
-                        className="w-5 h-5 text-gray-800 dark:text-gray-200"
+                    className="w-3 h-3 text-gray-800 dark:text-gray-200"
                       />
-                    </span>
                   </Menu.Button>
-                </div>
-                <Menu.Items className="absolute right-0 mt-2 w-60 shadow-lg rounded-md p-2 z-10 max-h-60 overflow-y-auto">
-                  <div className="p-2">
+                <Menu.Items className="absolute right-0 mt-1.5 w-36 shadow-lg rounded-md bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 p-1.5 z-10 max-h-40 overflow-y-auto">
+                  <div className="p-1.5">
                     <input
                       type="text"
                       placeholder="Search employees..."
-                      className="w-full p-2 border rounded-md mb-2"
+                      className="w-full p-1.5 border rounded-md mb-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
                       value={employeeSearch}
                       onChange={(e) => setEmployeeSearch(e.target.value)}
                     />
@@ -10000,11 +9976,11 @@ function Main() {
                   <Menu.Item>
                     {({ active }) => (
                       <button
-                        className={`flex items-center w-full text-left p-2 rounded-md ${
+                        className={`flex items-center w-full text-left p-1.5 rounded-md transition-colors duration-200 text-sm ${
                           !selectedEmployee
-                            ? "bg-primary text-white dark:bg-primary dark:text-white"
+                            ? "bg-blue-500 text-white"
                             : active
-                            ? "bg-gray-100 text-gray-900 dark:bg-gray-700 dark:text-gray-100"
+                            ? "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                             : "text-gray-700 dark:text-gray-200"
                         }`}
                         onClick={() => setSelectedEmployee(null)}
@@ -10022,21 +9998,20 @@ function Main() {
                         (userRole === "1" || employee.name === currentUserName)
                     )
                     .sort((a, b) => {
-                      // Handle null or undefined names
                       if (!a.name && !b.name) return 0;
-                      if (!a.name) return 1; // null names go last
-                      if (!b.name) return -1;
+                      if (!a.name) return 1;
+                      if (!b.name) return 1;
                       return a.name.localeCompare(b.name);
                     })
                     .map((employee) => (
                       <Menu.Item key={employee.id}>
                         {({ active }) => (
                           <button
-                            className={`flex items-center justify-between w-full text-left p-2 rounded-md ${
+                            className={`flex items-center justify-between w-full text-left p-1.5 rounded-md transition-colors duration-200 text-sm ${
                               selectedEmployee === employee.name
-                                ? "bg-primary text-white dark:bg-primary dark:text-white"
+                                ? "bg-blue-500 text-white"
                                 : active
-                                ? "bg-gray-100 text-gray-900 dark:bg-gray-700 dark:text-gray-100"
+                                ? "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                 : "text-gray-700 dark:text-gray-200"
                             }`}
                             onClick={() =>
@@ -10048,7 +10023,7 @@ function Main() {
                             }
                           >
                             <span>{employee.name}</span>
-                            <div className="flex items-center space-x-2 text-xs">
+                            <div className="flex items-center space-x-1.5 text-xs">
                               {employee.quotaLeads !== undefined && (
                                 <span className="text-gray-500 dark:text-gray-400">
                                   {employee.assignedContacts || 0}/
@@ -10062,23 +10037,23 @@ function Main() {
                     ))}
                 </Menu.Items>
               </Menu>
+
+              {/* Tags expansion toggle */}
               <button
-                className="p-2 !box m-0 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
+                className="p-1.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-all duration-200"
                 onClick={toggleTagsExpansion}
+                title={isTagsExpanded ? "Show Less Tags" : "Show More Tags"}
               >
-                <span className="flex items-center justify-center w-5 h-5">
                   <Lucide
                     icon={isTagsExpanded ? "ChevronUp" : "ChevronDown"}
-                    className="w-5 h-5 text-gray-800 dark:text-gray-200"
+                  className="w-3 h-3 text-gray-800 dark:text-gray-200"
                   />
-                </span>
               </button>
             </div>
           </div>
-          <div className="border-b border-gray-300 dark:border-gray-700 mt-4"></div>
         </div>
-        <div className="mt-4 mb-2 px-4 max-h-40 overflow-y-auto">
-          <div className="flex flex-wrap gap-2">
+        <div className="mt-2 mb-1 px-2 max-h-20 overflow-y-auto">
+          <div className="flex flex-wrap gap-1">
             {[
               "Mine",
               "All",
@@ -10090,7 +10065,7 @@ function Main() {
                     "Snooze",
                     "Stop Bot",
                     "Active Bot",
-                    "Resolved", // Added 'Active Bot'
+                    "Resolved",
                     ...(userData?.phone !== undefined && userData.phone !== -1
                       ? [
                           phoneNames[userData.phone] ||
@@ -10108,7 +10083,7 @@ function Main() {
                           "Group",
                           "stop bot",
                           "Active Bot",
-                        ].includes(tag.name) && // Added 'Active Bot'
+                        ].includes(tag.name) &&
                         !visiblePhoneTags.includes(tag.name)
                     ),
                   ]
@@ -10148,7 +10123,9 @@ function Main() {
                             (typeof e.name === "string"
                               ? e.name.toLowerCase()
                               : "") ===
-                            (typeof t === "string" ? t.toLowerCase() : String(t).toLowerCase())
+                            (typeof t === "string"
+                              ? t.toLowerCase()
+                              : String(t).toLowerCase())
                         )
                       )
                     : tagLower === "snooze"
@@ -10160,7 +10137,7 @@ function Main() {
                     : tagLower === "stop bot"
                     ? contactTags.includes("stop bot")
                     : tagLower === "active bot"
-                    ? !contactTags.includes("stop bot") // Added Active Bot condition
+                    ? !contactTags.includes("stop bot")
                     : phoneIndex !== -1
                     ? contact.phoneIndex === phoneIndex
                     : contactTags.includes(tagLower)) &&
@@ -10174,98 +10151,147 @@ function Main() {
                 <button
                   key={typeof tag === "string" ? tag : tag.id}
                   onClick={() => filterTagContact(tagName)}
-                  className={`px-3 py-1 rounded-full text-sm flex items-center ${
+                  className={`px-2 py-1 rounded-full text-xs font-medium transition-all duration-200 hover:scale-105 active:scale-95 ${
                     tagLower === activeTags[0]
-                      ? "bg-primary text-white dark:bg-primary dark:text-white"
-                      : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
-                  } transition-colors duration-200`}
+                      ? "bg-primary text-white shadow-md"
+                      : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600"
+                  }`}
                 >
+                  <span className="flex items-center space-x-1">
                   <span>{tagName}</span>
                   {userData?.role === "1" && unreadCount > 0 && (
                     <span
-                      className={`ml-2 px-1.5 py-0.5 rounded-full text-xs ${
+                        className={`px-1 py-0.5 rounded-full text-xs font-bold ${
                         tagName.toLowerCase() === "stop bot"
-                          ? "bg-red-700"
+                            ? "bg-danger/20 text-danger dark:bg-danger/20 dark:text-danger"
                           : tagName.toLowerCase() === "active bot"
-                          ? "bg-green-700"
-                          : "bg-primary"
-                      } text-white`}
+                            ? "bg-success/20 text-success dark:bg-success/20 dark:text-success"
+                            : "bg-primary/20 text-primary dark:bg-primary/20 dark:text-primary"
+                        }`}
                     >
                       {unreadCount}
                     </span>
                   )}
+                  </span>
                 </button>
               );
             })}
           </div>
         </div>
         <span
-          className="flex items-center justify-center p-2 cursor-pointer text-primary dark:text-blue-400 hover:underline transition-colors duration-200"
+          className="flex items-center justify-center p-1.5 cursor-pointer text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-all duration-200 font-medium text-xs"
           onClick={toggleTagsExpansion}
         >
-          {isTagsExpanded ? "Show Less" : "Show More"}
+          <span className="flex items-center space-x-1">
+            <span>{isTagsExpanded ? "Show Less" : "Show More"}</span>
+            <Lucide
+              icon={isTagsExpanded ? "ChevronUp" : "ChevronDown"}
+              className="w-2 h-2"
+            />
+          </span>
         </span>
         <div
-          className="bg-gray-100 dark:bg-gray-900 flex-1 overflow-y-scroll h-full relative"
+          className="bg-white dark:bg-gray-900 flex-1 overflow-y-scroll h-full relative dark:border-gray-700 p-2"
           ref={contactListRef}
         >
           {isLoadingMoreContacts && (
-            <div className="absolute inset-0 bg-white dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 flex items-center justify-center z-10">
-              <div className="flex flex-col items-center">
-                <LoadingIcon icon="oval" className="w-8 h-8 text-primary" />
-                <span className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            <div className="absolute inset-0 bg-white dark:bg-gray-800 bg-opacity-90 dark:bg-opacity-90 flex items-center justify-center z-10">
+              <div className="flex flex-col items-center bg-white dark:bg-gray-800 p-3 rounded-md shadow-md">
+                <LoadingIcon icon="oval" className="w-4 h-4 text-blue-500" />
+                <span className="mt-1.5 text-xs text-gray-600 dark:text-gray-400 font-medium">
                   Loading more contacts...
                 </span>
               </div>
             </div>
           )}
           {loadedContacts.length === 0 ? ( // Check if loadedContacts is empty
-            <div className="flex items-center justify-center h-full">
+            <div className="flex items-center justify-center h-full min-h-[400px]">
               {loadedContacts.length === 0 && (
-                <div className="flex flex-col items-center">
-                  <div>
+                <div className="flex flex-col items-center text-center max-w-md mx-auto">
+                  {/* Modern icon with gradient background */}
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center mb-3 shadow-md">
                     <Lucide
                       icon="MessageCircle"
-                      className="h-10 w-10 text-gray-500 dark:text-gray-400 mb-2"
+                      className="h-5 w-5 text-white"
                     />
                   </div>
-                  <div className="text-gray-500 text-2xl dark:text-gray-400 mt-2">
+
+                  {/* Main heading with better typography */}
+                  <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-1">
                     {isInitialLoading
                       ? "Loading contacts..."
+                      : isTagFiltering
+                      ? "Searching contacts..."
                       : "No contacts found"}
-                  </div>
+                  </h2>
+
+                  {/* Subtitle with better styling */}
+                  <p className="text-gray-600 dark:text-gray-400 mb-3 text-center text-sm">
+                    {isInitialLoading
+                      ? "Please wait while we load your contacts"
+                      : isTagFiltering
+                      ? "Searching through all your contacts..."
+                      : "Start by adding your first contact or importing from your phone"}
+                  </p>
+
+                  {/* Enhanced loading progress */}
                   {isInitialLoading && (
-                    <div className="mt-4 w-full max-w-xs">
-                      <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
-                        <span>Loading contacts...</span>
-                        <span>{realLoadingProgress}%</span>
+                    <div className="w-full max-w-sm bg-gray-100 dark:bg-gray-800 rounded-lg p-3 shadow-inner">
+                      <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1.5">
+                        <span className="font-medium">Loading progress</span>
+                        <span className="font-bold text-blue-600 dark:text-blue-400">
+                          {realLoadingProgress}%
+                        </span>
                       </div>
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+
+                      {/* Modern progress bar */}
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
                         <div
-                          className="bg-primary h-2 rounded-full transition-all duration-300 ease-out"
+                          className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-500 ease-out shadow-sm"
                           style={{ width: `${realLoadingProgress}%` }}
                         ></div>
                       </div>
+
+                      {/* Loading steps with better visual hierarchy */}
+                      <div className="mt-4 space-y-2">
                       {loadingSteps.userConfig && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          ✓ User configuration loaded
+                          <div className="flex items-center text-xs text-green-600 dark:text-green-400">
+                            <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                            <span>User configuration loaded</span>
                         </div>
                       )}
                       {loadingSteps.contactsFetch && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          ✓ Contacts fetched
+                          <div className="flex items-center text-xs text-green-600 dark:text-green-400">
+                            <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                            <span>Contacts fetched</span>
                         </div>
                       )}
                       {loadingSteps.contactsProcess && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          ✓ Processing contacts...
+                          <div className="flex items-center text-xs text-blue-600 dark:text-blue-400">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse"></div>
+                            <span>Processing contacts...</span>
                         </div>
                       )}
                       {loadingSteps.complete && (
-                        <div className="text-xs text-green-500 mt-1">
-                          ✓ Loading complete!
+                          <div className="flex items-center text-xs text-green-600 dark:text-green-400 font-medium">
+                            <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                            <span>Loading complete!</span>
                         </div>
                       )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Enhanced tag filtering state */}
+                  {isTagFiltering && (
+                    <div className="w-full max-w-sm bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-800">
+                      <div className="flex items-center justify-center mb-4">
+                        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                      </div>
+                      <p className="text-sm text-blue-700 dark:text-blue-300 font-medium text-center">
+                        Searching through {contacts.length.toLocaleString()}{" "}
+                        contacts...
+                      </p>
                     </div>
                   )}
                 </div>
@@ -10280,26 +10306,22 @@ function Main() {
                 }
               >
                 <div
-                  className={`m-2 pr-3 pb-2 pt-2 rounded-lg cursor-pointer flex items-center space-x-3 group ${
+                  className={`px-2 py-1.5 cursor-pointer transition-all duration-200 group hover:bg-gray-100/50 dark:hover:bg-gray-700/30 mx-1 my-0.5 select-none ${
                     contact.contact_id !== undefined
                       ? selectedChatId === contact.contact_id
-                        ? "bg-slate-300 text-white dark:bg-gray-800 dark:text-gray-200"
-                        : "hover:bg-gray-300 dark:hover:bg-gray-700"
+                        ? "bg-blue-100/50 dark:bg-blue-900/20 border border-blue-500/30 rounded-lg"
+                        : "bg-transparent"
                       : selectedChatId === contact.contact_id
-                      ? "bg-slate-300 text-white dark:bg-gray-800 dark:text-gray-200"
-                      : "hover:bg-gray-300 dark:hover:bg-gray-700"
+                      ? "bg-blue-100/50 dark:bg-blue-900/20 border border-blue-500/30 rounded-lg"
+                      : "bg-transparent"
                   }`}
                   onClick={() => selectChat(contact.contact_id!, contact.id!)}
                   onContextMenu={(e) => handleContextMenu(e, contact)}
+                  title="Right-click for more options"
                 >
-                  <div
-                    key={contact.id}
-                    className="hidden cursor-pointer"
-                    onClick={() => selectChat(contact.chat_id!, contact.id!)}
-                  ></div>
-                  <div className="relative w-14 h-14">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-14 h-14 bg-gray-400 dark:bg-gray-600 rounded-full flex items-center justify-center text-white text-xl overflow-hidden">
+                  <div className="flex items-center space-x-1.5">
+                    <div className="relative flex-shrink-0">
+                      <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center text-gray-600 dark:text-gray-300 overflow-hidden">
                         {contact &&
                           (contact.chat_id &&
                           contact.chat_id.includes("@g.us") ? (
@@ -10307,9 +10329,9 @@ function Main() {
                               <img
                                 src={contact.profilePicUrl}
                                 alt="Profile"
+                                className="w-full h-full object-cover rounded-full"
                                 onError={(e) => {
                                   const originalSrc = e.currentTarget.src;
-                                  // Prevent infinite loop by checking if we're already showing the fallback
                                   if (originalSrc !== logoImage) {
                                     e.currentTarget.src = logoImage;
                                   }
@@ -10318,79 +10340,71 @@ function Main() {
                             ) : (
                               <Lucide
                                 icon="Users"
-                                className="w-8 h-8 text-white dark:text-gray-200"
+                                className="w-2.5 h-2.5 text-white dark:text-gray-200"
                               />
                             )
                           ) : contact.profilePicUrl ? (
                             <img
                               src={contact.profilePicUrl}
                               alt={contact.contactName || "Profile"}
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-cover rounded-full"
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-gray-400 dark:bg-gray-600 text-white">
-                              {<Lucide icon="User" className="w-10 h-10" />}
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                              <Lucide icon="User" className="w-2.5 h-2.5" />
                             </div>
                           ))}
                       </div>
+
+                      {/* Unread badge - Show prominently when count > 0, show plain text when count = 0 */}
+                      {contact.unreadCount !== undefined && (
+                        <>
+                          {/* Prominent badge for unread messages */}
                       {(contact.unreadCount ?? 0) > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-primary text-white dark:bg-blue-600 dark:text-gray-200 text-xs rounded-full px-2.5 py-1 min-w-[20px] h-[20px] flex items-center justify-center">
-                          {contact.unreadCount}
+                            <span className="absolute -top-0.5 -right-0.5 bg-green-500 text-white text-xs rounded-full px-1 py-0.5 min-w-[14px] h-[14px] flex items-center justify-center font-bold">
+                              {(contact.unreadCount ?? 0) > 99
+                                ? "99+"
+                                : contact.unreadCount ?? 0}
                         </span>
+                          )}
+                        </>
                       )}
                     </div>
-                  </div>
+
                   <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center">
-                      <div className="flex flex-col">
-                        <span className="font-semibold capitalize truncate w-25 text-gray-800 dark:text-gray-200">
+                      <div className="flex flex-col space-y-0.5">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate mb-0">
                           {(
                             contact.contactName ??
                             contact.firstName ??
                             contact.phone ??
                             ""
-                          ).slice(0, 20)}
+                              ).slice(0, 25)}
                           {(
                             contact.contactName ??
                             contact.firstName ??
                             contact.phone ??
                             ""
-                          ).length > 20
+                              ).length > 25
                             ? "..."
                             : ""}
-                        </span>
-                        {!contact.chat_id?.includes("@g.us") &&
-                          (userData?.role === "1" ||
-                            userData?.role === "2") && (
-                            <span
-                              className="text-xs text-gray-600 dark:text-gray-400 truncate"
-                              style={{
-                                visibility:
-                                  contact.contactName === contact.phone ||
-                                  contact.firstName === contact.phone
-                                    ? "hidden"
-                                    : "visible",
-                                display:
-                                  contact.contactName === contact.phone ||
-                                  contact.firstName === contact.phone
-                                    ? "flex"
-                                    : "block",
-                                alignItems: "center",
-                              }}
-                            >
-                              {contact.phone}
-                            </span>
-                          )}
-                      </div>
-                      <span className="text-xs flex items-center space-x-2 text-gray-600 dark:text-gray-400">
+                            </h3>
+
+                            <div className="flex items-center space-x-0.5 text-xs text-gray-600 dark:text-gray-400">
                         <div className="flex flex-grow items-center">
                           {(() => {
                             const employeeTags =
                               contact.tags?.filter((tag) =>
                                 employeeList.some(
                                   (employee) =>
-                                    (employee.name?.toLowerCase() || "") ===
-                                    (typeof tag === "string" ? tag : String(tag)).toLowerCase()
+                                          (employee.name?.toLowerCase() ||
+                                            "") ===
+                                          (typeof tag === "string"
+                                            ? tag
+                                            : String(tag)
+                                          ).toLowerCase()
                                 )
                               ) || [];
 
@@ -10399,12 +10413,15 @@ function Main() {
                                 (tag) =>
                                   !employeeList.some(
                                     (employee) =>
-                                      (employee.name?.toLowerCase() || "") ===
-                                      (typeof tag === "string" ? tag : String(tag)).toLowerCase()
+                                            (employee.name?.toLowerCase() ||
+                                              "") ===
+                                            (typeof tag === "string"
+                                              ? tag
+                                              : String(tag)
+                                            ).toLowerCase()
                                   )
                               ) || [];
 
-                            // Create a unique set of all tags
                             const uniqueTags = Array.from(
                               new Set([...otherTags])
                             );
@@ -10412,23 +10429,25 @@ function Main() {
                             return (
                               <>
                                 <button
-                                  className={`text-md ${
+                                        className={`text-sm ${
                                     contact.pinned
-                                      ? "text-blue-500 dark:text-blue-400 font-bold"
-                                      : "text-gray-500 group-hover:text-blue-500 dark:text-gray-400 dark:group-hover:text-blue-400 group-hover:font-bold dark:group-hover:font-bold mr-1"
+                                            ? "text-blue-600 dark:text-blue-400 font-bold"
+                                            : "text-gray-600 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:font-bold mr-1"
                                   }`}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    togglePinConversation(contact.chat_id!);
+                                          togglePinConversation(
+                                            contact.chat_id!
+                                          );
                                   }}
                                 >
                                   {contact.pinned ? (
                                     <svg
                                       xmlns="http://www.w3.org/2000/svg"
-                                      width="16"
-                                      height="16"
+                                            width="9"
+                                            height="9"
                                       viewBox="0 0 48 48"
-                                      className="text-gray-800 dark:text-blue-400 fill-current mr-1"
+                                            className="text-blue-600 dark:text-blue-400 fill-current mr-0.5"
                                     >
                                       <mask id="ipSPin0">
                                         <path
@@ -10448,8 +10467,8 @@ function Main() {
                                   ) : (
                                     <svg
                                       xmlns="http://www.w3.org/2000/svg"
-                                      width="16"
-                                      height="16"
+                                            width="18"
+                                            height="18"
                                       viewBox="0 0 48 48"
                                       className="group-hover:block hidden"
                                     >
@@ -10464,90 +10483,64 @@ function Main() {
                                   )}
                                 </button>
                                 {uniqueTags.filter(
-                                  (tag) => (typeof tag === "string" ? tag : String(tag)).toLowerCase() !== "stop bot"
-                                ).length > 0 && (
-                                  <Tippy
-                                    content={uniqueTags
-                                      .filter(
                                         (tag) =>
-                                          (typeof tag === "string" ? tag : String(tag)).toLowerCase() !== "stop bot"
-                                      )
-                                      .map(
-                                        (tag) =>
-                                          tag.charAt(0).toUpperCase() +
-                                          tag.slice(1)
-                                      )
-                                      .join(", ")}
-                                    options={{
-                                      interactive: true,
-                                      appendTo: () => document.body,
-                                    }}
-                                  >
-                                    <span className="bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-200 text-xs font-semibold mr-1 px-2.5 py-0.5 rounded-full cursor-pointer">
+                                          (typeof tag === "string"
+                                            ? tag
+                                            : String(tag)
+                                          ).toLowerCase() !== "stop bot"
+                                      ).length > 0 && (
+                                        <span className="bg-blue-100 dark:bg-blue-600/30 text-blue-700 dark:text-blue-300 text-xs font-medium px-1.5 py-0.5 rounded-full mr-1">
                                       <Lucide
                                         icon="Tag"
-                                        className="w-4 h-4 inline-block"
+                                              className="w-3 h-3 inline-block mr-0.5"
                                       />
-                                      <span className="ml-1">
                                         {
                                           uniqueTags.filter(
                                             (tag) =>
-                                              (typeof tag === "string" ? tag : String(tag)).toLowerCase() !== "stop bot"
+                                                (typeof tag === "string"
+                                                  ? tag
+                                                  : String(tag)
+                                                ).toLowerCase() !== "stop bot"
                                           ).length
                                         }
                                       </span>
-                                    </span>
-                                  </Tippy>
                                 )}
                                 {employeeTags.length > 0 && (
-                                  <Tippy
-                                    content={employeeTags
-                                      .map((tag) => {
-                                        const employee = employeeList.find(
-                                          (e) =>
-                                            (e.name?.toLowerCase() || "") ===
-                                            (typeof tag === "string" ? tag : String(tag)).toLowerCase()
-                                        );
-                                        return employee ? employee.name : tag;
-                                      })
-                                      .join(", ")}
-                                    options={{
-                                      interactive: true,
-                                      appendTo: () => document.body,
-                                    }}
-                                  >
-                                    <span className="bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200 text-xs font-semibold mr-1 px-2.5 py-0.5 rounded-full cursor-pointer">
+                                        <span className="bg-green-100 dark:bg-green-600/30 text-green-700 dark:text-green-300 text-xs font-medium px-1.5 py-0.5 rounded-full mr-1">
                                       <Lucide
                                         icon="Users"
-                                        className="w-4 h-4 inline-block"
+                                              className="w-3 h-3 inline-block mr-0.5"
                                       />
-                                      <span className="ml-1 text-xxs capitalize">
                                         {employeeTags.length === 1
-                                          ?                                             employeeList.find(
+                                            ? employeeList.find(
                                               (e) =>
                                                 (e.name?.toLowerCase() ||
                                                   "") ===
-                                                (typeof employeeTags[0] === "string" ? employeeTags[0] : String(employeeTags[0])).toLowerCase()
+                                                  (typeof employeeTags[0] ===
+                                                  "string"
+                                                    ? employeeTags[0]
+                                                    : String(employeeTags[0])
+                                                  ).toLowerCase()
                                             )?.employeeId ||
                                             (employeeTags[0]?.length > 8
                                               ? employeeTags[0].slice(0, 6)
                                               : employeeTags[0])
                                           : employeeTags.length}
                                       </span>
-                                    </span>
-                                  </Tippy>
                                 )}
                               </>
                             );
                           })()}
+                              </div>
+                            </div>
                         </div>
 
-                        <div className="flex items-center align-top space-x-1">
+                          <div className="flex flex-col items-end space-y-0 ml-1">
                           <span
-                            className={`${
+                              className={`text-xs ${
                               contact.unreadCount && contact.unreadCount > 0
-                                ? "text-blue-500 font-medium"
-                                : ""
+                                  ? "text-green-600 dark:text-green-400 font-medium"
+                                  : "text-gray-600 dark:text-gray-400"
                             }`}
                           >
                             {contact.last_message?.createdAt ||
@@ -10557,22 +10550,21 @@ function Main() {
                                     (contact.last_message.timestamp &&
                                       contact.last_message.timestamp * 1000)
                                 )
-                              : "No Messages"}
+                                : "New"}
                           </span>
                         </div>
-                      </span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span
-                        className="text-sm truncate text-gray-600 dark:text-gray-400"
-                        style={{ width: "200px" }}
-                      >
+
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1 min-w-0">
+                            <div className="mt-0.5">
+                              <span className="text-xs text-gray-700 dark:text-gray-400 truncate block">
                         {contact.last_message ? (
                           <>
                             {contact.last_message.from_me && (
                               <svg
                                 xmlns="http://www.w3.org/2000/svg"
-                                className="inline-block items-center justify-start w-5 h-5 text-blue-500"
+                                        className="inline-block w-3 h-3 text-blue-600 dark:text-blue-400 mr-1"
                                 viewBox="0 0 20 20"
                                 fill="currentColor"
                               >
@@ -10591,7 +10583,9 @@ function Main() {
                                 switch (message.type) {
                                   case "text":
                                   case "chat":
-                                    return message.text?.body || "Message";
+                                            return (
+                                              message.text?.body || "Message"
+                                            );
                                   case "image":
                                     return message.text?.body
                                       ? `📷 ${message.text?.body}`
@@ -10628,136 +10622,110 @@ function Main() {
                                   case "privateNote":
                                     return "📝 Private note";
                                   default:
-                                    return message.text?.body || "Message";
+                                            return (
+                                              message.text?.body || "Message"
+                                            );
                                 }
                               };
 
                               const content = getMessageContent();
-                              return message.from_me ? content : content;
+                                      return message.from_me
+                                        ? content
+                                        : content;
                             })()}
                           </>
                         ) : (
                           "No Messages"
                         )}
                       </span>
+                            </div>
+                          </div>
+
                       {isAssistantAvailable && (
                         <div
-                          onClick={(e) => toggleStopBotLabel(contact, index, e)}
-                          className="cursor-pointer"
-                        >
-                          <label className="inline-flex items-center cursor-pointer">
+                              onClick={(e) =>
+                                toggleStopBotLabel(contact, index, e)
+                              }
+                              className="cursor-pointer ml-2"
+                              title={
+                                contact.tags?.includes("stop bot")
+                                  ? "Bot Disabled"
+                                  : "Bot Enabled"
+                              }
+                            >
+                              <label className="inline-flex items-center cursor-pointer group">
                             <input
                               type="checkbox"
                               className="sr-only peer"
                               checked={contact.tags?.includes("stop bot")}
                               readOnly
                             />
-                            <div
-                              className={`mt-1 ml-0 relative w-11 h-6 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer ${
+                                <span
+                                  className={`relative w-8 h-4 flex items-center rounded-full transition-colors duration-300 ${
                                 contact.tags?.includes("stop bot")
-                                  ? "bg-red-500 dark:bg-red-700"
-                                  : "bg-green-500 dark:bg-green-700"
-                              } peer-checked:after:-translate-x-full rtl:peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:end-[2px] after:bg-white after:border-gray-200 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-400`}
-                            ></div>
+                                      ? "bg-gradient-to-r from-red-500 to-red-700"
+                                      : "bg-gradient-to-r from-green-500 to-green-700"
+                                  }`}
+                                >
+                                  <span
+                                    className={`absolute left-0.5 top-0.5 w-3 h-3 rounded-full bg-white shadow-md transition-transform duration-300 ${
+                                      contact.tags?.includes("stop bot")
+                                        ? "translate-x-4"
+                                        : "translate-x-0"
+                                    }`}
+                                  ></span>
+                                </span>
                           </label>
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
-                {index < filteredContacts.length - 1 && (
-                  <hr className="my-2 border-gray-300 dark:border-gray-700" />
-                )}
+                  </div>
+                </div>
               </React.Fragment>
             ))
           ) : null}
         </div>
         <div
-          className={`flex justify-center items-center mt-4 mb-4 ${
+          className={`flex flex-col justify-center items-center gap-1.5 mt-3 mb-3 px-2 ${
             isLoadingMoreContacts ? "opacity-50" : ""
           }`}
         >
+          {/* Main Pagination */}
+          <div className="flex justify-center items-center">
           <ReactPaginate
             breakLabel="…"
             nextLabel="Next"
             onPageChange={isLoadingMoreContacts ? () => {} : handlePageChange}
-            pageRangeDisplayed={5}
+              pageRangeDisplayed={2}
             marginPagesDisplayed={2}
             pageCount={Math.ceil(totalContacts / contactsPerPage)}
             previousLabel="Previous"
             renderOnZeroPageCount={null}
-            containerClassName="flex justify-center items-center flex-wrap gap-1"
-            pageClassName="mx-0.5"
-            pageLinkClassName="px-1.5 py-1 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 text-xs min-w-[28px] text-center"
+              containerClassName="flex justify-center items-center flex-wrap gap-0.5"
+              pageClassName="mx-0.25"
+              pageLinkClassName="px-1.5 py-1 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs min-w-[18px] text-center font-medium transition-all duration-200 border border-gray-200 dark:border-gray-600"
             previousClassName="mx-0.5"
             nextClassName="mx-0.5"
-            previousLinkClassName="px-1.5 py-1 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 text-xs"
-            nextLinkClassName="px-1.5 py-1 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 text-xs"
+              previousLinkClassName="px-1.5 py-1 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs font-medium transition-all duration-200 border border-gray-200 dark:border-gray-600"
+              nextLinkClassName="px-1.5 py-1 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs font-medium transition-all duration-200 border border-gray-200 dark:border-gray-600"
             disabledClassName="opacity-50 cursor-not-allowed"
             activeClassName="font-bold"
-            activeLinkClassName="bg-blue-500 text-white hover:bg-blue-600 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
+              activeLinkClassName="bg-blue-500 text-white hover:bg-blue-600 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700 border-blue-500"
             forcePage={currentPage}
           />
-
-          {/* Quick Navigation */}
-          <div className="flex items-center gap-2 ml-4">
-            <span className="text-xs text-gray-600 dark:text-gray-400">
-              Go to:
-            </span>
-            <input
-              type="number"
-              min="1"
-              max={Math.ceil(totalContacts / contactsPerPage)}
-              value={currentPage + 1}
-              onChange={(e) => {
-                const page = parseInt(e.target.value) - 1;
-                if (
-                  page >= 0 &&
-                  page < Math.ceil(totalContacts / contactsPerPage)
-                ) {
-                  handlePageChange({ selected: page });
-                }
-              }}
-              className="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
-            />
-            <span className="text-xs text-gray-600 dark:text-gray-400">
-              of {Math.ceil(totalContacts / contactsPerPage)}
-            </span>
-
-            {/* Quick Jump Buttons */}
-            <div className="flex items-center gap-1 ml-2">
-              <button
-                onClick={() => handlePageChange({ selected: 0 })}
-                disabled={currentPage === 0}
-                className="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
-              >
-                First
-              </button>
-              <button
-                onClick={() =>
-                  handlePageChange({
-                    selected: Math.ceil(totalContacts / contactsPerPage) - 1,
-                  })
-                }
-                disabled={
-                  currentPage === Math.ceil(totalContacts / contactsPerPage) - 1
-                }
-                className="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
-              >
-                Last
-              </button>
-            </div>
           </div>
         </div>
         {isLoadingMoreContacts && (
-          <div className="flex flex-col items-center justify-center mt-4 mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <LoadingIcon icon="oval" className="w-6 h-6 text-primary" />
-            <span className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          <div className="flex flex-col items-center justify-center mt-2 mb-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-md">
+            <LoadingIcon icon="oval" className="w-3 h-3 text-primary" />
+            <span className="mt-1 text-xs text-gray-600 dark:text-gray-400">
               Loading more contacts...
             </span>
-            <div className="mt-2 w-full max-w-xs">
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                <div className="bg-primary h-2 rounded-full animate-pulse"></div>
+            <div className="mt-1 w-full max-w-xs">
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1">
+                <div className="bg-primary h-1 rounded-full animate-pulse"></div>
               </div>
             </div>
           </div>
@@ -10766,23 +10734,23 @@ function Main() {
       <div className="flex flex-col w-full sm:w-3/4  dark:bg-gray-900 relative flext-1 overflow-hidden">
         {selectedChatId ? (
           <>
-            <div className="flex items-center justify-between p-3 border-b border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
+            <div className="flex items-center justify-between p-3 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
               <div className="flex items-center">
                 <button
                   onClick={handleBack}
-                  className="back-button p-2 text-lg"
+                  className="back-button p-1.5 text-sm hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors duration-200"
                 >
-                  <Lucide icon="ChevronLeft" className="w-6 h-6" />
+                  <Lucide icon="ChevronLeft" className="w-3.5 h-3.5" />
                 </button>
-                <div className="w-10 h-10 overflow-hidden rounded-full shadow-lg bg-gray-700 flex items-center justify-center text-white mr-3 ml-2">
+                <div className="w-8 h-8 overflow-hidden rounded-full shadow-md bg-gray-700 flex items-center justify-center text-white mr-2 ml-1.5">
                   {selectedContact?.profilePicUrl ? (
                     <img
                       src={selectedContact.profilePicUrl}
                       alt={selectedContact.contactName || "Profile"}
-                      className="w-10 h-10 rounded-full object-cover"
+                      className="w-8 h-8 rounded-full object-cover"
                     />
                   ) : (
-                    <span className="text-2xl font-bold">
+                    <span className="text-sm font-bold">
                       {selectedContact?.contactName
                         ? selectedContact.contactName.charAt(0).toUpperCase()
                         : "?"}
@@ -10791,7 +10759,7 @@ function Main() {
                 </div>
 
                 <div>
-                  <div className="font-semibold text-gray-800 dark:text-gray-200 capitalize">
+                  <div className="text-sm font-bold text-gray-800 dark:text-gray-200 capitalize mb-0.5">
                     {selectedContact.contactName && selectedContact.lastName
                       ? `${selectedContact.contactName} ${selectedContact.lastName}`
                       : selectedContact.contactName ||
@@ -10807,48 +10775,26 @@ function Main() {
                 </div>
               </div>
 
-              <div className="flex items-center space-x-3">
-                <div className="hidden sm:flex space-x-3">
-                  <button
-                    className="p-2 m-0 !box"
-                    onClick={() => {
-                      if (userRole !== "3") {
-                        setBlastMessageModal(true);
-                      } else {
-                        toast.error(
-                          "You don't have permission to send blast messages."
-                        );
-                      }
-                    }}
-                    disabled={userRole === "3"}
-                  >
-                    <span className="flex items-center justify-center w-5 h-5">
-                      <Lucide
-                        icon="Send"
-                        className="w-5 h-5 text-gray-800 dark:text-gray-200"
-                      />
-                    </span>
-                  </button>
-                  {/* <button className="p-2 m-0 !box" onClick={handleReminderClick}>
-              <span className="flex items-center justify-center w-5 h-5">
-                <Lucide icon="BellRing" className="w-5 h-5 text-gray-800 dark:text-gray-200" />
-              </span>
-            </button> */}
+              <div className="flex items-center space-x-2">
+                <div className="hidden sm:flex space-x-2">
                   <Menu as="div" className="relative inline-block text-left">
-                    <Menu.Button as={Button} className="p-2 !box m-0">
-                      <span className="flex items-center justify-center w-5 h-5">
+                    <Menu.Button
+                      as={Button}
+                      className="p-2 !box m-0 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
+                    >
+                      <span className="flex items-center justify-center w-8 h-8">
                         <Lucide
                           icon="Users"
                           className="w-5 h-5 text-gray-800 dark:text-gray-200"
                         />
                       </span>
                     </Menu.Button>
-                    <Menu.Items className="absolute right-0 mt-2 w-60 shadow-lg rounded-md p-2 z-10 max-h-60 overflow-y-auto">
-                      <div className="p-2">
+                    <Menu.Items className="absolute right-0 mt-2 w-64 shadow-xl rounded-xl p-4 z-10 max-h-96 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                      <div className="mb-4">
                         <input
                           type="text"
                           placeholder="Search employees..."
-                          className="w-full p-2 border rounded-md mb-2"
+                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
                           value={employeeSearch}
                           onChange={(e) => setEmployeeSearch(e.target.value)}
                         />
@@ -10856,9 +10802,9 @@ function Main() {
                       <Menu.Item>
                         {({ active }) => (
                           <button
-                            className={`flex items-center w-full text-left p-2 rounded-md ${
+                            className={`flex items-center w-full text-left px-4 py-3 rounded-lg text-base font-medium ${
                               !selectedEmployee
-                                ? "bg-primary text-white dark:bg-primary dark:text-white"
+                                ? "bg-blue-600 text-white dark:bg-blue-600 dark:text-white"
                                 : active
                                 ? "bg-gray-100 text-gray-900 dark:bg-gray-700 dark:text-gray-100"
                                 : "text-gray-700 dark:text-gray-200"
@@ -10887,9 +10833,9 @@ function Main() {
                           <Menu.Item key={employee.id}>
                             {({ active }) => (
                               <button
-                                className={`flex items-center justify-between w-full text-left p-2 rounded-md ${
+                                className={`flex items-center justify-between w-full text-left px-4 py-3 rounded-lg text-base ${
                                   selectedEmployee === employee.name
-                                    ? "bg-primary text-white dark:bg-primary dark:text-white"
+                                    ? "bg-blue-600 text-white dark:bg-blue-600 dark:text-white"
                                     : active
                                     ? "bg-gray-100 text-gray-900 dark:bg-gray-700 dark:text-gray-100"
                                     : "text-gray-700 dark:text-gray-200"
@@ -10906,8 +10852,10 @@ function Main() {
                                   );
                                 }}
                               >
-                                <span>{employee.name}</span>
-                                <div className="flex items-center space-x-2 text-xs">
+                                <span className="font-medium">
+                                  {employee.name}
+                                </span>
+                                <div className="flex items-center space-x-2 text-sm">
                                   {employee.quotaLeads !== undefined && (
                                     <span className="text-gray-500 dark:text-gray-400">
                                       {employee.assignedContacts || 0}/
@@ -10922,19 +10870,22 @@ function Main() {
                     </Menu.Items>
                   </Menu>
                   <Menu as="div" className="relative inline-block text-left">
-                    <Menu.Button as={Button} className="p-2 !box m-0">
-                      <span className="flex items-center justify-center w-5 h-5">
+                    <Menu.Button
+                      as={Button}
+                      className="p-2 !box m-0 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
+                    >
+                      <span className="flex items-center justify-center w-8 h-8">
                         <Lucide
                           icon="Tag"
                           className="w-5 h-5 text-gray-800 dark:text-gray-200"
                         />
                       </span>
                     </Menu.Button>
-                    <Menu.Items className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 shadow-lg rounded-md p-2 z-10 max-h-60 overflow-y-auto">
+                    <Menu.Items className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 shadow-xl rounded-xl p-4 z-10 max-h-96 overflow-y-auto border border-gray-200 dark:border-gray-700">
                       {tagList.map((tag) => (
                         <Menu.Item key={tag.id}>
                           <button
-                            className={`flex items-center w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md ${
+                            className={`flex items-center w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base ${
                               activeTags.includes(tag.name)
                                 ? "bg-gray-200 dark:bg-gray-700"
                                 : ""
@@ -10953,9 +10904,9 @@ function Main() {
                           >
                             <Lucide
                               icon="User"
-                              className="w-4 h-4 mr-2 text-gray-800 dark:text-gray-200"
+                              className="w-5 h-5 mr-3 text-gray-800 dark:text-gray-200"
                             />
-                            <span className="text-gray-800 dark:text-gray-200">
+                            <span className="text-gray-800 dark:text-gray-200 font-medium">
                               {tag.name}
                             </span>
                           </button>
@@ -10963,22 +10914,25 @@ function Main() {
                       ))}
                     </Menu.Items>
                   </Menu>
-                  <button className="p-2 m-0 !box" onClick={handleEyeClick}>
-                    <span className="flex items-center justify-center w-5 h-5">
+                  <button
+                    className="p-3 m-0 !box hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
+                    onClick={handleEyeClick}
+                  >
+                    <span className="flex items-center justify-center w-6 h-6">
                       <Lucide
                         icon={isTabOpen ? "X" : "Eye"}
-                        className="w-5 h-5 text-gray-800 dark:text-gray-200"
+                        className="w-6 h-6 text-gray-800 dark:text-gray-200"
                       />
                     </span>
                   </button>
                   <button
-                    className="p-2 m-0 !box"
+                    className="p-3 m-0 !box hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
                     onClick={handleMessageSearchClick}
                   >
-                    <span className="flex items-center justify-center w-5 h-5">
+                    <span className="flex items-center justify-center w-6 h-6">
                       <Lucide
                         icon={isMessageSearchOpen ? "X" : "Search"}
-                        className="w-5 h-5 text-gray-800 dark:text-gray-200"
+                        className="w-6 h-6 text-gray-800 dark:text-gray-200"
                       />
                     </span>
                   </button>
@@ -10987,37 +10941,34 @@ function Main() {
                   as="div"
                   className="sm:hidden relative inline-block text-left"
                 >
-                  <Menu.Button as={Button} className="p-2 !box m-0">
-                    <span className="flex items-center justify-center w-5 h-5">
+                  <Menu.Button
+                    as={Button}
+                    className="p-3 !box m-0 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
+                  >
+                    <span className="flex items-center justify-center w-6 h-6">
                       <Lucide
                         icon="MoreVertical"
-                        className="w-5 h-5 text-gray-800 dark:text-gray-200"
+                        className="w-6 h-6 text-gray-800 dark:text-gray-200"
                       />
                     </span>
                   </Menu.Button>
-                  <Menu.Items className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 shadow-lg rounded-md p-2 z-10">
-                    {/* <Menu.Item>
-                <button className="flex items-center w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md" onClick={handleReminderClick}>
-                  <Lucide icon="BellRing" className="w-4 h-4 mr-2 text-gray-800 dark:text-gray-200" />
-                  <span className="text-gray-800 dark:text-gray-200">Reminder</span>
-                </button>
-              </Menu.Item> */}
+                  <Menu.Items className="absolute right-0 mt-3 w-48 bg-white dark:bg-gray-800 shadow-xl rounded-xl p-3 z-10 border border-gray-200 dark:border-gray-700">
                     <Menu.Item>
                       <Menu
                         as="div"
                         className="relative inline-block text-left w-full"
                       >
-                        <Menu.Button className="flex items-center w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+                        <Menu.Button className="flex items-center w-full text-left p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base">
                           <Lucide
                             icon="Users"
-                            className="w-4 h-4 mr-2 text-gray-800 dark:text-gray-200"
+                            className="w-5 h-5 mr-3 text-gray-800 dark:text-gray-200"
                           />
                           <span className="text-gray-800 dark:text-gray-200">
                             Assign Employee
                           </span>
                         </Menu.Button>
-                        <Menu.Items className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 shadow-lg rounded-md p-2 z-10 overflow-y-auto max-h-96">
-                          <div className="mb-2">
+                        <Menu.Items className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 shadow-xl rounded-xl p-4 z-10 overflow-y-auto max-h-96 border border-gray-200 dark:border-gray-700">
+                          <div className="mb-4">
                             <input
                               type="text"
                               placeholder="Search employees..."
@@ -11025,7 +10976,7 @@ function Main() {
                               onChange={(e) =>
                                 setEmployeeSearch(e.target.value)
                               }
-                              className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                              className="w-full px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
                             />
                           </div>
                           {employeeList
@@ -11047,7 +10998,7 @@ function Main() {
                               return (
                                 <Menu.Item key={employee.id}>
                                   <button
-                                    className="flex items-center w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                                    className="flex items-center w-full text-left p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base"
                                     onClick={() =>
                                       handleAddTagToSelectedContacts(
                                         employee.name,
@@ -11070,20 +11021,20 @@ function Main() {
                         as="div"
                         className="relative inline-block text-left w-full"
                       >
-                        <Menu.Button className="flex items-center w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+                        <Menu.Button className="flex items-center w-full text-left p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base">
                           <Lucide
                             icon="Tag"
-                            className="w-4 h-4 mr-2 text-gray-800 dark:text-gray-200"
+                            className="w-5 h-5 mr-3 text-gray-800 dark:text-gray-200"
                           />
                           <span className="text-gray-800 dark:text-gray-200">
                             Add Tag
                           </span>
                         </Menu.Button>
-                        <Menu.Items className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 shadow-lg rounded-md p-2 z-10 max-h-60 overflow-y-auto">
+                        <Menu.Items className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 shadow-xl rounded-xl p-4 z-10 max-h-96 overflow-y-auto border border-gray-200 dark:border-gray-700">
                           {tagList.map((tag) => (
                             <Menu.Item key={tag.id}>
                               <button
-                                className="flex items-center w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                                className="flex items-center w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base"
                                 onClick={() => {
                                   console.log(
                                     "🎯 [UI] Tag assignment clicked (menu 2):",
@@ -11096,7 +11047,7 @@ function Main() {
                                   );
                                 }}
                               >
-                                <span className="text-gray-800 dark:text-gray-200">
+                                <span className="text-gray-800 dark:text-gray-200 font-medium">
                                   {tag.name}
                                 </span>
                               </button>
@@ -11107,12 +11058,12 @@ function Main() {
                     </Menu.Item>
                     <Menu.Item>
                       <button
-                        className="flex items-center w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                        className="flex items-center w-full text-left p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base"
                         onClick={handleEyeClick}
                       >
                         <Lucide
                           icon={isTabOpen ? "X" : "Eye"}
-                          className="w-4 h-4 mr-2 text-gray-800 dark:text-gray-200"
+                          className="w-5 h-5 mr-3 text-gray-800 dark:text-gray-200"
                         />
                         <span className="text-gray-800 dark:text-gray-200">
                           {isTabOpen ? "Close" : "View"} Details
@@ -11121,12 +11072,12 @@ function Main() {
                     </Menu.Item>
                     <Menu.Item>
                       <button
-                        className="flex items-center w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                        className="flex items-center w-full text-left p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base"
                         onClick={handleMessageSearchClick}
                       >
                         <Lucide
                           icon={isMessageSearchOpen ? "X" : "Search"}
-                          className="w-4 h-4 mr-2 text-gray-800 dark:text-gray-200"
+                          className="w-5 h-5 mr-3 text-gray-800 dark:text-gray-200"
                         />
                         <span className="text-gray-800 dark:text-gray-200">
                           {isMessageSearchOpen ? "Close" : "Open"} Search
@@ -11140,7 +11091,7 @@ function Main() {
             <div
               className="flex-1 overflow-y-auto p-2"
               style={{
-                paddingBottom: "150px",
+                paddingBottom: "75px",
                 backgroundColor: selectedContact
                   ? "transparent"
                   : "bg-white dark:bg-gray-800",
@@ -11151,12 +11102,12 @@ function Main() {
             >
               {isLoading2 && (
                 <div className="fixed top-0 left-0 right-10 bottom-0 flex justify-center items-center bg-opacity-50">
-                  <div className="items-center absolute top-1/2 left-1/2 transform translate-x-[200%] -translate-y-1/2 p-4">
+                  <div className="items-center absolute top-1/2 left-1/2 transform translate-x-[200%] -translate-y-1/2 p-6">
                     <div role="status">
                       <div className="flex flex-col items-center justify-end col-span-6 sm:col-span-3 xl:col-span-2">
                         <LoadingIcon
                           icon="spinning-circles"
-                          className="w-20 h-20 p-4 text-blue-500 dark:text-blue-400"
+                          className="w-24 h-24 p-6 text-blue-500 dark:text-blue-400"
                         />
                       </div>
                     </div>
@@ -11238,75 +11189,99 @@ function Main() {
                           }`}
                         >
                           {showDateHeader && (
-                            <div className="flex justify-center my-4">
-                              <div className="inline-block bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-bold py-1 px-4 rounded-lg shadow-md">
-                                {formatDateHeader(
-                                  message.timestamp || message.createdAt || ""
-                                )}
+                            <div className="flex justify-center my-3">
+                              <div className="inline-block bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-bold py-1 px-3 rounded-lg shadow-md text-sm">
+                                {(() => {
+                                  const messageDate = new Date(
+                                    (message.timestamp ||
+                                      message.createdAt ||
+                                      0) * 1000
+                                  );
+                                  const today = new Date();
+
+                                  if (isSameDay(messageDate, today)) {
+                                    return "Today";
+                                  } else if (
+                                    isSameDay(
+                                      messageDate,
+                                      new Date(
+                                        today.getTime() - 24 * 60 * 60 * 1000
+                                      )
+                                    )
+                                  ) {
+                                    return "Yesterday";
+                                  } else {
+                                    return formatDateHeader(
+                                      message.timestamp ||
+                                        message.createdAt ||
+                                        ""
+                                    );
+                                  }
+                                })()}
                               </div>
                             </div>
                           )}
                           <div className="flex items-center gap-2 relative">
                             <div
                               data-message-id={message.id}
-                              className={`p-2 mr-6 mb-5${
+                              className={`p-2 mr-5 mb-2 ${
                                 message.type === "privateNote"
                                   ? privateNoteClass
                                   : messageClass
-                              }relative`}
+                              } relative`}
                               style={{
                                 maxWidth:
                                   message.type === "document" ? "90%" : "70%",
                                 width: `${
                                   message.type === "document"
-                                    ? "400"
+                                    ? "600"
                                     : message.type !== "text"
-                                    ? "320"
+                                    ? "500"
                                     : message.text?.body
                                     ? Math.min(
                                         Math.max(
                                           message.text.body.length,
                                           message.text?.context?.quoted_content
                                             ?.body?.length || 0
-                                        ) * 30,
-                                        320
+                                        ) * 40,
+                                        500
                                       )
-                                    : "150"
+                                    : "250"
                                 }px`,
-                                minWidth: "200px",
+                                minWidth: "300px",
+                                backgroundColor: message.from_me ? "#dcf8c6" : undefined,
                               }}
                               onMouseEnter={() =>
                                 setHoveredMessageId(message.id)
                               }
                               onMouseLeave={() => setHoveredMessageId(null)}
                             >
-                              {/* {hoveredMessageId === message.id && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setReactionMessage(message);
-                            setShowReactionPicker(true);
-                          }}
-                          className="absolute top-0 right-0 -mt-2 -mr-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Lucide icon="Smile" className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                        </button>
-                      )} */}
+                              {/* Sender name display */}
+                              {!message.isPrivateNote && (
+                                <div className="text-xs font-medium mb-1 text-gray-600 dark:text-gray-400">
+                                  {message.from_me 
+                                    ? (userData?.name || "Me") 
+                                    : (selectedContact?.contactName || 
+                                       selectedContact?.firstName || 
+                                       selectedContact?.phone || 
+                                       "Contact")}
+                                </div>
+                              )}
                               {message.isPrivateNote && (
-                                <div className="flex items-center mb-1">
-                                  <Lock size={16} className="mr-1" />
-                                  <span className="text-xs font-semibold">
+                                <div className="flex items-center mb-1.5">
+                                  <Lock size={10} className="mr-1.5" />
+                                  <span className="text-sm font-semibold">
                                     Private Note
                                   </span>
                                 </div>
                               )}
-                              {message.chat_id &&
-                                (message.chat_id.includes("@g.us") ||
-                                  (userData?.companyId === "0123" &&
-                                    message.chat_id.includes("@c.us"))) &&
+                                    {message.chat_id &&
+                                      (message.chat_id.includes("@g.us") ||
+                                        (userData?.companyId === "0123" &&
+                                          message.chat_id.includes("@c.us"))) &&
                                 message.author && (
                                   <div
-                                    className="pb-0.5 text-sm font-medium capitalize"
+                                    className="pb-1 text-sm font-medium capitalize mb-1.5"
                                     style={{
                                       color: getAuthorColor(
                                         message.author.split("@")[0]
@@ -11314,12 +11289,12 @@ function Main() {
                                     }}
                                   >
                                     {message.author.split("@")[0].toLowerCase()}
-                                  </div>
+                              </div>
                                 )}
                               {message.type === "text" &&
                                 message.text?.context && (
                                   <div
-                                    className="p-2 mb-2 rounded bg-gray-200 dark:bg-gray-800 cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-700"
+                                    className="p-2 mb-2 rounded-lg bg-gray-200 dark:bg-gray-800 cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors duration-200"
                                     onClick={() => {
                                       const quotedMessageId =
                                         message.text?.context?.id;
@@ -11376,7 +11351,7 @@ function Main() {
                                     }}
                                   >
                                     <div
-                                      className="text-sm font-medium"
+                                      className="text-sm font-medium mb-1"
                                       style={{
                                         color: getAuthorColor(
                                           message.text.context.from
@@ -11396,14 +11371,8 @@ function Main() {
                                     </div>
                                   </div>
                                 )}
-                              {/* {message.chat_id && message.chat_id.includes('@g') && message.phoneIndex != null && phoneCount >= 2 && (
-                        <span className="text-sm font-medium pb-0.5 "
-                          style={{ color: getAuthorColor(message.phoneIndex.toString() ) }}>
-                          {phoneNames[message.phoneIndex] || `Phone ${message.phoneIndex + 1}`}
-                        </span>
-                      )} */}
                               {message.type === "privateNote" && (
-                                <div className="inline-block whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200">
+                                <div className="inline-block whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200 text-sm">
                                   {(() => {
                                     const text =
                                       typeof message.text === "string"
@@ -11431,12 +11400,12 @@ function Main() {
                                       message.userName !== "" &&
                                       message.chat_id &&
                                       message.chat_id.includes("@g.us") && (
-                                        <div className="text-sm text-gray-300 dark:text-gray-300 mb-1 capitalize font-medium">
+                                        <div className="text-sm text-gray-300 dark:text-gray-300 mb-1.5 capitalize font-medium">
                                           {message.userName}
                                         </div>
                                       )}
                                     <div
-                                      className={`whitespace-pre-wrap break-words overflow-hidden leading-relaxed text-[15px] font-normal ${
+                                      className={`whitespace-pre-wrap break-words overflow-hidden leading-relaxed text-sm font-normal ${
                                         message.from_me
                                           ? `${myMessageTextClass}`
                                           : `${otherMessageTextClass}`
@@ -11444,14 +11413,14 @@ function Main() {
                                       style={{
                                         wordBreak: "break-word",
                                         overflowWrap: "break-word",
-                                        lineHeight: "1.5",
+                                        lineHeight: "1.4",
                                         letterSpacing: "0.01em",
                                       }}
                                     >
                                       {formatText(message.text.body)}
                                     </div>
                                     {message.edited && (
-                                      <div className="text-xs text-gray-500 mt-1 italic">
+                                      <div className="text-sm text-gray-500 mt-1.5 italic">
                                         Edited
                                       </div>
                                     )}
@@ -11486,7 +11455,7 @@ function Main() {
                                         return logoImage; // Fallback to placeholder
                                       })()}
                                       alt="Image"
-                                      className="rounded-lg message-image cursor-pointer"
+                                      className="rounded-2xl message-image cursor-pointer"
                                       style={{
                                         maxWidth: "auto",
                                         maxHeight: "auto",
@@ -11527,26 +11496,26 @@ function Main() {
                                   </div>
                                   {message.image?.caption && (
                                     <div
-                                      className="mb-2"
+                                      className="mb-4"
                                       style={{
                                         maxWidth: "70%",
                                         width: `${Math.min(
                                           (message.image.caption.length || 0) *
-                                            10,
-                                          350
+                                            15,
+                                          500
                                         )}px`,
-                                        minWidth: "75px",
+                                        minWidth: "120px",
                                       }}
                                     >
                                       <div
-                                        className={`whitespace-pre-wrap break-words leading-relaxed text-[15px] font-normal ${
+                                        className={`whitespace-pre-wrap break-words leading-relaxed text-lg font-normal ${
                                           message.from_me
                                             ? "text-white dark:text-white"
                                             : "text-black dark:text-white"
                                         }`}
                                         style={{
-                                          lineHeight: "1.5",
-                                          letterSpacing: "0.01em",
+                                          lineHeight: "1.7",
+                                          letterSpacing: "0.03em",
                                         }}
                                       >
                                         {formatText(message.image.caption)}
@@ -11557,11 +11526,11 @@ function Main() {
                               )}
                               {message.type === "order" && message.order && (
                                 <div className="p-0 message-content">
-                                  <div className="flex items-center space-x-3 bg-emerald-800 rounded-lg p-2">
+                                  <div className="flex items-center space-x-2.5 bg-emerald-800 rounded-lg p-2.5">
                                     <img
                                       src={`data:image/jpeg;base64,${message.order.thumbnail}`}
                                       alt="Order"
-                                      className="w-12 h-12 rounded-lg object-cover"
+                                      className="w-10 h-10 rounded-lg object-cover"
                                       onError={(e) => {
                                         const originalSrc = e.currentTarget.src;
                                         console.error(
@@ -11575,10 +11544,10 @@ function Main() {
                                       }}
                                     />
                                     <div className="text-white">
-                                      <div className="flex items-center">
+                                      <div className="flex items-center mb-1">
                                         <Lucide
                                           icon="ShoppingCart"
-                                          className="w-4 h-4 mr-1"
+                                          className="w-3 h-3 mr-1.5"
                                         />
                                         <span className="text-sm">
                                           {message.order.itemCount} item
@@ -11615,7 +11584,7 @@ function Main() {
                                       src={message.gif.link}
                                       alt="GIF"
                                       className="rounded-lg message-image cursor-pointer"
-                                      style={{ maxWidth: "300px" }}
+                                      style={{ maxWidth: "200px" }}
                                       onClick={() =>
                                         openImageModal(message.gif?.link || "")
                                       }
@@ -11628,21 +11597,21 @@ function Main() {
                                         maxWidth: "70%",
                                         width: `${Math.min(
                                           (message.gif.caption.length || 0) *
-                                            10,
-                                          350
+                                            7.5,
+                                          250
                                         )}px`,
-                                        minWidth: "75px",
+                                        minWidth: "60px",
                                       }}
                                     >
                                       <div
-                                        className={`whitespace-pre-wrap break-words leading-relaxed text-[15px] font-normal ${
+                                        className={`whitespace-pre-wrap break-words leading-relaxed text-sm font-normal ${
                                           message.from_me
                                             ? "text-white dark:text-white"
                                             : "text-black dark:text-white"
                                         }`}
                                         style={{
-                                          lineHeight: "1.5",
-                                          letterSpacing: "0.01em",
+                                          lineHeight: "1.7",
+                                          letterSpacing: "0.03em",
                                         }}
                                       >
                                         {formatText(message.gif.caption)}
@@ -11658,7 +11627,7 @@ function Main() {
                                     <div className="audio-content p-0 message-content image-message">
                                       <audio
                                         controls
-                                        className="rounded-lg message-image cursor-pointer"
+                                        className="rounded-2xl message-image cursor-pointer"
                                         src={(() => {
                                           const audioData =
                                             message.audio?.data ||
@@ -11695,7 +11664,7 @@ function Main() {
                                     {(message.audio?.caption ||
                                       message.ptt?.caption) && (
                                       <div
-                                        className="mb-2"
+                                        className="mb-4"
                                         style={{
                                           maxWidth: "70%",
                                           width: `${Math.min(
@@ -11703,21 +11672,21 @@ function Main() {
                                               message.audio?.caption ||
                                               message.ptt?.caption ||
                                               ""
-                                            ).length || 0) * 10,
-                                            350
+                                            ).length || 0) * 15,
+                                            500
                                           )}px`,
-                                          minWidth: "75px",
+                                          minWidth: "120px",
                                         }}
                                       >
                                         <div
-                                          className={`whitespace-pre-wrap break-words leading-relaxed text-[15px] font-normal ${
+                                          className={`whitespace-pre-wrap break-words leading-relaxed text-lg font-normal ${
                                             message.from_me
                                               ? "text-white dark:text-white"
                                               : "text-black dark:text-white"
                                           }`}
                                           style={{
-                                            lineHeight: "1.5",
-                                            letterSpacing: "0.01em",
+                                            lineHeight: "1.7",
+                                            letterSpacing: "0.03em",
                                           }}
                                         >
                                           {formatText(
@@ -11735,16 +11704,16 @@ function Main() {
                                   <audio
                                     controls
                                     src={message.voice.link}
-                                    className="rounded-lg message-image cursor-pointer"
+                                    className="rounded-2xl message-image cursor-pointer"
                                   />
                                 </div>
                               )}
                               {message.type === "document" &&
                                 message.document && (
                                   <>
-                                    <div className="document-content flex flex-col items-center p-4 rounded-md shadow-md bg-white dark:bg-gray-800">
+                                    <div className="document-content flex flex-col items-center p-8 rounded-2xl shadow-xl bg-white dark:bg-gray-800">
                                       <div
-                                        className="w-full cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 p-4 rounded-lg"
+                                        className="w-full cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 p-5 rounded-2xl"
                                         onClick={() => {
                                           if (message.document) {
                                             const docUrl =
@@ -11764,31 +11733,31 @@ function Main() {
                                           ) ? (
                                             <Lucide
                                               icon="Video"
-                                              className="w-8 h-8 text-gray-500 dark:text-gray-400 mr-3"
+                                              className="w-6 h-6 text-gray-500 dark:text-gray-400 mr-2.5"
                                             />
                                           ) : message.document.mimetype?.startsWith(
                                               "image/"
                                             ) ? (
                                             <Lucide
                                               icon="Image"
-                                              className="w-8 h-8 text-gray-500 dark:text-gray-400 mr-3"
+                                              className="w-6 h-6 text-gray-500 dark:text-gray-400 mr-2.5"
                                             />
                                           ) : message.document.mimetype?.includes(
                                               "pdf"
                                             ) ? (
                                             <Lucide
                                               icon="FileText"
-                                              className="w-8 h-8 text-gray-500 dark:text-gray-400 mr-3"
+                                              className="w-6 h-6 text-gray-500 dark:text-gray-400 mr-2.5"
                                             />
                                           ) : (
                                             <Lucide
                                               icon="File"
-                                              className="w-8 h-8 text-gray-500 dark:text-gray-400 mr-3"
+                                              className="w-6 h-6 text-gray-500 dark:text-gray-400 mr-2.5"
                                             />
                                           )}
 
                                           <div className="flex-1">
-                                            <div className="font-semibold text-gray-800 dark:text-gray-200 truncate">
+                                            <div className="font-semibold text-gray-800 dark:text-gray-200 truncate text-sm">
                                               {message.document.file_name ||
                                                 message.document.filename ||
                                                 "Document"}
@@ -11817,7 +11786,7 @@ function Main() {
                                           </div>
                                           <Lucide
                                             icon="ExternalLink"
-                                            className="w-5 h-5 text-gray-400 dark:text-gray-500 ml-3"
+                                            className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 ml-2.5"
                                           />
                                         </div>
                                       </div>
@@ -11829,21 +11798,21 @@ function Main() {
                                           maxWidth: "70%",
                                           width: `${Math.min(
                                             (message.document.caption.length ||
-                                              0) * 10,
-                                            350
+                                              0) * 7.5,
+                                            250
                                           )}px`,
-                                          minWidth: "75px",
+                                          minWidth: "60px",
                                         }}
                                       >
                                         <div
-                                          className={`whitespace-pre-wrap break-words leading-relaxed text-[15px] font-normal ${
+                                          className={`whitespace-pre-wrap break-words leading-relaxed text-sm font-normal ${
                                             message.from_me
                                               ? "text-white dark:text-white"
                                               : "text-black dark:text-white"
                                           }`}
                                           style={{
-                                            lineHeight: "1.5",
-                                            letterSpacing: "0.01em",
+                                            lineHeight: "1.7",
+                                            letterSpacing: "0.03em",
                                           }}
                                         >
                                           {formatText(message.document.caption)}
@@ -11866,14 +11835,14 @@ function Main() {
                                         alt="Preview"
                                         className="w-full"
                                       />
-                                      <div className="p-2">
-                                        <div className="font-bold text-lg">
+                                      <div className="p-2.5">
+                                        <div className="font-bold text-lg mb-1.5">
                                           {message.link_preview.title}
                                         </div>
-                                        <div className="text-sm text-gray-800 dark:text-gray-200">
+                                        <div className="text-sm text-gray-800 dark:text-gray-200 mb-1.5">
                                           {message.link_preview.description}
                                         </div>
-                                        <div className="text-blue-500 mt-1">
+                                        <div className="text-blue-500 text-sm">
                                           {message.link_preview.body}
                                         </div>
                                       </div>
@@ -11904,7 +11873,7 @@ function Main() {
                                 message.location && (
                                   <div className="location-content p-0 message-content image-message">
                                     <button
-                                      className="text-white bg-blue-500 hover:bg-blue-600 rounded-md px-3 py-1"
+                                      className="text-white bg-blue-500 hover:bg-blue-600 rounded-lg px-2.5 py-1.5 text-sm transition-colors duration-200"
                                       onClick={() =>
                                         window.open(
                                           `https://www.google.com/maps?q=${message.location?.latitude},${message.location?.longitude}`,
@@ -11915,7 +11884,7 @@ function Main() {
                                       Open Location in Google Maps
                                     </button>
                                     {message.location?.description && (
-                                      <div className="text-xs text-white mt-1">
+                                      <div className="text-sm text-white mt-1.5">
                                         {message.location.description}
                                       </div>
                                     )}
@@ -11936,40 +11905,40 @@ function Main() {
                                 </div>
                               )}
                               {message.type === "action" && message.action && (
-                                <div className="action-content flex flex-col p-4 rounded-md shadow-md bg-white dark:bg-gray-800">
+                                <div className="action-content flex flex-col p-4 rounded-lg shadow-lg bg-white dark:bg-gray-800">
                                   {message.action.type === "delete" ? (
-                                    <div className="text-gray-400 dark:text-gray-600">
+                                    <div className="text-gray-400 dark:text-gray-600 text-sm">
                                       This message was deleted
                                     </div>
                                   ) : (
                                     /* Handle other action types */
-                                    <div className="text-gray-800 dark:text-gray-200">
+                                    <div className="text-gray-800 dark:text-gray-200 text-sm">
                                       {message.action.emoji}
                                     </div>
                                   )}
                                 </div>
                               )}
                               {message.type === "call_log" && (
-                                <div className="call-logs-content p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                                <div className="call-logs-content p-2.5 bg-gray-100 dark:bg-gray-700 rounded-lg">
                                   <div className="flex items-center space-x-2 mb-2">
                                     {message.call_log?.status === "missed" ? (
                                       <Lucide
                                         icon="PhoneMissed"
-                                        className="w-5 h-5 text-red-500"
+                                        className="w-3.5 h-3.5 text-red-500"
                                       />
                                     ) : message.call_log?.status ===
                                       "outgoing" ? (
                                       <Lucide
                                         icon="PhoneOutgoing"
-                                        className="w-5 h-5 text-green-500"
+                                        className="w-3.5 h-3.5 text-green-500"
                                       />
                                     ) : (
                                       <Lucide
                                         icon="PhoneIncoming"
-                                        className="w-5 h-5 text-blue-500"
+                                        className="w-3.5 h-3.5 text-blue-500"
                                       />
                                     )}
-                                    <span className="font-medium text-gray-800 dark:text-gray-200 capitalize">
+                                    <span className="font-medium text-gray-800 dark:text-gray-200 capitalize text-sm">
                                       {message.call_log?.status || "Missed"}{" "}
                                       Call
                                     </span>
@@ -12001,7 +11970,7 @@ function Main() {
                                 )}
                               {message.reactions &&
                                 message.reactions.length > 0 && (
-                                  <div className="flex flex-wrap gap-1 mt-1 rounded-full px-2 py-0.5 w-fit">
+                                  <div className="flex flex-wrap gap-1.5 mt-1.5 rounded-full px-2 py-1 w-fit">
                                     {message.reactions.map(
                                       (reaction: any, index: number) => (
                                         <span key={index} className="text-lg">
@@ -12017,21 +11986,21 @@ function Main() {
                                     message.from_me
                                       ? myMessageTextClass
                                       : otherMessageTextClass
-                                  } flex items-center h-6 ml-auto`}
+                                  } flex items-center h-4 ml-auto`}
                                 >
-                                  <div className="flex items-center mr-2">
+                                  <div className="flex items-center mr-1">
                                     {(hoveredMessageId === message.id ||
                                       selectedMessages.includes(message)) && (
                                       <>
                                         <button
-                                          className="ml-2 text-black hover:text-blue-600 dark:text-white dark:hover:text-blue-300 transition-colors duration-200 mr-2"
+                                          className="ml-1 text-black hover:text-blue-600 dark:text-white dark:hover:text-blue-300 transition-colors duration-200 mr-1"
                                           onClick={() =>
                                             setReplyToMessage(message)
                                           }
                                         >
                                           <Lucide
                                             icon="MessageCircleReply"
-                                            className="w-6 h-6"
+                                            className="w-4 h-4"
                                           />
                                         </button>
                                         <button
@@ -12040,11 +12009,11 @@ function Main() {
                                             setReactionMessage(message);
                                             setShowReactionPicker(true);
                                           }}
-                                          className="mr-2 p-1 text-black hover:text-blue-500 dark:text-white dark:hover:text-blue-300"
+                                          className="mr-1 p-0.5 text-black hover:text-blue-500 dark:text-white dark:hover:text-blue-300"
                                         >
                                           <Lucide
                                             icon="Heart"
-                                            className="w-6 h-6"
+                                            className="w-4 h-4"
                                           />
                                         </button>
                                         {showReactionPicker &&
@@ -12075,13 +12044,13 @@ function Main() {
                                             >
                                               <Lucide
                                                 icon="PencilLine"
-                                                className="w-5 h-5"
+                                                className="w-4 h-4"
                                               />
                                             </button>
                                           )}
                                         <input
                                           type="checkbox"
-                                          className="mr-2 form-checkbox h-5 w-5 text-blue-500 transition duration-150 ease-in-out rounded-full"
+                                          className="mr-2 form-checkbox h-4 w-4 text-blue-500 transition duration-150 ease-in-out rounded-full"
                                           checked={selectedMessages.includes(
                                             message
                                           )}
@@ -12091,34 +12060,29 @@ function Main() {
                                         />
                                       </>
                                     )}
-                                    {/* {message.name && (
-                                      <span className="ml-2 text-gray-400 dark:text-gray-600">
-                                        {message.name}
-                                      </span>
-                                    )} */}
                                     {message.phoneIndex !== undefined && (
                                       <div
                                         className={`text-xs px-2 py-1 ${
                                           message.from_me
-                                            ? "text-white"
-                                            : "text-white-500 dark:text-gray-400"
+                                            ? "text-black"
+                                            : "text-black dark:text-gray-400"
                                         }`}
                                       >
                                         {phoneNames[message.phoneIndex] ||
                                           `Phone ${message.phoneIndex + 1}`}
                                       </div>
                                     )}
-                                    {formatTimestamp(
-                                      message.createdAt ||
-                                        message.dateAdded ||
-                                        message.timestamp
-                                    )}
+                                      {formatTimestamp(
+                                        message.createdAt ||
+                                          message.dateAdded ||
+                                          message.timestamp
+                                      )}
 
                                     {/* Message status indicator for sent messages */}
                                     {message.from_me && (
-                                      <div className="flex items-center ml-2">
+                                      <div className="flex items-center ml-4">
                                         {message.status === "failed" ? (
-                                          <div className="flex items-center space-x-1">
+                                          <div className="flex items-center space-x-2">
                                             <Lucide
                                               icon="XCircle"
                                               className="w-4 h-4 text-red-500"
@@ -12286,9 +12250,9 @@ function Main() {
                   ))}
                 </div>
               )}
-              <div className="flex items-center w-full bg-white dark:bg-gray-800 pl-2 pr-2 rounded-lg">
+              <div className="flex items-center w-full bg-white dark:bg-gray-800 pl-1 pr-1 rounded-md">
                 <button
-                  className="p-2 m-0 !box"
+                  className="p-1 m-0 !box"
                   onClick={() => setEmojiPickerOpen(!isEmojiPickerOpen)}
                 >
                   <span className="flex items-center justify-center w-5 h-5">
@@ -12298,11 +12262,11 @@ function Main() {
                     />
                   </span>
                 </button>
-                <Menu as="div" className="relative inline-block text-left p-2">
-                  <div className="flex items-center space-x-3">
+                <Menu as="div" className="relative inline-block text-left p-1">
+                  <div className="flex items-center space-x-1.5">
                     <Menu.Button
                       as={Button}
-                      className="p-2 !box m-0"
+                      className="p-1 !box m-0"
                       onClick={handleTagClick}
                     >
                       <span className="flex items-center justify-center w-5 h-5">
@@ -12313,13 +12277,13 @@ function Main() {
                       </span>
                     </Menu.Button>
                   </div>
-                  <Menu.Items className="absolute left-0 bottom-full mb-2 w-40 bg-white dark:bg-gray-800 shadow-lg rounded-md p-2 z-10 max-h-60 overflow-y-auto">
+                  <Menu.Items className="absolute left-0 bottom-full mb-1 w-20 bg-white dark:bg-gray-800 shadow-md rounded-md p-1 z-10 max-h-30 overflow-y-auto">
                     <button className="flex items-center w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
                       <label
                         htmlFor="imageUpload"
                         className="flex items-center cursor-pointer text-gray-800 dark:text-gray-200 w-full"
                       >
-                        <Lucide icon="Image" className="w-4 h-4 mr-2" />
+                        <Lucide icon="Image" className="w-5 h-5 mr-2" />
                         Image
                         <input
                           type="file"
@@ -12367,7 +12331,7 @@ function Main() {
                         htmlFor="documentUpload"
                         className="flex items-center cursor-pointer text-gray-800 dark:text-gray-200 w-full"
                       >
-                        <Lucide icon="File" className="w-4 h-4 mr-2" />
+                        <Lucide icon="File" className="w-5 h-5 mr-2" />
                         Document
                         <input
                           type="file"
@@ -12399,10 +12363,10 @@ function Main() {
                 </button>
 
                 {isRecordingPopupOpen && (
-                  <div className="absolute bottom-full mb-2 left-0 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
-                    <div className="flex items-center mb-2">
+                  <div className="absolute bottom-full mb-1 left-0 w-32 bg-white dark:bg-gray-800 rounded-md shadow-md p-2">
+                    <div className="flex items-center mb-1">
                       <button
-                        className={`p-2 rounded-md ${
+                        className={`p-1 rounded-md ${
                           isRecording
                             ? "bg-red-500 text-white"
                             : "bg-primary text-white"
@@ -12411,35 +12375,35 @@ function Main() {
                       >
                         <Lucide
                           icon={isRecording ? "StopCircle" : "Mic"}
-                          className="w-5 h-5"
+                          className="w-2.5 h-2.5"
                         />
                       </button>
                       <ReactMicComponent
                         record={isRecording}
-                        className="w-44 rounded-md h-10 mr-2 ml-2"
+                        className="w-22 rounded-md h-5 mr-1 ml-1"
                         onStop={onStop}
                         strokeColor="#0000CD"
                         backgroundColor="#FFFFFF"
                         mimeType="audio/webm"
                       />
                     </div>
-                    <div className="flex flex-col space-y-2">
+                    <div className="flex flex-col space-y-1">
                       {audioBlob && (
                         <>
                           <audio
                             src={URL.createObjectURL(audioBlob)}
                             controls
-                            className="w-full h-10 mb-2"
+                            className="w-full h-5 mb-1"
                           />
                           <div className="flex justify-between">
                             <button
-                              className="px-3 py-1 rounded bg-gray-500 text-white"
+                              className="px-1.5 py-0.5 rounded bg-gray-500 text-white text-xs"
                               onClick={() => setAudioBlob(null)}
                             >
                               Remove
                             </button>
                             <button
-                              className="px-3 py-1 rounded bg-green-700 text-white"
+                              className="px-1.5 py-0.5 rounded bg-green-700 text-white text-xs"
                               onClick={sendVoiceMessage}
                             >
                               Send
@@ -12473,7 +12437,7 @@ function Main() {
                 )}
                 <textarea
                   ref={textareaRef}
-                  className={`flex-grow h-10 px-2 py-2 m-1 ml-2 border rounded-lg focus:outline-none focus:border-info text-md resize-none overflow-hidden ${"bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400"} border-gray-300 dark:border-gray-700`}
+                  className={`flex-grow h-8 px-1 py-1 m-0.5 ml-1 border rounded-md focus:outline-none focus:border-info text-sm resize-none overflow-hidden ${"bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400"} border-gray-300 dark:border-gray-700`}
                   placeholder={
                     messageMode === "privateNote"
                       ? "Type a private note..."
@@ -13041,21 +13005,62 @@ function Main() {
             </div>
           </>
         ) : (
-          <div className="hidden md:flex flex-col w-full h-full bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 items-center justify-center">
-            <div className="flex flex-col items-center justify-center p-8 rounded-lg shadow-lg bg-gray-100 dark:bg-gray-700">
-              <Lucide
-                icon="MessageSquare"
-                className="w-16 h-16 text-black dark:text-white mb-4"
-              />
-              <p className="text-black dark:text-white text-lg text-center mb-6">
-                Select a chat to start messaging
+          <div className="hidden md:flex flex-col w-full h-full bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 items-center justify-center">
+            <div className="flex flex-col items-center justify-center p-9 rounded-xl shadow-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+              <div className="w-16 h-16 mb-4 overflow-hidden rounded-xl shadow-lg">
+                <img
+                  src={logoImage}
+                  alt="Logo"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200 text-center mb-3">
+                Welcome to Chat
+              </h2>
+              <p className="text-gray-600 dark:text-gray-400 text-lg text-center mb-6 max-w-sm leading-relaxed">
+                Select a contact from the list to start messaging, or create a
+                new conversation to get started.
               </p>
-              <button
+              <div className="flex flex-col sm:flex-row gap-3">
+              <Button
+                variant="primary"
                 onClick={openNewChatModal}
-                className="bg-primary hover:bg-primary-dark text-white font-bold py-2 px-4 rounded transition duration-200"
+                className="font-bold py-3 px-6 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
               >
-                Start New Chat
-              </button>
+                  <div className="flex items-center space-x-2">
+                    <Lucide icon="Plus" className="w-4 h-4" />
+                    <span>Start New Chat</span>
+                  </div>
+              </Button>
+                <button
+                  onClick={() => setIsSearchModalOpen(true)}
+                  className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold py-3 px-6 rounded-lg transition-all duration-200 border border-gray-300 dark:border-gray-600"
+                >
+                  <div className="flex items-center space-x-2">
+                    <Lucide icon="Search" className="w-4 h-4" />
+                    <span>Search Contacts</span>
+                  </div>
+                </button>
+              </div>
+              <div className="mt-6 text-center">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                  Quick Tips:
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <span>Click on any contact to start chatting</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span>Use search to find specific contacts</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                    <span>Create new conversations anytime</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -13133,21 +13138,7 @@ function Main() {
           <div className="flex flex-col h-full">
             <div className="flex items-center justify-between p-3 border-b border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 overflow-hidden rounded-full shadow-lg bg-gray-700 flex items-center justify-center text-white">
-                  {selectedContact.profilePicUrl ? (
-                    <img
-                      src={selectedContact.profilePicUrl}
-                      alt={selectedContact.contactName || "Profile"}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-2xl font-bold">
-                      {selectedContact.contactName
-                        ? selectedContact.contactName.charAt(0).toUpperCase()
-                        : "?"}
-                    </span>
-                  )}
-                </div>
+                <div className="w-10 h-10 shadow-lg"></div>
 
                 <div className="flex flex-col">
                   {isEditing ? (
@@ -13201,15 +13192,15 @@ function Main() {
               </button>
             </div>
             {/* Enhanced Content Area */}
-            <div className="flex-grow overflow-y-auto p-6 space-y-6 bg-gradient-to-b from-gray-50/50 to-white dark:from-gray-800/50 dark:to-gray-900">
+            <div className="flex-grow overflow-y-auto p-3 space-y-3 bg-gradient-to-b from-gray-50/50 to-white dark:from-gray-800/50 dark:to-gray-900">
               {/* Contact Information Card */}
-              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-700 hover:shadow-2xl transition-shadow duration-300">
-                <div className="bg-blue-50 dark:bg-blue-900 px-4 py-3 border-b border-gray-200 dark:border-gray-600">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-shadow duration-300">
+                <div className="bg-blue-50 dark:bg-blue-900 px-2 py-1.5 border-b border-gray-200 dark:border-gray-600">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                    <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
                       Contact Information
                     </h3>
-                    <div className="flex space-x-2">
+                    <div className="flex space-x-1">
                       {!isEditing ? (
                         <>
                           <button
@@ -13217,7 +13208,7 @@ function Main() {
                               setIsEditing(true);
                               setEditedContact({ ...selectedContact });
                             }}
-                            className="px-3 py-1 bg-primary text-white rounded-md hover:bg-primary-dark transition duration-200"
+                            className="px-1.5 py-0.5 bg-primary text-white rounded-md hover:bg-primary-dark transition duration-200 text-xs"
                           >
                             Edit
                           </button>
@@ -13226,10 +13217,10 @@ function Main() {
                             as="div"
                             className="relative inline-block text-left"
                           >
-                            <Menu.Button className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-200">
+                            <Menu.Button className="px-1.5 py-0.5 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-200 text-xs">
                               Sync
                             </Menu.Button>
-                            <Menu.Items className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 shadow-lg rounded-md p-2 z-10">
+                            <Menu.Items className="absolute right-0 mt-1 w-20 bg-white dark:bg-gray-800 shadow-md rounded-md p-1 z-10">
                               <Menu.Item>
                                 {({ active }) => (
                                   <button
@@ -13588,21 +13579,16 @@ function Main() {
                       </div>
                     ))}
                   </div>
-                  {/* Enhanced Divider */}
-                  <div className="flex items-center my-8">
-                    <div className="flex-grow h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent"></div>
-                    <div className="px-4">
-                      <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                    </div>
-                    <div className="flex-grow h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent"></div>
-                  </div>
 
                   {/* Enhanced Employee Assignment Section */}
                   {selectedContact.tags.some((tag: string) =>
                     employeeList.some(
                       (employee) =>
                         (employee.name?.toLowerCase() || "") ===
-                        (typeof tag === "string" ? tag : String(tag)).toLowerCase()
+                        (typeof tag === "string"
+                          ? tag
+                          : String(tag)
+                        ).toLowerCase()
                     )
                   ) && (
                     <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 rounded-xl p-6 border border-green-200 dark:border-green-700 mb-6">
@@ -13620,7 +13606,10 @@ function Main() {
                             employeeList.some(
                               (employee) =>
                                 (employee.name?.toLowerCase() || "") ===
-                                (typeof tag === "string" ? tag : String(tag)).toLowerCase()
+                                (typeof tag === "string"
+                                  ? tag
+                                  : String(tag)
+                                ).toLowerCase()
                             )
                           )
                           .map((employeeTag: string, index: number) => (
@@ -13667,11 +13656,17 @@ function Main() {
                         {selectedContact.tags
                           .filter(
                             (tag: string) =>
-                              (typeof tag === "string" ? tag : String(tag)).toLowerCase() !== "stop bot" &&
+                              (typeof tag === "string"
+                                ? tag
+                                : String(tag)
+                              ).toLowerCase() !== "stop bot" &&
                               !employeeList.some(
                                 (employee) =>
                                   (employee.name?.toLowerCase() || "") ===
-                                  (typeof tag === "string" ? tag : String(tag)).toLowerCase()
+                                  (typeof tag === "string"
+                                    ? tag
+                                    : String(tag)
+                                  ).toLowerCase()
                               )
                           )
                           .map((tag: string, index: number) => (
@@ -13937,6 +13932,495 @@ function Main() {
         }}
         initialCaption={documentCaption}
       />
+
+      {/* Usage Dashboard Modal */}
+      {isUsageDashboardOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setIsUsageDashboardOpen(false)}
+          />
+          {/* Modal Content */}
+          <div className="relative flex flex-col w-full h-full bg-white dark:bg-gray-900 overflow-hidden">
+            {/* Header */}
+            <div className="relative bg-gradient-to-r from-slate-600 via-gray-600 to-slate-700 p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/15 backdrop-blur-sm rounded-xl flex items-center justify-center border border-white/20">
+                    <Lucide icon="BarChart3" className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white">
+                      Usage Analytics
+                    </h2>
+                    <p className="text-gray-200 text-sm">
+                      Real-time monitoring and insights
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={fetchDailyUsageData}
+                    disabled={isLoadingUsageData}
+                    className="flex items-center gap-2 px-3 py-2 bg-white/15 hover:bg-white/25 disabled:bg-white/10 text-white rounded-lg transition-all duration-200 text-sm font-medium border border-white/20 backdrop-blur-sm"
+                  >
+                    <Lucide
+                      icon={isLoadingUsageData ? "Loader2" : "RefreshCw"}
+                      className={`w-4 h-4 ${
+                        isLoadingUsageData ? "animate-spin" : ""
+                      }`}
+                    />
+                    Refresh
+                  </button>
+                  <button
+                    onClick={() => setIsUsageDashboardOpen(false)}
+                    className="p-2 hover:bg-white/15 rounded-lg transition-all duration-200 border border-white/20"
+                  >
+                    <Lucide icon="X" className="w-4 h-4 text-white" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 p-8 overflow-y-auto bg-gray-50 dark:bg-gray-800">
+              <div className="max-w-7xl mx-auto">
+              {isLoadingUsageData ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="flex flex-col items-center gap-4">
+                    <LoadingIcon
+                      icon="oval"
+                      className="w-10 h-10 text-blue-500"
+                    />
+                    <p className="text-gray-600 dark:text-gray-400 font-medium">
+                      Loading analytics data...
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {/* Current Usage Stats */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="relative overflow-hidden bg-gradient-to-br from-blue-50 via-blue-50 to-blue-100 dark:from-blue-950/50 dark:via-blue-900/30 dark:to-blue-800/20 p-6 rounded-2xl border border-blue-200/50 dark:border-blue-700/50 group hover:shadow-lg hover:scale-[1.02] transition-all duration-300">
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full -translate-y-12 translate-x-12"></div>
+                      <div className="relative">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
+                            <Lucide
+                              icon="Sparkles"
+                              className="w-6 h-6 text-white"
+                            />
+                          </div>
+                          <h3 className="text-xl font-bold text-blue-900 dark:text-blue-100">
+                            AI Messages
+                          </h3>
+                        </div>
+                        <div className="space-y-3">
+                          <div className="flex items-end justify-between">
+                            <span className="text-4xl font-black text-blue-900 dark:text-blue-100 tracking-tight">
+                              {aiMessageUsage.toLocaleString()}
+                            </span>
+                            <span className="text-lg font-semibold text-blue-600 dark:text-blue-400">
+                              / {(quotaAIMessage || 500).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="relative w-full bg-blue-200/50 dark:bg-blue-800/50 rounded-full h-4 overflow-hidden">
+                            <div
+                              className="absolute inset-0 bg-gradient-to-r from-blue-500 via-blue-600 to-blue-500 rounded-full transition-all duration-700 ease-out shadow-sm"
+                              style={{
+                                width: `${Math.min(
+                                  (aiMessageUsage / (quotaAIMessage || 500)) *
+                                    100,
+                                  100
+                                )}%`,
+                              }}
+                            >
+                              <div className="w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+                            </div>
+                          </div>
+                          <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                            {(
+                              (aiMessageUsage / (quotaAIMessage || 500)) *
+                              100
+                            ).toFixed(1)}
+                            % quota utilized this month
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="relative overflow-hidden bg-gradient-to-br from-emerald-50 via-emerald-50 to-emerald-100 dark:from-emerald-950/50 dark:via-emerald-900/30 dark:to-emerald-800/20 p-6 rounded-2xl border border-emerald-200/50 dark:border-emerald-700/50 group hover:shadow-lg hover:scale-[1.02] transition-all duration-300">
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 rounded-full -translate-y-12 translate-x-12"></div>
+                      <div className="relative">
+                      
+                        <div className="space-y-3">
+
+  <div className="flex items-center justify-between text-sm">
+    <span className="font-medium text-emerald-700 dark:text-emerald-300">
+      {contacts.length || 0} total contacts
+    </span>
+    <span className="font-medium text-emerald-700 dark:text-emerald-300">
+      {((blastedMessageUsage / Math.max(contacts.length || 1, 1)) * 100).toFixed(1)}% coverage
+    </span>
+  </div>
+  <div className="flex items-center justify-between text-sm">
+    <span className="font-medium text-emerald-700 dark:text-emerald-300">
+      Contact Limit
+    </span>
+    <span className={`font-bold ${
+      contacts.length <= currentPlanLimits.contacts 
+        ? "text-emerald-800 dark:text-emerald-200" 
+        : "text-red-600 dark:text-red-400"
+    }`}>
+      {currentPlanLimits.contacts.toLocaleString()}
+    </span>
+  </div>
+  {contacts.length > currentPlanLimits.contacts && (
+    <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-700/50">
+      <p className="text-xs text-orange-700 dark:text-orange-300 font-medium">
+        ⚠️ You have {(contacts.length - currentPlanLimits.contacts).toLocaleString()} contacts over your plan limit. Consider upgrading to manage all contacts effectively.
+      </p>
+    </div>
+  )}
+  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+    {currentPlanLimits.title} - {currentPlanLimits.contacts.toLocaleString()} contacts limit
+  </p>
+</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Daily Usage Chart */}
+                  <div className="bg-gradient-to-br from-gray-50/50 via-white to-gray-50/50 dark:from-gray-900/50 dark:via-gray-800 dark:to-gray-900/50 rounded-3xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden shadow-lg">
+                    <div className="bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-750 px-6 py-5 border-b border-gray-200/50 dark:border-gray-600/50">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-gradient-to-br from-slate-500 to-gray-600 rounded-xl flex items-center justify-center">
+                            <Lucide
+                              icon="TrendingUp"
+                              className="w-5 h-5 text-white"
+                            />
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                              7-Day Usage Trend
+                            </h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              AI messages activity
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-8">
+                      {dailyUsageData.length > 0 ? (
+                        <div className="space-y-8">
+                          {/* Enhanced Line Chart */}
+                          <div className="relative h-96 bg-gradient-to-b from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-700/50 shadow-inner overflow-hidden">
+                            {(() => {
+                              return (
+                                <div className="w-full h-full p-4">
+                                  <canvas
+                                    id="usage-chart"
+                                    ref={(canvas) => {
+                                      if (canvas && dailyUsageData.length > 0) {
+                                        const existingChart = (canvas as any)
+                                          .chart;
+                                        if (existingChart) {
+                                          existingChart.destroy();
+                                        }
+
+                                        import("chart.js/auto").then(
+                                          (Chart) => {
+                                            const ctx = canvas.getContext("2d");
+                                            if (ctx) {
+                                              const isDark =
+                                                document.documentElement.classList.contains(
+                                                  "dark"
+                                                );
+                                              const formatDateLabel = (
+                                                dateString: string
+                                              ) => {
+                                                const date = new Date(
+                                                  dateString
+                                                );
+                                                const monthNames = [
+                                                  "JAN",
+                                                  "FEB",
+                                                  "MAR",
+                                                  "APR",
+                                                  "MAY",
+                                                  "JUN",
+                                                  "JUL",
+                                                  "AUG",
+                                                  "SEP",
+                                                  "OCT",
+                                                  "NOV",
+                                                  "DEC",
+                                                ];
+                                                const month =
+                                                  monthNames[date.getMonth()];
+                                                const day = date
+                                                  .getDate()
+                                                  .toString()
+                                                  .padStart(2, "0");
+                                                return `${month} ${day}`;
+                                              };
+
+                                              (canvas as any).chart =
+                                                new Chart.default(ctx, {
+                                                  type: "line",
+                                                  data: {
+                                                    labels: dailyUsageData.map(
+                                                      (day) =>
+                                                        formatDateLabel(
+                                                          day.date
+                                                        )
+                                                    ),
+                                                    datasets: [
+                                                      {
+                                                        label: "AI Messages",
+                                                        data: dailyUsageData.map(
+                                                          (day) =>
+                                                            day.aiMessages
+                                                        ),
+                                                        borderColor: "#3B82F6",
+                                                        backgroundColor:
+                                                          "rgba(59, 130, 246, 0.1)",
+                                                        borderWidth: 3,
+                                                        pointBackgroundColor:
+                                                          "#3B82F6",
+                                                        pointBorderColor:
+                                                          "#ffffff",
+                                                        pointBorderWidth: 2,
+                                                        pointRadius: 6,
+                                                        pointHoverRadius: 8,
+                                                        tension: 0.4,
+                                                        fill: true,
+                                                      },
+                                                    ],
+                                                  },
+                                                  options: {
+                                                    responsive: true,
+                                                    maintainAspectRatio: false,
+                                                    interaction: {
+                                                      intersect: false,
+                                                      mode: "index" as const,
+                                                    },
+                                                    plugins: {
+                                                      legend: {
+                                                        position:
+                                                          "top" as const,
+                                                        labels: {
+                                                          usePointStyle: true,
+                                                          pointStyle:
+                                                            "circle" as const,
+                                                          padding: 20,
+                                                          color: isDark
+                                                            ? "#9CA3AF"
+                                                            : "#6B7280",
+                                                          font: {
+                                                            size: 14,
+                                                          },
+                                                        },
+                                                      },
+                                                      tooltip: {
+                                                        backgroundColor: isDark
+                                                          ? "#1F2937"
+                                                          : "#FFFFFF",
+                                                        titleColor: isDark
+                                                          ? "#F3F4F6"
+                                                          : "#1F2937",
+                                                        bodyColor: isDark
+                                                          ? "#D1D5DB"
+                                                          : "#4B5563",
+                                                        borderColor: isDark
+                                                          ? "#374151"
+                                                          : "#E5E7EB",
+                                                        borderWidth: 1,
+                                                        cornerRadius: 8,
+                                                        displayColors: true,
+                                                        padding: 12,
+                                                      },
+                                                    },
+                                                    scales: {
+                                                      x: {
+                                                        grid: {
+                                                          display: true,
+                                                          color: isDark
+                                                            ? "#374151"
+                                                            : "#F3F4F6",
+                                                        },
+                                                        ticks: {
+                                                          color: isDark
+                                                            ? "#9CA3AF"
+                                                            : "#6B7280",
+                                                          font: {
+                                                            size: 12,
+                                                          },
+                                                          padding: 10,
+                                                        },
+                                                      },
+                                                      y: {
+                                                        beginAtZero: true,
+                                                        grid: {
+                                                          display: true,
+                                                          color: isDark
+                                                            ? "#374151"
+                                                            : "#F3F4F6",
+                                                        },
+                                                        ticks: {
+                                                          color: isDark
+                                                            ? "#9CA3AF"
+                                                            : "#6B7280",
+                                                          font: {
+                                                            size: 12,
+                                                          },
+                                                          padding: 10,
+                                                          callback: function (
+                                                            value: any
+                                                          ) {
+                                                            return Number.isInteger(
+                                                              value
+                                                            )
+                                                              ? value
+                                                              : "";
+                                                          },
+                                                        },
+                                                      },
+                                                    },
+                                                  },
+                                                });
+                                            }
+                                          }
+                                        );
+                                      }
+                                    }}
+                                    className="w-full h-full"
+                                  />
+                                </div>
+                              );
+                            })()}
+                          </div>
+
+                          {/* Enhanced Usage Summary */}
+                          <div className="grid grid-cols-3 gap-6 pt-6 border-t border-gray-200/50 dark:border-gray-600/50">
+                            <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-800/10 rounded-2xl border border-blue-200/30 dark:border-blue-700/30">
+                              <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1">
+                                {dailyUsageData
+                                  .reduce((sum, day) => sum + day.aiMessages, 0)
+                                  .toLocaleString()}
+                              </div>
+                              <div className="text-sm text-blue-700 dark:text-blue-300 font-semibold">
+                                Total AI Messages
+                              </div>
+                              <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                                Past 7 days
+                              </div>
+                            </div>
+                            <div className="text-center p-4 bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-900/20 dark:to-emerald-800/10 rounded-2xl border border-emerald-200/30 dark:border-emerald-700/30">
+                              <div className="flex items-center justify-center mb-2">
+                                <Lucide icon="UserPlus" className="w-6 h-6 text-emerald-500" />
+                              </div>
+                              <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400 mb-1">
+                                {dailyUsageData
+                                  .reduce(
+                                    (sum, day) => sum + (day.contacts || 0),
+                                    0
+                                  )
+                                  .toLocaleString()}
+                              </div>
+                              <div className="text-sm text-emerald-700 dark:text-emerald-300 font-semibold">
+                                New Contacts
+                              </div>
+                              <div className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+                                Past 7 days
+                              </div>
+                            </div>
+                            <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-900/20 dark:to-purple-800/10 rounded-2xl border border-purple-200/30 dark:border-purple-700/30">
+                              <div className="flex items-center justify-center mb-2">
+                                <Lucide icon="Users" className="w-6 h-6 text-purple-500" />
+                              </div>
+                              <div className="text-3xl font-black text-purple-600 dark:text-purple-400 mb-1">
+                                {contacts.length || 0}
+                              </div>
+                              <div className="text-sm text-purple-700 dark:text-purple-300 font-semibold">
+                                Total Contacts
+                              </div>
+                              <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                                Available for blasts
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                          <div className="text-center">
+                            <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                              <Lucide
+                                icon="BarChart3"
+                                className="w-10 h-10 text-gray-400 dark:text-gray-500"
+                              />
+                            </div>
+                            <p className="text-xl font-bold text-gray-600 dark:text-gray-400 mb-2">
+                              No usage data yet
+                            </p>
+                            <p className="text-sm text-gray-500 dark:text-gray-500 max-w-sm">
+                              Your usage analytics will appear here once you
+                              start sending AI and blast messages
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-700 rounded-3xl p-5 border border-gray-200/50 dark:border-gray-600/50">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <button
+                          onClick={() => {
+                            toast.info(
+                              "📊 Export functionality will be available soon with CSV, PDF, and Excel formats!"
+                            );
+                          }}
+                          className="flex items-center gap-3 px-6 py-3 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 border border-gray-200 dark:border-gray-600 shadow-sm hover:shadow-md group"
+                        >
+                          <Lucide
+                            icon="Download"
+                            className="w-5 h-5 group-hover:scale-110 transition-transform"
+                          />
+                          <span className="font-semibold">
+                            Export Analytics
+                          </span>
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setIsUsageDashboardOpen(false);
+                          setIsTopUpModalOpen(true);
+                        }}
+                        className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-slate-500 to-gray-600 text-white rounded-2xl hover:from-slate-600 hover:to-gray-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 group"
+                      >
+                        <Lucide
+                          icon="Plus"
+                          className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300"
+                        />
+                        <span className="font-semibold">Upgrade Quota</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          </div>
+        </div>
+      )}
       <ImageModal
         isOpen={isImageModalOpen}
         onClose={closeImageModal}
@@ -14076,6 +14560,9 @@ function Main() {
         <Item onClick={({ props }) => markAsUnread(props.contact)}>
           Mark as Unread
         </Item>
+        <Item onClick={({ props }) => markAsRead(props.contact)}>
+          Mark as Read
+        </Item>
         <Separator />
         <Item
           onClick={({ props }) =>
@@ -14147,6 +14634,307 @@ function Main() {
               >
                 Set Reminder
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top-up Modal */}
+      {isTopUpModalOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setIsTopUpModalOpen(false)}
+          />
+          {/* Modal Content */}
+          <div className="relative flex flex-col w-full h-full bg-white dark:bg-gray-900 overflow-hidden">
+            {/* Header */}
+            <div className="relative bg-gradient-to-r from-slate-600 via-gray-600 to-slate-700 p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white/15 backdrop-blur-sm rounded-xl flex items-center justify-center border border-white/20">
+                    <Lucide icon="Sparkles" className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">
+                      AI Response Top-up & Plans
+                    </h2>
+                    <p className="text-gray-200 text-sm mt-1">
+                      Upgrade your plan or top up your AI responses
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsTopUpModalOpen(false)}
+                  className="p-2 hover:bg-white/15 rounded-xl transition-all duration-200 border border-white/20"
+                >
+                  <Lucide icon="X" className="w-6 h-6 text-white" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 p-8 overflow-y-auto bg-gray-50 dark:bg-gray-800">
+              <div className="max-w-7xl mx-auto">
+                {/* Current Usage Summary */}
+                <div className="mb-10 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-2xl border border-blue-200/50 dark:border-blue-700/50">
+                <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-3">
+                  Current Usage
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      {aiMessageUsage}
+                    </div>
+                    <div className="text-sm text-blue-700 dark:text-blue-300">
+                      AI Responses Used
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      {currentPlanLimits.aiMessages}
+                    </div>
+                    <div className="text-sm text-blue-700 dark:text-blue-300">
+                      Monthly Limit ({currentPlanLimits.title})
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className={`text-2xl font-bold ${
+                      currentPlanLimits.aiMessages - aiMessageUsage >= 0 
+                        ? "text-blue-600 dark:text-blue-400" 
+                        : "text-red-600 dark:text-red-400"
+                    }`}>
+                      {currentPlanLimits.aiMessages - aiMessageUsage}
+                    </div>
+                    <div className="text-sm text-blue-700 dark:text-blue-300">
+                      Remaining
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pricing Plans */}
+              <div className="mb-10">
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-8">
+                  Choose Your Plan
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                  {/* Free Plan */}
+                  <div className="relative bg-white dark:bg-gray-800 rounded-2xl p-8 border-2 border-gray-200 dark:border-gray-700 hover:border-primary dark:hover:border-primary transition-all duration-300 hover:shadow-xl hover:scale-105">
+                    <div className="text-center">
+                      <h4 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                        Free Plan
+                      </h4>
+                      <div className="text-3xl font-black text-primary mb-4">
+                        RM 0
+                        <span className="text-lg font-normal text-gray-600 dark:text-gray-400">/month</span>
+                      </div>
+                      <p className="text-gray-600 dark:text-gray-400 mb-6 text-sm">
+                        Perfect for small businesses. Get 100 AI responses monthly and 100 contacts with full access to all system features.
+                      </p>
+                      <button className="w-full bg-primary hover:bg-primary/80 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95">
+                        Start Free
+                      </button>
+                    </div>
+                    <div className="mt-6 space-y-3">
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        100 AI Responses Monthly
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        100 Contacts
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        AI Follow-Up System
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        AI Booking System
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        AI Tagging System
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        AI Assign System
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        Mobile App Access
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        Desktop App Access
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Enterprise Plan - Most Popular */}
+                  <div className="relative bg-white dark:bg-gray-800 rounded-2xl p-8 border-2 border-primary shadow-xl scale-105">
+                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                      <span className="bg-primary text-white text-xs font-bold px-3 py-1 rounded-full">
+                        Most Popular
+                      </span>
+                    </div>
+                    <div className="text-center">
+                      <h4 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                        Enterprise Plan
+                      </h4>
+                      <div className="text-3xl font-black text-primary mb-4">
+                        RM 888
+                        <span className="text-lg font-normal text-gray-600 dark:text-gray-400">/month</span>
+                      </div>
+                      <p className="text-gray-600 dark:text-gray-400 mb-6 text-sm">
+                        Premium support with 5,000 AI responses monthly and 10,000 contacts. We handle your prompting, follow-ups, and maintenance.
+                      </p>
+                      <button className="w-full bg-primary hover:bg-primary/80 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95">
+                        Start
+                      </button>
+                    </div>
+                    <div className="mt-6 space-y-3">
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        5,000 AI Responses Monthly
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        10,000 Contacts
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        AI Follow-Up System
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        AI Booking System
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        AI Tagging System
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        AI Assign System
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        Mobile App Access
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        Desktop App Access
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        Full Maintenance & Support
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pro Plan */}
+                  <div className="relative bg-white dark:bg-gray-800 rounded-2xl p-8 border-2 border-gray-200 dark:border-gray-700 hover:border-primary dark:hover:border-primary transition-all duration-300 hover:shadow-xl hover:scale-105">
+                    <div className="text-center">
+                      <h4 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                        Pro Plan
+                      </h4>
+                      <div className="text-3xl font-black text-primary mb-4">
+                        RM 3088
+                        <span className="text-lg font-normal text-gray-600 dark:text-gray-400">/month</span>
+                      </div>
+                      <p className="text-gray-600 dark:text-gray-400 mb-6 text-sm">
+                        Complete solution with 20,000 AI responses, 50,000 contacts, custom integrations, full setup and maintenance included.
+                      </p>
+                      <button className="w-full bg-primary hover:bg-primary/80 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95">
+                        Start
+                      </button>
+                    </div>
+                    <div className="mt-6 space-y-3">
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        20,000 AI Responses Monthly
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        50,000 Contacts
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        AI Follow-Up System
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        AI Booking System
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        AI Tagging System
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        AI Assign System
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        Mobile App Access
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        Desktop App Access
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        Full Maintenance & Support
+                      </div>
+                      <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                        <Lucide icon="Check" className="w-4 h-4 text-green-500 mr-3" />
+                        Full AI Setup & Custom Automations
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Top-up Section */}
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 rounded-2xl border border-green-200/50 dark:border-green-700/50 p-8">
+                <h3 className="text-2xl font-bold text-green-900 dark:text-green-100 mb-6">
+                  Need More AI Responses?
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="text-center">
+                    <div className="text-3xl font-black text-green-600 dark:text-green-400 mb-2">
+                      RM 10
+                    </div>
+                    <div className="text-lg font-semibold text-green-700 dark:text-green-300 mb-2">
+                      per 100 AI Responses
+                    </div>
+                    <p className="text-green-600 dark:text-green-400 text-sm mb-4">
+                      Top up anytime, regardless of your plan
+                    </p>
+                    <button className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95">
+                      Get Top-up
+                    </button>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-black text-green-600 dark:text-green-400 mb-2">
+                      Custom
+                    </div>
+                    <div className="text-lg font-semibold text-green-700 dark:text-green-300 mb-2">
+                      AI Setup & Automations
+                    </div>
+                    <p className="text-green-600 dark:text-green-400 text-sm mb-4">
+                      Based on your specific requirements
+                    </p>
+                    <button className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95">
+                      Get Quote
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
             </div>
           </div>
         </div>

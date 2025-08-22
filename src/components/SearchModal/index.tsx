@@ -201,7 +201,10 @@ const enhancedMessages = data.results.map(message => {
   const highlightText = (text: string, query: string) => {
     if (!query) return text;
     
-    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    // Escape special regex characters to prevent errors
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    const parts = text.split(new RegExp(`(${escapedQuery})`, 'gi'));
     return parts.map((part, i) => 
       part.toLowerCase() === query.toLowerCase() ? 
         <span key={i} className="bg-yellow-200 dark:bg-yellow-600">{part}</span> : 
