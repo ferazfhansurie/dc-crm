@@ -11052,7 +11052,15 @@ console.log(data);
                     </span>
                   </span>
                 )}
-
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsTopUpModalOpen(true);
+                  }}
+                  className="px-2 py-1 text-xs bg-primary/90 hover:bg-primary backdrop-blur-sm text-white rounded-lg transition-all duration-300 ease-out hover:scale-105 active:scale-95 font-medium border border-primary/50 shadow-sm hover:shadow-md"
+                >
+                  Top-up
+                </button>
               </div>
             </div>
 
@@ -12768,10 +12776,10 @@ console.log(data);
                                 message.type === "ptt") &&
                                 (message.audio || message.ptt) && (
                                   <>
-                                    <div className="audio-content p-0 message-content image-message">
+                                    <div className="message-content">
                                       <audio
                                         controls
-                                        className="rounded-2xl message-image cursor-pointer"
+                                        className="max-w-full"
                                         src={(() => {
                                           const audioData =
                                             message.audio?.data ||

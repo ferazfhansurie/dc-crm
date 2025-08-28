@@ -97,4 +97,17 @@
     border-radius: 20px;
     border: 2px solid #1F2937;
   }
+}/* Instead of: */
+.tooltip {
+  right: 0;
+}
+
+/* Use: */
+.tooltip {
+  left: 0;
+  transform: translateX(-100%);
+}
+.voice-message-bubble {
+  overflow: visible;
+  position: relative;
 }
