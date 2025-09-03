@@ -47,7 +47,7 @@ function Main() {
       if (response.ok) {
         localStorage.setItem('userEmail', email);
         localStorage.setItem('userData', JSON.stringify(data.user));
-        navigate('/loading');
+        navigate('/chat');
       } else {
         setError(data.error || "An error occurred during sign-in. Please try again later.");
       }
