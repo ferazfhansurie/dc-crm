@@ -611,6 +611,7 @@ function Main() {
 
   const fetchPhoneIndex = async (companyId: string) => {
     try {
+      //
       // Get current user email for API call
       const userEmail = localStorage.getItem("userEmail");
       if (!userEmail) {
