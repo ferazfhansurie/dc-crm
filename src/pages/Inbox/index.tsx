@@ -1,3 +1,5 @@
+
+
 import React, { useRef, useState, useEffect } from "react";
 import axios from "axios";
 import Button from "@/components/Base/Button";
@@ -68,10 +70,13 @@ interface MessageListProps {
   onSendMessage: (message: string) => void;
   assistantName: string;
   deleteThread: () => void;
-  threadId: string; // Add this line
-  enterFullscreenMode: () => void; // Add this line
-  openPDFModal: (documentUrl: string, documentName?: string) => void; // Add this line
-  companyId: string | null; // Add this line
+  threadId: string;
+  enterFullscreenMode: () => void;
+  openPDFModal: (documentUrl: string, documentName?: string) => void;
+  companyId: string | null;
+  isAiThinking: boolean;
+  // Thread management props
+  onCreateNewThread: () => void;
 }
 interface AssistantConfig {
   id: string;
@@ -101,24 +106,24 @@ const PDFModal: React.FC<PDFModalProps> = ({ isOpen, onClose, documentUrl, docum
       onClick={onClose}
     >
       <div
-        className="relative bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full md:w-[800px] h-auto md:h-[600px] p-4"
+        className="relative bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full md:w-[800px] h-auto md:h-[600px] p-3"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200">
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200">
             Document Preview
           </h2>
           <button
             className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
             onClick={onClose}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
         <div
-          className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg mb-4 flex justify-center items-center"
+          className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg mb-3 flex justify-center items-center"
           style={{ height: "90%" }}
         >
           {documentUrl.toLowerCase().includes('.pdf') ? (
@@ -131,13 +136,13 @@ const PDFModal: React.FC<PDFModalProps> = ({ isOpen, onClose, documentUrl, docum
             />
           ) : (
             <div className="text-center">
-              <svg className="w-20 h-20 mb-2 mx-auto text-gray-600 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-16 h-16 mb-1.5 mx-auto text-gray-600 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
               </svg>
-              <p className="text-gray-800 dark:text-gray-200 font-semibold">
+              <p className="text-gray-800 dark:text-gray-200 font-semibold text-sm">
                 {documentName || "Document"}
               </p>
-              <p className="text-gray-600 dark:text-gray-400 mt-2">
+              <p className="text-gray-600 dark:text-gray-400 mt-1.5 text-xs">
                 Click Download to view this document
               </p>
             </div>
@@ -145,7 +150,7 @@ const PDFModal: React.FC<PDFModalProps> = ({ isOpen, onClose, documentUrl, docum
         </div>
         <div className="flex justify-center">
           <button
-            className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+            className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors text-sm"
             onClick={() => window.open(documentUrl, '_blank')}
           >
             Download Document
@@ -165,13 +170,15 @@ const MessageList: React.FC<MessageListProps> = ({
   enterFullscreenMode,
   openPDFModal,
   companyId,
+  isAiThinking,
+  onCreateNewThread,
 }) => {
   const [newMessage, setNewMessage] = useState("");
 
   const myMessageClass =
-    "flex flex-col w-full max-w-[320px] leading-1.5 p-1 bg-gray-700 text-white dark:bg-gray-600 rounded-tr-xl rounded-tl-xl rounded-br-sm rounded-bl-xl self-end ml-auto mr-2 text-left";
+    "flex flex-col max-w-xs lg:max-w-md px-4 py-2 mx-2 mb-3 bg-blue-500 text-white rounded-2xl rounded-br-md shadow-sm self-end ml-auto text-left";
   const otherMessageClass =
-    "bg-[#dcf8c6] dark:bg-green-700 text-black dark:text-white rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-sm p-1 self-start text-left";
+    "flex flex-col max-w-xs lg:max-w-md px-4 py-2 mx-2 mb-3 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-2xl rounded-bl-md shadow-sm border border-gray-200 dark:border-gray-700 self-start text-left";
 
   const handleSendMessage = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -185,119 +192,65 @@ const MessageList: React.FC<MessageListProps> = ({
 
   return (
     <div className="flex flex-col w-full h-full bg-white dark:bg-gray-900 relative">
-      <div className="flex items-center justify-between p-2 border-b border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
+      <div className="flex items-center justify-between p-1.5 border-b border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
         <div className="flex items-center">
-          <div className="w-8 h-8 overflow-hidden rounded-full shadow-lg bg-gray-700 dark:bg-gray-600 flex items-center justify-center text-white mr-3">
-            <span className="text-lg capitalize">
-              {assistantName.charAt(0)}
-            </span>
-          </div>
-          <div>
-            <div className="font-semibold text-gray-800 dark:text-gray-200 capitalize">
-              {assistantName}
-            </div>
+          <div className="px-3 py-1.5 bg-gray-600 dark:bg-gray-500 text-white rounded-full shadow-lg font-semibold text-xs capitalize">
+            {assistantName}
           </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          {/* New Chat Button - Always creates a fresh conversation */}
           <button
-            onClick={deleteThread}
-            className={`px-4 py-2 text-white rounded flex items-center text-sm ${
-              !threadId
-                ? "bg-gray-500 dark:bg-gray-600 cursor-not-allowed"
-                : "bg-red-500 dark:bg-red-600"
-            } active:scale-95 transition-all duration-200`}
-            disabled={!threadId}
+            onClick={onCreateNewThread}
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs active:scale-95 transition-all duration-200 flex items-center gap-1"
           >
-            Reset Conversation
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Chat
           </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 dark:bg-gray-900 relative">
-                {/* Tool Buttons - Positioned at top of chat area */}
-        <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-200 dark:border-gray-700">
-          {/* Add subtle background for better visual separation */}
-          <div className="absolute inset-0 bg-gradient-to-r from-gray-50/50 to-transparent dark:from-gray-800/50 pointer-events-none rounded-t-lg"></div>
-          <Link to="/a-i-responses">
-            <button className="px-3 py-2 bg-blue-500 dark:bg-blue-600 text-white border-2 border-blue-600 dark:border-blue-500 rounded-lg hover:bg-blue-600 dark:hover:bg-blue-700 hover:border-blue-700 dark:hover:border-blue-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-2 whitespace-nowrap">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-4 w-4"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              AI Tools
-            </button>
-          </Link>
-          <Link to="/follow-ups">
-            <button className="px-3 py-2 bg-teal-500 dark:bg-teal-600 text-white border-2 border-teal-600 dark:border-teal-500 rounded-lg hover:bg-teal-600 dark:hover:bg-teal-700 hover:border-teal-700 dark:hover:border-teal-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-2 whitespace-nowrap">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-                className="h-4 w-4"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-                <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z" />
-            </svg>
-              Follow-Ups
-          </button>
-          </Link>
-          <Link to="/users-layout-2/builder2">
-            <button className="px-3 py-2 bg-purple-500 dark:bg-purple-600 text-white border-2 border-purple-600 dark:border-purple-500 rounded-lg hover:bg-purple-600 dark:hover:bg-purple-700 hover:border-purple-700 dark:hover:border-purple-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-2 whitespace-nowrap">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
-                <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" />
-              </svg>
-              Prompt Builder
-          </button>
-          </Link>
-          <Link to="/split-test">
-            <button className="px-3 py-2 bg-orange-500 dark:bg-orange-600 text-white border-2 border-orange-600 dark:border-orange-500 rounded-lg hover:bg-orange-600 dark:hover:bg-orange-700 hover:border-orange-700 dark:hover:border-orange-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-2 whitespace-nowrap">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 11-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 012 0v1.586l2.293-2.293a1 1 0 111.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm13-1a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 010-2h1.586l-2.293-2.293a1 1 0 111.414-1.414L15 13.586V12a1 1 0 011-1z" clipRule="evenodd" />
-              </svg>
-              Split Test
-            </button>
-          </Link>
-         
+            <div className="flex-1 overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 relative">
+        {/* Tool Buttons - Positioned at top of chat area */}
+        <div className="flex items-center gap-1.5 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
         </div>
         
-        {messages
-          .slice()
-          .reverse()
-          .map((message, index) => (
+
+        
+        {messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center text-gray-500 dark:text-gray-400">
+              <div className="px-3 py-2 bg-[#dcf8c6] dark:bg-green-700 text-black dark:text-white rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-sm self-start text-left max-w-[100%] font-mono text-xs">
+              Chat With {assistantName}...
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {messages
+              .slice()
+              .reverse()
+              .map((message, index) => (
             <div key={index}>
               {message.text.split("||")
                 .filter(splitText => splitText.trim() !== "")
                 .map((splitText, splitIndex) => (
                 <div
                   key={`${index}-${splitIndex}`}
-                  className={`p-2 mb-2 rounded ${
-                    message.from_me ? myMessageClass : otherMessageClass
-                  }`}
-                  style={{
-                    maxWidth: "70%",
-                    width: `${
-                      message.type === "image" || message.type === "document"
-                        ? "350"
-                        : Math.min((splitText.trim().length || 0) * 10, 350)
-                    }px`,
-                    minWidth: "75px",
-                  }}
+                  className={`flex ${message.from_me ? 'justify-end' : 'justify-start'} animate-fadeIn`}
                 >
+                  <div
+                    className={message.from_me ? myMessageClass : otherMessageClass}
+                  >
                   {message.type === "text" && (
                     <div className="whitespace-pre-wrap break-words">
                       {splitText.trim()}
                     </div>
                   )}
                   {message.type === "image" && message.imageUrls && (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {message.imageUrls.map((imageUrl, imgIndex) => (
                         <div key={imgIndex} className="relative">
                           <img
@@ -311,7 +264,7 @@ const MessageList: React.FC<MessageListProps> = ({
                             }}
                           />
                           {message.caption && (
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                               {message.caption}
                             </p>
                           )}
@@ -320,16 +273,16 @@ const MessageList: React.FC<MessageListProps> = ({
                     </div>
                   )}
                   {message.type === "document" && message.documentUrls && (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {message.documentUrls.map((documentUrl, docIndex) => (
                         <div key={docIndex} className="relative">
                           {/* Document Header */}
-                          <div className="flex items-center p-3 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 mb-2">
-                            <svg className="w-8 h-8 text-gray-500 dark:text-gray-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                          <div className="flex items-center p-2 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 mb-1.5">
+                            <svg className="w-6 h-6 text-gray-500 dark:text-gray-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
                             </svg>
                             <div className="flex-1">
-                              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                              <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
                                 {documentUrl.split('/').pop()?.split('?')[0] || `Document ${docIndex + 1}`}
                               </p>
                               {message.caption && (
@@ -340,7 +293,7 @@ const MessageList: React.FC<MessageListProps> = ({
                             </div>
                             <button
                               onClick={() => openPDFModal(documentUrl, documentUrl.split('/').pop()?.split('?')[0] || `Document ${docIndex + 1}`)}
-                              className="px-3 py-1 text-xs bg-green-500 dark:bg-green-600 text-white rounded hover:bg-green-600 dark:hover:bg-green-700 transition-colors"
+                              className="px-2 py-0.5 text-xs bg-green-500 dark:bg-green-600 text-white rounded hover:bg-green-600 dark:hover:bg-green-700 transition-colors"
                             >
                               View
                             </button>
@@ -382,23 +335,75 @@ const MessageList: React.FC<MessageListProps> = ({
                     </div>
                   )}
                   {splitIndex === message.text.split("||").filter(splitText => splitText.trim() !== "").length - 1 && (
-                    <div className="message-timestamp text-xs text-gray-400 dark:text-gray-500 mt-2 px-2 py-1 bg-gray-50 dark:bg-gray-800 rounded-full inline-block">
-                      {new Date(message.createdAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                    <div className={`text-xs text-gray-400 dark:text-gray-500 mt-1 ${message.from_me ? 'text-right' : 'text-left'} flex items-center gap-1 ${message.from_me ? 'justify-end' : 'justify-start'}`}>
+                      <span>
+                        {new Date(message.createdAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                      {message.from_me && (
+                        <svg className="w-3 h-3 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
                     </div>
                   )}
+                  </div>
                 </div>
               ))}
             </div>
           ))}
+          </>
+        )}
+          
+        {/* AI Thinking Indicator - ChatGPT Style */}
+        {isAiThinking && (
+          <div className="flex justify-start mb-4 animate-fadeIn">
+            <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-bl-md px-4 py-3 max-w-xs shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center space-x-2">
+                <div className="flex space-x-1">
+                  <div className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0ms', animationDuration: '1.4s' }}></div>
+                  <div className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s', animationDuration: '1.4s' }}></div>
+                  <div className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s', animationDuration: '1.4s' }}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       
       {/* Fullscreen Button - Positioned inside chatbox */}
+      <div className="absolute bottom-20 right-4 flex gap-2 z-10">
+        {/* Guest Chat Button */}
+        <a
+          href={`https://web.jutateknologi.com/guest-chat/${companyId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <button
+            className="p-3 bg-indigo-500 dark:bg-indigo-600 text-white rounded-full hover:bg-indigo-600 dark:hover:bg-indigo-700 active:scale-95 transition-colors shadow-lg"
+            title="Open Guest Chat"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+        </a>
+        
+        {/* Fullscreen Button */}
       <button
         onClick={enterFullscreenMode}
-        className="absolute bottom-20 right-4 p-3 bg-green-500 dark:bg-green-600 text-white rounded-full hover:bg-green-600 dark:hover:bg-green-700 active:scale-95 transition-colors z-10 shadow-lg"
+          className="p-3 bg-green-500 dark:bg-green-600 text-white rounded-full hover:bg-green-600 dark:hover:bg-green-700 active:scale-95 transition-colors shadow-lg"
         title="Open in fullscreen"
       >
         <svg
@@ -414,11 +419,12 @@ const MessageList: React.FC<MessageListProps> = ({
           <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
         </svg>
       </button>
+      </div>
 
-      <div className="p-4 border-t border-gray-300 dark:border-gray-700">
+      <div className="p-3 border-t border-gray-300 dark:border-gray-700">
         <div className="flex items-center">
           <textarea
-            className="w-full h-10 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-green-500 dark:focus:border-green-400 resize-none"
+            className="w-full h-8 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-green-500 dark:focus:border-green-400 resize-none"
             placeholder="Type a message"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
@@ -426,11 +432,11 @@ const MessageList: React.FC<MessageListProps> = ({
           />
           <button
             onClick={() => onSendMessage(newMessage)}
-            className="px-4 py-2 ml-2 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-2"
+            className="px-3 py-1.5 ml-1.5 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-1.5 text-xs"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-4 w-4"
+              className="h-3 w-3"
               viewBox="0 0 20 20"
               fill="currentColor"
           >
@@ -484,6 +490,17 @@ const Main: React.FC = () => {
   const [aiAutoResponse, setAiAutoResponse] = useState<boolean>(false);
   const [aiDelay, setAiDelay] = useState<number>(0);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isAiThinking, setIsAiThinking] = useState<boolean>(false);
+  
+  // Thread management state
+  const [editingThreadName, setEditingThreadName] = useState<string | null>(null);
+  const [editingThreadNameValue, setEditingThreadNameValue] = useState<string>('');
+  
+  // AI Tools Modal state
+  const [isAiToolsModalOpen, setIsAiToolsModalOpen] = useState(false);
+  const [selectedToolCategory, setSelectedToolCategory] = useState<string>("");
+  const [showAiToolsDropdown, setShowAiToolsDropdown] = useState(false);
+  const [showAiToolsSection, setShowAiToolsSection] = useState(false);
   
   // Fullscreen mode state
   const location = useLocation();
@@ -491,11 +508,242 @@ const Main: React.FC = () => {
   const isFullscreenMode = location.pathname.includes('/fullscreen-chat/');
   const fullscreenCompanyId = location.pathname.match(/\/fullscreen-chat\/([^\/]+)/)?.[1];
 
+  // AI Tools data
+  const aiToolsData = {
+    calendar: {
+      title: "Calendar & Reminder Functions",
+      description: "Tools for managing calendar events, appointments, and scheduling",
+      examples: [
+        {
+          name: "checkAvailableTimeSlots",
+          description: "Checks available appointment slots",
+          example: "use 'checkAvailableTimeSlots' function to check available time slots for January 15th between 9 AM and 7 PM"
+        },
+        {
+          name: "createCalendarEvent",
+          description: "Creates calendar events/appointments",
+          example: "use 'createCalendarEvent' function to create a calendar event for an appointment with John Doe on January 15th from 10 AM to 11 AM for a consultation"
+        },
+        {
+          name: "rescheduleCalendarEvent",
+          description: "Reschedules existing events",
+          example: "use 'rescheduleCalendarEvent' function to reschedule event_123 to January 16th from 2 PM to 3 PM"
+        },
+        {
+          name: "cancelCalendarEvent",
+          description: "Cancels events",
+          example: "use 'cancelCalendarEvent' function to cancel event_123"
+        },
+        {
+          name: "searchUpcomingAppointments",
+          description: "Searches for upcoming appointments",
+          example: "use 'searchUpcomingAppointments' function to search for upcoming appointments between January 15th and January 31st"
+        },
+        {
+          name: "sendRescheduleRequest",
+          description: "Sends reschedule requests",
+          example: "use 'sendRescheduleRequest' function to send a reschedule request for event_123 to January 17th at 3 PM"
+        }
+      ]
+    },
+    contact: {
+      title: "Contact Management Functions",
+      description: "Tools for managing contacts, tags, and contact data",
+      examples: [
+        {
+          name: "tagContact",
+          description: "Tags a contact",
+          example: "use 'tagContact' function to tag contact_123 as 'VIP' with the description 'High Priority Client'"
+        },
+        {
+          name: "manageContactTags",
+          description: "Adds/removes tags from contacts",
+          example: "use 'manageContactTags' function to add the 'Prospect' tag to contact_123"
+        },
+        {
+          name: "listContactsWithTag",
+          description: "Lists contacts with specific tags",
+          example: "use 'listContactsWithTag' function to list all contacts with the 'VIP' tag, showing up to 20 results"
+        },
+        {
+          name: "searchContacts",
+          description: "Searches for contacts",
+          example: "use 'searchContacts' function to search for contacts with the name 'John Doe'"
+        },
+        {
+          name: "listContacts",
+          description: "Lists contacts with pagination",
+          example: "use 'listContacts' function to list contacts with pagination, showing 20 results starting from the beginning, sorted by creation date in descending order"
+        },
+        {
+          name: "fetchContactData",
+          description: "Gets contact data",
+          example: "use 'fetchContactData' function to fetch the complete data for contact_123"
+        },
+        {
+          name: "fetchMultipleContactsData",
+          description: "Gets data for multiple contacts",
+          example: "use 'fetchMultipleContactsData' function to fetch data for multiple contacts including contact_123 and contact_456"
+        },
+        {
+          name: "listAssignedContacts",
+          description: "Lists contacts assigned to specific person",
+          example: "use 'listAssignedContacts' function to list all contacts assigned to john.doe@company.com"
+        },
+        {
+          name: "getContactsAddedToday",
+          description: "Gets contacts created today",
+          example: "use 'getContactsAddedToday' function to get all contacts that were added today"
+        },
+        {
+          name: "getTotalContacts",
+          description: "Gets total contact count",
+          example: "use 'getTotalContacts' function to get the total count of all contacts"
+        }
+      ]
+    },
+    database: {
+      title: "Database & Custom Fields Functions",
+      description: "Tools for managing custom fields and database operations",
+      examples: [
+        {
+          name: "updateCustomFields",
+          description: "Updates custom fields for contacts",
+          example: "use 'updateCustomFields' function to update the custom fields for contact_123 to set industry as 'Technology' and company_size as '50-100'"
+        },
+        {
+          name: "getCustomFields",
+          description: "Retrieves custom fields for contacts",
+          example: "use 'getCustomFields' function to retrieve all custom fields for contact_123"
+        }
+      ]
+    },
+    followUps: {
+      title: "Follow-Up Management Functions",
+      description: "Tools for creating, managing, and automating follow-up templates and sequences",
+      examples: [
+        {
+          name: "createFollowUpTemplate",
+          description: "Creates new follow-up email templates",
+          example: "use 'createFollowUpTemplate' function to create a follow-up template for lead nurturing with the subject 'Following up on your interest' and personalized content"
+        },
+        {
+          name: "editFollowUpTemplate",
+          description: "Edits existing follow-up templates",
+          example: "use 'editFollowUpTemplate' function to edit template_456 to update the subject line and add more personalization tokens"
+        },
+        {
+          name: "deleteFollowUpTemplate",
+          description: "Deletes follow-up templates",
+          example: "use 'deleteFollowUpTemplate' function to delete template_456"
+        },
+        {
+          name: "listFollowUpTemplates",
+          description: "Lists all follow-up templates",
+          example: "use 'listFollowUpTemplates' function to list all active follow-up templates with pagination"
+        },
+        {
+          name: "scheduleFollowUp",
+          description: "Schedules follow-up messages to contacts",
+          example: "use 'scheduleFollowUp' function to schedule a follow-up email to contact_123 using template_456 for tomorrow at 2 PM"
+        },
+        {
+          name: "createFollowUpSequence",
+          description: "Creates automated follow-up sequences",
+          example: "use 'createFollowUpSequence' function to create a 5-step nurturing sequence with emails sent every 3 days"
+        },
+        {
+          name: "assignContactToSequence",
+          description: "Assigns contacts to follow-up sequences",
+          example: "use 'assignContactToSequence' function to assign contact_123 to the lead nurturing sequence starting immediately"
+        },
+        {
+          name: "pauseFollowUpSequence",
+          description: "Pauses follow-up sequences for contacts",
+          example: "use 'pauseFollowUpSequence' function to pause the follow-up sequence for contact_123"
+        },
+        {
+          name: "updateFollowUpStatus",
+          description: "Updates follow-up status and tracking",
+          example: "use 'updateFollowUpStatus' function to mark followup_789 as completed and add completion notes"
+        }
+      ]
+    },
+    utility: {
+      title: "Utility Functions",
+      description: "General utility tools for web search, date operations, and system functions",
+      examples: [
+        {
+          name: "sendWhatsAppMessage",
+          description: "Sends WhatsApp messages to any contact using their contact ID or phone number",
+          example: "use 'sendWhatsAppMessage' function with contactId '0128-60123456789' and message 'Hello! Your appointment is confirmed for tomorrow at 2 PM. Please reply to confirm.'"
+        },
+        {
+          name: "sendWhatsAppMessage",
+          description: "Sends WhatsApp messages to a group using the group contact ID",
+          example: "use 'sendWhatsAppMessage' function with contactId '0210-120363275496222216' and message 'Team meeting scheduled for Friday at 3 PM. Please confirm your attendance.'"
+        },
+        {
+          name: "scheduleMessage",
+          description: "Schedule WhatsApp messages to be sent at a specific time with AI-powered intelligent optimization",
+          example: "use 'scheduleMessage' function with contactIds ['0128-60123456789', '0128-60987654321'] and message 'Special promotion ending soon!' and scheduledTime '2024-01-15T09:00:00+08:00'"
+        },
+        {
+          name: "searchWeb",
+          description: "Performs web searches",
+          example: "use 'searchWeb' function to search the web for 'latest CRM software trends 2024'"
+        },
+        {
+          name: "getTodayDate",
+          description: "Gets current date",
+          example: "use 'getTodayDate' function to get today's date"
+        },
+        {
+          name: "calculateDateDifference",
+          description: "Calculates difference between dates",
+          example: "use 'calculateDateDifference' function to calculate the number of days between January 15th and January 30th"
+        },
+        {
+          name: "formatDate",
+          description: "Formats dates in different formats",
+          example: "use 'formatDate' function to format '2024-01-15' to 'January 15, 2024'"
+        },
+        {
+          name: "generateUUID",
+          description: "Generates unique identifiers",
+          example: "use 'generateUUID' function to generate a unique ID for a new record"
+        },
+        {
+          name: "validateEmail",
+          description: "Validates email addresses",
+          example: "use 'validateEmail' function to check if 'user@example.com' is a valid email format"
+        },
+        {
+          name: "exportData",
+          description: "Exports data to various formats",
+          example: "use 'exportData' function to export contact list to CSV format with selected fields"
+        },
+        {
+          name: "importData",
+          description: "Imports data from files",
+          example: "use 'importData' function to import contacts from a CSV file with field mapping"
+        },
+        {
+          name: "sendNotification",
+          description: "Sends system notifications",
+          example: "use 'sendNotification' function to send a notification to admin@company.com about system maintenance"
+        },
+      
+      
+      ]
+    }
+  };
+
   // Message classes for fullscreen mode
   const myMessageClass =
-    "flex flex-col w-full max-w-[320px] leading-1.5 p-1 bg-gray-700 text-white dark:bg-gray-600 rounded-tr-xl rounded-tl-xl rounded-br-sm rounded-bl-xl self-end ml-auto mr-2 text-left";
+    "flex flex-col max-w-xs lg:max-w-md px-4 py-2 mx-2 mb-3 bg-blue-500 text-white rounded-2xl rounded-br-md shadow-sm self-end ml-auto text-left";
   const otherMessageClass =
-    "bg-[#dcf8c6] dark:bg-green-700 text-black dark:text-white rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-sm p-1 self-start text-left";
+    "flex flex-col max-w-xs lg:max-w-md px-4 py-2 mx-2 mb-3 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-2xl rounded-bl-md shadow-sm border border-gray-200 dark:border-gray-700 self-start text-left";
 
   // Fullscreen message handling
   const [fullscreenNewMessage, setFullscreenNewMessage] = useState("");
@@ -525,6 +773,30 @@ const Main: React.FC = () => {
       documentUrl: "",
       documentName: "",
     });
+  };
+
+  const openAiToolsModal = (category: string) => {
+    setSelectedToolCategory(category);
+    setIsAiToolsModalOpen(true);
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Copied to clipboard!");
+  };
+
+  const handleAiToolsClick = () => {
+    setShowAiToolsDropdown(!showAiToolsDropdown);
+  };
+
+  const handleAutomatedClick = () => {
+    setShowAiToolsSection(true);
+    setShowAiToolsDropdown(false);
+  };
+
+  const handleManualClick = () => {
+    navigate('/a-i-responses');
+    setShowAiToolsDropdown(false);
   };
   
   const handleFullscreenSendMessage = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -588,6 +860,20 @@ const Main: React.FC = () => {
       fetchAiSettings();
     }
   }, [companyId]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showAiToolsDropdown && !(event.target as Element).closest('.ai-tools-dropdown')) {
+        setShowAiToolsDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showAiToolsDropdown]);
 
   const fetchCompanyId = async () => {
     const userEmail = localStorage.getItem("userEmail");
@@ -754,6 +1040,7 @@ const Main: React.FC = () => {
 
     setIsSaving(true);
 
+    try {
     // Get all unique vector store IDs from files
     const vectorStoreIds = [
       ...new Set(files.map((file) => file.vectorStoreId).filter(Boolean)),
@@ -771,7 +1058,7 @@ const Main: React.FC = () => {
       },
     };
 
-    try {
+      // Update the assistant in OpenAI
       const response = await axios.post(
         `https://api.openai.com/v1/assistants/${assistantId}`,
         payload,
@@ -784,7 +1071,32 @@ const Main: React.FC = () => {
         }
       );
 
+      // Also save the template version
+      if (companyId && assistantInfo.instructions.trim()) {
+        try {
+          const timestamp = new Date().toLocaleString();
+          const templateResponse = await axios.post(
+            "https://juta-dev.ngrok.dev/api/instruction-templates",
+            {
+              companyId,
+              name: timestamp,
+              instructions: assistantInfo.instructions,
+            }
+          );
+
+          if (templateResponse.data.success) {
+            fetchTemplates(); // Refresh templates list
+            toast.success("Assistant updated and template saved successfully");
+          } else {
+            toast.success("Assistant updated successfully, but template save failed");
+          }
+        } catch (templateError) {
+          console.error("Error saving template:", templateError);
+          toast.success("Assistant updated successfully, but template save failed");
+        }
+      } else {
       toast.success("Assistant updated successfully");
+      }
     } catch (error) {
       if (axios.isAxiosError(error)) {
         console.error(
@@ -965,15 +1277,29 @@ const Main: React.FC = () => {
   };
 
   const sendMessageToAssistant = async (messageText: string) => {
+    console.log('🚀 [SEND MESSAGE] Starting sendMessageToAssistant with message:', messageText);
+    
+    // Ensure we have a threadId, create one if needed
+    let currentThreadId = threadId;
+    if (!currentThreadId) {
+      currentThreadId = generateThreadId();
+      setThreadId(currentThreadId);
+      console.log('✅ [THREAD] Created new threadId:', currentThreadId);
+    } else {
+      console.log('✅ [THREAD] Using existing threadId:', currentThreadId);
+    }
+
     const newMessage: ChatMessage = {
       from_me: true,
       type: "text",
       text: messageText,
       createdAt: new Date().toISOString(),
     };
+    console.log('✅ [MESSAGE] Created user message:', newMessage);
 
     // Clear dummy messages if they are present
     setMessages((prevMessages) => {
+      console.log('📝 [STATE] Current messages before update:', prevMessages);
       if (
         prevMessages.some(
           (message) =>
@@ -981,76 +1307,175 @@ const Main: React.FC = () => {
             message.createdAt === "2024-05-29T10:01:00Z"
         )
       ) {
+        console.log('🧹 [CLEANUP] Clearing dummy messages, returning only new message');
         return [newMessage];
       } else {
+        console.log('📝 [STATE] Adding new message to existing messages');
         return [newMessage, ...prevMessages];
       }
     });
 
-    // Log assistantId
+    // Save user message to current thread
+    console.log('💾 [SAVE] Saving user message to thread:', currentThreadId);
+    try {
+      saveChatHistory(currentThreadId, [newMessage, ...messages]);
+      console.log('✅ [SAVE] User message saved successfully');
+    } catch (saveError) {
+      console.error('❌ [SAVE ERROR] Failed to save user message:', saveError);
+    }
+
+    // Show AI thinking indicator
+    setIsAiThinking(true);
+    console.log('🤔 [UI] AI thinking indicator activated');
 
     try {
       const userEmail = localStorage.getItem("userEmail");
+      console.log('👤 [AUTH] Retrieved user email:', userEmail);
 
       // Get the assistant response first
-      const res = await axios.get(
-        `https://juta-dev.ngrok.dev/api/assistant-test/`,
-        {
-          params: {
-            message: messageText,
-            email: userEmail,
-            assistantid: assistantId,
-          },
+      // Send the full conversation history so AI remembers the context
+      const conversationHistory = messages.map(msg => ({
+        role: msg.from_me ? 'user' : 'assistant',
+        content: msg.text
+      }));
+      
+      console.log('📜 [HISTORY] Sending conversation history to AI:', conversationHistory);
+      console.log('📝 [STATE] Current messages state:', messages);
+      console.log('🆔 [ASSISTANT] Using assistantId:', assistantId);
+      const apiUrl = `https://juta-dev.ngrok.dev/api/assistant-test/`;
+      const requestParams = {
+        message: messageText,
+        email: userEmail,
+        assistantid: assistantId,
+        conversationHistory: JSON.stringify(conversationHistory)
+      };
+      
+      console.log('🔗 [API] Making request to assistant API...');
+      console.log('🌐 [API] URL:', apiUrl);
+      console.log('📋 [API] Request params:', requestParams);
+      console.log('⏰ [API] Request starting at:', new Date().toISOString());
+      
+      // Test if the ngrok endpoint is reachable first
+      try {
+        console.log('🔍 [NETWORK] Testing ngrok endpoint reachability...');
+        const healthCheck = await axios.get('https://juta-dev.ngrok.dev/', { timeout: 5000 });
+        console.log('✅ [NETWORK] Ngrok endpoint is reachable, status:', healthCheck.status);
+      } catch (networkError) {
+        console.error('❌ [NETWORK] Ngrok endpoint unreachable:', networkError);
+        throw new Error('Ngrok endpoint is not accessible');
+      }
+      
+      const res = await axios.get(apiUrl, {
+        params: requestParams,
+        timeout: 30000, // 30 second timeout
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        // Add request interceptor for debugging
+        validateStatus: function (status) {
+          console.log('📊 [API] HTTP Status received:', status);
+          return status >= 200 && status < 300;
         }
-      );
+      });
+      
+      console.log('⏰ [API] Request completed at:', new Date().toISOString());
+      console.log('✅ [API] Response received, status:', res.status);
+      console.log('📋 [API] Full response data:', res.data);
+      
       const data = res.data;
+
+      if (!data || !data.answer) {
+        console.error('❌ [API ERROR] Invalid response structure:', data);
+        throw new Error('Invalid response from API - missing answer field');
+      }
+
+      console.log('📝 [RESPONSE] Raw bot answer:', data.answer);
 
       // Split the bot's response into individual messages using || separator
       const botMessages = data.answer.split('||').filter((line: string) => line.trim() !== '');
-      console.log("Bot response split into messages:", botMessages);
+      console.log('✂️ [SPLIT] Bot response split into messages:', botMessages);
+      console.log('📊 [SPLIT] Number of bot message parts:', botMessages.length);
       
       // Check for AI responses based on the BOT's message, not the user's
+      console.log('🔍 [AI CHECK] Checking for AI responses...');
       const aiResponses = await checkAIResponses(data.answer, false);
-      console.log("AI Responses found for bot message:", aiResponses);
+      console.log('🤖 [AI CHECK] AI Responses found for bot message:', aiResponses);
+      console.log('📊 [AI CHECK] Number of AI responses:', aiResponses.length);
       
       // Create messages array - each || separated part becomes a separate message
       const newMessages: ChatMessage[] = [];
+      console.log('📝 [PROCESS] Starting to process bot message parts...');
       
       // Process each bot message part and insert AI responses after the triggering part
       for (let i = 0; i < botMessages.length; i++) {
         const botMessage = botMessages[i];
-        console.log(`Processing bot message part ${i}:`, botMessage);
+        console.log(`🔄 [PROCESS ${i}] Processing bot message part:`, botMessage);
         
         // Add the bot message part
-        newMessages.push({
+        const botMessageObj = {
           from_me: false,
-          type: "text",
+          type: "text" as const,
           text: botMessage,
           createdAt: new Date().toISOString(),
-        });
+        };
+        newMessages.push(botMessageObj);
+        console.log(`✅ [PROCESS ${i}] Added bot message:`, botMessageObj);
         
         // If this message part contains the keyword, add AI responses immediately after
-        if (aiResponses.length > 0 && botMessage.toLowerCase().includes('your cnb carpets virtual admin assistant')) {
-          console.log("Adding AI responses after message part:", botMessage);
+        const hasKeyword = botMessage.toLowerCase().includes('your cnb carpets virtual admin assistant');
+        console.log(`🔍 [KEYWORD ${i}] Checking for keyword 'your cnb carpets virtual admin assistant':`, hasKeyword);
+        
+        if (aiResponses.length > 0 && hasKeyword) {
+          console.log(`🤖 [AI INSERT ${i}] Adding AI responses after message part:`, botMessage);
           newMessages.push(...aiResponses);
+          console.log(`✅ [AI INSERT ${i}] Added ${aiResponses.length} AI responses`);
         }
       }
       
-      console.log("Final newMessages array:", newMessages);
+      console.log('📋 [FINAL] Final newMessages array:', newMessages);
+      console.log('📊 [FINAL] Total new messages count:', newMessages.length);
       
       // Reverse the messages so newest appears first in the chat display
       const reversedNewMessages = [...newMessages].reverse();
-      console.log("Reversed for chat display:", reversedNewMessages);
+      console.log('🔄 [REVERSE] Reversed for chat display:', reversedNewMessages);
       
       // Add all messages to the chat (newest first)
       // The image should appear after the greeting message that triggered it
-      setMessages((prevMessages) => [...reversedNewMessages, ...prevMessages]);
-      if (userEmail) {
-        setThreadId(userEmail); // Update the threadId to user email as a placeholder
-      }
+      console.log('📝 [UPDATE] Updating messages state...');
+      setMessages((prevMessages) => {
+        console.log('📝 [UPDATE] Previous messages:', prevMessages);
+        const updatedMessages = [...reversedNewMessages, ...prevMessages];
+        console.log('📝 [UPDATE] Updated messages:', updatedMessages);
+        
+        // Save messages to current thread
+        console.log('💾 [SAVE] Saving updated messages to thread:', currentThreadId);
+        try {
+          saveChatHistory(currentThreadId, updatedMessages);
+          console.log('✅ [SAVE] Updated messages saved successfully');
+        } catch (saveError) {
+          console.error('❌ [SAVE ERROR] Failed to save updated messages:', saveError);
+        }
+        
+        return updatedMessages;
+      });
+      
+      console.log('✅ [SUCCESS] Message processing completed successfully');
+      
     } catch (error) {
-      console.error("Error:", error);
+      console.error("❌ [FATAL ERROR] Error in sendMessageToAssistant:", error);
+      console.error("❌ [FATAL ERROR] Error details:", {
+        message: (error as any).message,
+        stack: (error as any).stack,
+        response: (error as any).response?.data,
+        status: (error as any).response?.status
+      });
       setError("Failed to send message");
+    } finally {
+      // Hide AI thinking indicator
+      setIsAiThinking(false);
+      console.log('🤔 [UI] AI thinking indicator deactivated');
+      console.log('🏁 [END] sendMessageToAssistant function completed');
     }
   };
 
@@ -1059,6 +1484,16 @@ const Main: React.FC = () => {
       fetchAssistantInfo(assistantId, apiKey);
     }
   }, [assistantId, apiKey]);
+
+  // Always create a new thread when component mounts
+  useEffect(() => {
+    const initializeNewThread = async () => {
+      console.log('Creating new chat thread...');
+      await createNewThread();
+    };
+    
+    initializeNewThread();
+  }, []); // Only run once on mount
 
   const deleteThread = async () => {
     const userEmail = localStorage.getItem("userEmail");
@@ -1084,6 +1519,69 @@ const Main: React.FC = () => {
       setError("Failed to delete thread");
     }
   };
+
+  // Thread management functions
+  const generateThreadId = () => {
+    return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+  };
+
+  const generateDefaultThreadName = () => {
+    const date = new Date().toLocaleDateString();
+    const time = new Date().toLocaleTimeString();
+    return `Chat ${date} ${time}`;
+  };
+
+  const saveChatHistory = async (threadId: string, messages: ChatMessage[], customName?: string) => {
+    try {
+      const threadName = customName || 'AI Assistant Chat';
+      const threadData = {
+        threadId,
+        templateName: threadName,
+        messages: messages,
+        lastUpdated: new Date().toISOString(),
+        messageCount: messages.length
+      };
+
+      // Save to localStorage
+      localStorage.setItem(`chat_thread_${threadId}`, JSON.stringify(threadData));
+      console.log('Chat history saved to local storage successfully');
+    } catch (error) {
+      console.error('Error saving chat history to local storage:', error);
+    }
+  };
+
+  const loadChatHistory = async (threadId: string): Promise<ChatMessage[]> => {
+    try {
+      console.log('Loading chat history from local storage for thread:', threadId);
+      const threadData = localStorage.getItem(`chat_thread_${threadId}`);
+      
+      if (threadData) {
+        const parsedData = JSON.parse(threadData);
+        const messages = parsedData.messages || [];
+        console.log('Messages loaded from local storage:', messages);
+        return messages;
+      } else {
+        console.log('No chat history found for thread:', threadId);
+        return [];
+      }
+    } catch (error) {
+      console.error('Error loading chat history from local storage:', error);
+      return [];
+    }
+  };
+
+
+
+
+  const createNewThread = async () => {
+    const newThreadId = generateThreadId();
+    const defaultName = generateDefaultThreadName();
+    setThreadId(newThreadId);
+    setMessages([]);
+    
+    await saveChatHistory(newThreadId, [], defaultName);
+  };
+
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -1111,6 +1609,12 @@ const Main: React.FC = () => {
       window.removeEventListener("scroll", handleScroll);
     };
   }, []);
+
+  // Debug: Monitor messages state changes
+  useEffect(() => {
+    console.log('Messages state changed:', messages.length, 'messages:', messages);
+  }, [messages]);
+
 
   const fetchFiles = async () => {
     if (!companyId) return;
@@ -1611,31 +2115,16 @@ const Main: React.FC = () => {
   };
 
   const renderTemplateSection = () => (
-    <div className="mb-4">
-      <div className="flex justify-between items-center mb-2">
-        <div className="flex gap-2">
-          <button
-            onClick={saveTemplate}
-            className="px-4 py-2 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-2"
-            disabled={userRole === "3"}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-4 w-4"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-              <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h-2v5.586l-1.293-1.293z" />
-            </svg>
-            Save Current
-          </button>
+    <div className="mb-3">
+      <div className="flex justify-between items-center mb-1.5">
+        <div className="flex gap-1.5">
           <button
             onClick={() => setIsTemplateModalOpen(true)}
-            className="px-4 py-2 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-2"
+            className="px-3 py-1.5 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-1.5 text-xs"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-4 w-4"
+              className="h-3 w-3"
               viewBox="0 0 20 20"
               fill="currentColor"
             >
@@ -1644,123 +2133,10 @@ const Main: React.FC = () => {
                 clipRule="evenodd"
               />
             </svg>
-            View Saved Versions
+            Version History
           </button>
         </div>
       </div>
-
-      <Transition appear show={isTemplateModalOpen} as={Fragment}>
-        <Dialog
-          as="div"
-          className="relative z-50"
-          onClose={() => setIsTemplateModalOpen(false)}
-        >
-          <Transition.Child
-            as={Fragment}
-            enter="ease-out duration-300"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
-            leave="ease-in duration-200"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <div className="fixed inset-0 bg-black bg-opacity-25" />
-          </Transition.Child>
-
-          <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4 text-center">
-              <Transition.Child
-                as={Fragment}
-                enter="ease-out duration-300"
-                enterFrom="opacity-0 scale-95"
-                enterTo="opacity-100 scale-100"
-                leave="ease-in duration-200"
-                leaveFrom="opacity-100 scale-100"
-                leaveTo="opacity-0 scale-95"
-              >
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 p-6 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title
-                    as="h3"
-                    className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100 mb-4"
-                  >
-                    Saved Templates
-                  </Dialog.Title>
-                  <div className="max-h-[60vh] overflow-y-auto">
-                    {templates.length === 0 ? (
-                      <p className="text-gray-500 dark:text-gray-400 text-center py-4">
-                        No templates saved yet
-                      </p>
-                    ) : (
-                      templates.map((template) => (
-                        <div
-                          key={template.id}
-                          className="mb-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200"
-                        >
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="text-sm text-gray-600 dark:text-gray-300">
-                              {template.name}
-                            </span>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => {
-                                  loadTemplate(template);
-                                  setIsTemplateModalOpen(false);
-                                }}
-                                className="px-3 py-1 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors duration-200 text-sm flex items-center gap-1"
-                              >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  className="h-4 w-4"
-                                  viewBox="0 0 20 20"
-                                  fill="currentColor"
-                                >
-                                  <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h-2v5.586l-1.293-1.293z" />
-                                </svg>
-                                Load
-                              </button>
-                              <button
-                                onClick={() => deleteTemplate(template.id)}
-                                className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors duration-200 text-sm flex items-center gap-1"
-                                disabled={userRole === "3"}
-                              >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  className="h-4 w-4"
-                                  viewBox="0 0 20 20"
-                                  fill="currentColor"
-                                >
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                                Delete
-                              </button>
-                            </div>
-                          </div>
-                          <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2">
-                            {template.instructions}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  <div className="mt-4">
-                    <button
-                      type="button"
-                      className="inline-flex justify-center rounded-md border border-transparent bg-gray-100 dark:bg-gray-600 px-4 py-2 text-sm font-medium text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
-                      onClick={() => setIsTemplateModalOpen(false)}
-                    >
-                      Close
-                    </button>
-                  </div>
-                </Dialog.Panel>
-              </Transition.Child>
-            </div>
-          </div>
-        </Dialog>
-      </Transition>
     </div>
   );
 
@@ -1823,26 +2199,19 @@ const Main: React.FC = () => {
     return (
       <div className="flex flex-col w-full h-screen bg-white dark:bg-gray-900">
         {/* Fullscreen Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
-          <div className="flex items-center">
-            <div className="w-10 h-10 overflow-hidden rounded-full shadow-lg bg-gray-700 dark:bg-gray-600 flex items-center justify-center text-white mr-3">
-              <span className="text-xl capitalize">
-                {assistantInfo.name.charAt(0)}
-              </span>
-            </div>
-            <div>
-              <div className="font-semibold text-xl text-gray-800 dark:text-gray-200 capitalize">
-                {assistantInfo.name}
-              </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                Fullscreen Chat
-              </div>
-            </div>
+        <div className="flex items-center justify-between p-3 border-b border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
+                  <div className="flex items-center">
+          <div className="px-4 py-2 bg-gray-600 dark:bg-gray-500 text-white rounded-full shadow-lg font-semibold text-base capitalize">
+            {assistantInfo.name}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="ml-3 text-xs text-gray-600 dark:text-gray-400">
+            Fullscreen Chat
+          </div>
+        </div>
+          <div className="flex items-center gap-2">
             <button
               onClick={exitFullscreenMode}
-              className="px-4 py-2 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              className="px-3 py-1.5 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-xs"
             >
               Exit Fullscreen
             </button>
@@ -1850,13 +2219,13 @@ const Main: React.FC = () => {
         </div>
 
         {/* Fullscreen Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-4 dark:bg-gray-900">
+        <div className="flex-1 overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center text-gray-500 dark:text-gray-400">
-                <div className="text-2xl mb-2">👋</div>
-                <div className="text-lg mb-2">Welcome to {assistantInfo.name}</div>
-                <div className="text-sm">Start a conversation by typing a message below</div>
+                                <div className="px-3 py-2 bg-[#dcf8c6] dark:bg-green-700 text-black dark:text-white rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-sm self-start text-left max-w-[70%] font-semibold text-sm">
+                  Start a conversation
+              </div>
               </div>
             </div>
           ) : (
@@ -1870,19 +2239,11 @@ const Main: React.FC = () => {
                     .map((splitText, splitIndex) => (
                     <div
                       key={`${index}-${splitIndex}`}
-                      className={`p-3 mb-3 rounded-lg ${
-                        message.from_me ? myMessageClass : otherMessageClass
-                      }`}
-                      style={{
-                        maxWidth: "70%",
-                        width: `${
-                          message.type === "image" || message.type === "document"
-                            ? "350"
-                            : Math.min((splitText.trim().length || 0) * 10, 350)
-                        }px`,
-                        minWidth: "75px",
-                      }}
+                      className={`flex ${message.from_me ? 'justify-end' : 'justify-start'} animate-fadeIn mb-4`}
                     >
+                      <div
+                        className={message.from_me ? myMessageClass : otherMessageClass}
+                      >
                       {message.type === "text" && (
                         <div className="whitespace-pre-wrap break-words">
                           {splitText.trim()}
@@ -1917,7 +2278,7 @@ const Main: React.FC = () => {
                             <div key={docIndex} className="relative">
                               <div className="flex items-center p-3 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600">
                                 <svg className="w-8 h-8 text-gray-500 dark:text-gray-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M4 4a2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
                                 </svg>
                                 <div className="flex-1">
                                   <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -1973,18 +2334,34 @@ const Main: React.FC = () => {
                         </div>
                       )}
 
+                      </div>
                     </div>
                   ))}
                 </div>
               ))
           )}
+          
+          {/* AI Thinking Indicator for Fullscreen - ChatGPT Style */}
+          {isAiThinking && (
+            <div className="flex justify-start mb-6 animate-fadeIn">
+              <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-bl-md px-5 py-4 max-w-md shadow-sm border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center space-x-3">
+                  <div className="flex space-x-1.5">
+                    <div className="w-2.5 h-2.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0ms', animationDuration: '1.4s' }}></div>
+                    <div className="w-2.5 h-2.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s', animationDuration: '1.4s' }}></div>
+                    <div className="w-2.5 h-2.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s', animationDuration: '1.4s' }}></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Fullscreen Message Input */}
-        <div className="p-4 border-t border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
-          <div className="flex items-center gap-3">
+        <div className="p-3 border-t border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="flex items-center gap-2">
             <textarea
-              className="flex-1 h-12 px-4 py-3 text-base text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+              className="flex-1 h-10 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
               placeholder="Type a message..."
               value={fullscreenNewMessage}
               onChange={(e) => setFullscreenNewMessage(e.target.value)}
@@ -1993,7 +2370,7 @@ const Main: React.FC = () => {
             />
             <button
               onClick={handleFullscreenSendClick}
-              className="px-6 py-3 bg-green-500 dark:bg-green-600 text-white rounded-lg hover:bg-green-600 dark:hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
+              className="px-4 py-2 bg-green-500 dark:bg-green-600 text-white rounded-lg hover:bg-green-600 dark:hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors text-sm"
             >
               Send
             </button>
@@ -2020,29 +2397,29 @@ const Main: React.FC = () => {
   }
 
   return (
-    <div className="flex justify-center h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="flex justify-center h-screen bg-gray-50 dark:bg-gray-900">
       <div className={`w-full ${isWideScreen ? "max-w-7xl flex" : "max-w-lg"}`}>
         {isWideScreen ? (
           <>
-            <div className="w-1/2 pl-2 pr-2 ml-2 mr-2 mt-4 overflow-auto">
+            <div className="w-1/2 pl-1.5 pr-1.5 ml-1.5 mr-1.5 mt-0 overflow-auto bg-gray-50 dark:bg-gray-800 rounded-lg pt-1.5 px-3 pb-3">
               {loading ? (
                 <div className="flex items-center justify-center h-full">
-                  <div className="flex flex-col items-center w-3/4 max-w-lg text-center p-4">
-                    <img alt="Logo" className="w-24 h-24 mb-4" src={logoUrl} />
-                    <div className="mt-2 text-xs p-2 dark:text-gray-200">
+                  <div className="flex flex-col items-center w-3/4 max-w-lg text-center p-3">
+                    <img alt="Logo" className="w-20 h-20 mb-3" src={logoUrl} />
+                    <div className="mt-1.5 text-xs p-1.5 dark:text-gray-200">
                       Fetching Assistant...
                     </div>
-                    <LoadingIcon icon="three-dots" className="w-20 h-20 p-4" />
+                    <LoadingIcon icon="three-dots" className="w-16 h-16 p-3" />
                   </div>
                 </div>
               ) : (
                 <>
-                  <div className="mb-4 flex items-center justify-between">
+                  <div className="mb-3 flex items-center justify-between">
                     {assistants.length > 1 ? (
                       <select
                         value={selectedAssistant}
                         onChange={(e) => handleAssistantChange(e.target.value)}
-                        className="w-full p-2 text-2xl font-bold border border-gray-300 rounded-lg bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+                        className="w-full p-1.5 text-lg font-bold border border-gray-300 rounded-lg bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
                       >
                         {assistants.map((assistant) => (
                           <option key={assistant.id} value={assistant.id}>
@@ -2050,15 +2427,11 @@ const Main: React.FC = () => {
                           </option>
                         ))}
                       </select>
-                    ) : (
-                      <h1 className="text-2xl font-bold dark:text-gray-200">
-                        {assistantInfo.name || "Assistant Name"}
-                      </h1>
-                    )}
+                    ) : null}
                   </div>
-                                      <div className="mb-4">
+                                      <div className="mb-3">
                       <label
-                        className="mb-2 text-lg font-medium capitalize dark:text-gray-200"
+                        className="mb-1.5 text-sm font-medium capitalize dark:text-gray-200"
                         htmlFor="name"
                       >
                         Name
@@ -2068,7 +2441,7 @@ const Main: React.FC = () => {
                           id="name"
                           name="name"
                           type="text"
-                          className="w-full p-3 border border-gray-300 rounded-lg text-sm bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 pr-10"
+                          className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 pr-8 font-mono"
                           placeholder="Name your assistant"
                           value={assistantInfo.name}
                           onChange={handleInputChange}
@@ -2078,18 +2451,149 @@ const Main: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* AI Tools Section */}
+                  <div className="mb-3">
+                    <div className="flex flex-wrap gap-1.5">
+                      <button 
+                        onClick={handleAutomatedClick}
+                        className="px-2 py-1.5 bg-blue-500 dark:bg-blue-600 text-white border-2 border-blue-600 dark:border-blue-500 rounded-lg hover:bg-blue-600 dark:hover:bg-blue-700 hover:border-blue-700 dark:hover:border-blue-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 whitespace-nowrap text-xs"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-3 w-3"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        AI Tools
+                      </button>
+                      <button
+                        onClick={handleManualClick}
+                        className="px-2 py-1.5 bg-indigo-500 dark:bg-indigo-600 text-white border-2 border-indigo-600 dark:border-indigo-500 rounded-lg hover:bg-indigo-600 dark:hover:bg-indigo-700 hover:border-indigo-700 dark:hover:border-indigo-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 whitespace-nowrap text-xs"
+                      >
+                        <svg className="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M2 10a8 8 0 1116 0 8 8 0 01-16 0zm7-3h2v6H9V7zm0 8h2v2H9v-2z" />
+                        </svg>
+                        Keyword Tools
+                      </button>
+                      <Link to="/follow-ups">
+                        <button className="px-2 py-1.5 bg-teal-500 dark:bg-teal-600 text-white border-2 border-teal-600 dark:border-teal-500 rounded-lg hover:bg-teal-600 dark:hover:bg-teal-700 hover:border-teal-700 dark:hover:border-teal-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 whitespace-nowrap text-xs">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-3 w-3"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z" />
+                          </svg>
+                          Follow-Ups
+                        </button>
+                      </Link>
+                      <Link to="/users-layout-2/builder2">
+                        <button className="px-2 py-1.5 bg-purple-500 dark:bg-purple-600 text-white border-2 border-purple-600 dark:border-purple-500 rounded-lg hover:bg-purple-600 dark:hover:bg-purple-700 hover:border-purple-700 dark:hover:border-purple-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 whitespace-nowrap text-xs">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
+                            <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" />
+                          </svg>
+                          Prompt Builder
+                        </button>
+                      </Link>
+                      <Link to="/split-test">
+                        <button className="px-2 py-1.5 bg-orange-500 dark:bg-orange-600 text-white border-2 border-orange-600 dark:border-orange-500 rounded-lg hover:bg-orange-600 dark:hover:bg-orange-700 hover:border-orange-700 dark:hover:border-orange-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 whitespace-nowrap text-xs">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 11-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 012 0v1.586l2.293-2.293a1 1 0 111.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm13-1a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 010-2h1.586l-2.293-2.293a1 1 0 111.414-1.414L15 13.586V12a1 1 0 011-1z" clipRule="evenodd" />
+                          </svg>
+                          Split Test
+                        </button>
+                      </Link>
+                    </div>
+                  </div>
+
+                  {/* AI Tools Section - Show when Automated is selected */}
+                  {showAiToolsSection && (
+                    <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-100 dark:border-blue-800 shadow-sm">
+                      <div className="flex justify-between items-center mb-3">
+                        <label className="text-lg font-medium dark:text-gray-200 flex items-center gap-2">
+                          <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                          </svg>
+                          AI Tools
+                        </label>
+                        <button
+                          onClick={() => setShowAiToolsSection(false)}
+                          className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                        Click on any tool category to see examples and copy them directly to your chat
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <button
+                          onClick={() => openAiToolsModal('calendar')}
+                          className="p-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors duration-200 text-left"
+                        >
+                          <div className="font-medium">Calendar & Reminders</div>
+                          <div className="text-xs opacity-90">Event management & scheduling</div>
+                        </button>
+                        <button
+                          onClick={() => openAiToolsModal('contact')}
+                          className="p-3 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors duration-200 text-left"
+                        >
+                          <div className="font-medium">Contact Management</div>
+                          <div className="text-xs opacity-90">Contact & tag operations</div>
+                        </button>
+                        <button
+                          onClick={() => openAiToolsModal('database')}
+                          className="p-3 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors duration-200 text-left"
+                        >
+                          <div className="font-medium">Database & Custom Fields</div>
+                          <div className="text-xs opacity-90">Data management tools</div>
+                        </button>
+                        <button
+                          onClick={() => openAiToolsModal('followUps')}
+                          className="p-3 bg-pink-500 hover:bg-pink-600 text-white rounded-lg transition-colors duration-200 text-left"
+                        >
+                          <div className="font-medium">Follow-Up Management</div>
+                          <div className="text-xs opacity-90">Templates & sequences</div>
+                        </button>
+                        <button
+                          onClick={() => openAiToolsModal('utility')}
+                          className="p-3 bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors duration-200 text-left md:col-span-2"
+                        >
+                          <div className="font-medium">Utility Functions</div>
+                          <div className="text-xs opacity-90">Web search, dates & system tools</div>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="mb-4">
-                    <label
-                      className="mb-2 text-lg font-medium dark:text-gray-200"
-                      htmlFor="instructions"
-                    >
-                      Instructions
-                    </label>
+ 
                     <div className="relative">
                       <textarea
                         id="instructions"
                         name="instructions"
-                        className="w-full p-4 border border-gray-300 rounded-xl h-[600px] text-sm bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 font-mono shadow-sm"
+                        className="w-full p-3 border border-gray-300 rounded-xl h-[500px] text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 font-mono shadow-sm"
                         placeholder="Tell your assistant what to do"
                         value={assistantInfo.instructions}
                         onChange={handleInputChange}
@@ -2122,21 +2626,6 @@ const Main: React.FC = () => {
                       {/* Template Buttons - Positioned at bottom left inside textarea */}
                       <div className="absolute bottom-2 left-2 flex gap-2">
                         <button
-                          onClick={saveTemplate}
-                          className="px-3 py-2 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-2"
-                          disabled={userRole === "3"}
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-4 w-4"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
-                          >
-                            <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h-2v5.586l-1.293-1.293z" />
-                          </svg>
-                          Save Current
-                        </button>
-                        <button
                           onClick={() => setIsTemplateModalOpen(true)}
                           className="px-3 py-2 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-2"
                         >
@@ -2151,7 +2640,7 @@ const Main: React.FC = () => {
                               clipRule="evenodd"
                             />
                           </svg>
-                          View Saved Versions
+                          Version History
                         </button>
                       </div>
                       
@@ -2186,7 +2675,7 @@ const Main: React.FC = () => {
                             />
                           </svg>
                           )}
-                        {isSaving ? 'Saving...' : 'Save Instructions'}
+                        {isSaving ? 'Saving...' : 'Save'}
                       </button>
                     </div>
                   </div>
@@ -2197,9 +2686,9 @@ const Main: React.FC = () => {
 
 
 
-                                      <div className="mb-5 p-4 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-100 dark:border-green-800 shadow-sm">
-                    <div className="space-y-4">
-                          <h3 className="text-md font-medium text-gray-700 dark:text-gray-300">
+                                      <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-100 dark:border-green-800 shadow-sm">
+                    <div className="space-y-3">
+                          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
                               Response Delay (seconds)
                           </h3>
 
@@ -2212,7 +2701,7 @@ const Main: React.FC = () => {
                               onChange={(e) =>
                                 setAiDelay(Number(e.target.value))
                               }
-                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+                              className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-xs bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
                               disabled={userRole === "3"}
                             />
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -2224,12 +2713,12 @@ const Main: React.FC = () => {
                           <div>
                             <button
                               onClick={handleSaveAiSettings}
-                              className="px-4 py-2 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-2"
+                              className="px-3 py-1.5 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-1.5 text-xs"
                               disabled={userRole === "3"}
                             >
                               <svg
                                 xmlns="http://www.w3.org/2000/svg"
-                                className="h-4 w-4"
+                                className="h-3 w-3"
                                 viewBox="0 0 20 20"
                                 fill="currentColor"
                               >
@@ -2245,12 +2734,12 @@ const Main: React.FC = () => {
                         </div>
                   </div>
 
-                  <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                     <label
-                      className="mb-3 text-lg font-medium dark:text-gray-200 flex items-center gap-2"
+                      className="mb-2 text-sm font-medium dark:text-gray-200 flex items-center gap-1.5"
                       htmlFor="file-upload"
                     >
-                      <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414L7.293 9.293z" clipRule="evenodd" />
                       </svg>
                       Knowledge Base
@@ -2260,67 +2749,70 @@ const Main: React.FC = () => {
                         id="file-upload"
                         type="file"
                         onChange={handleFileUpload}
-                        className="w-full p-3 border border-gray-300 rounded-lg text-sm bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 hover:border-gray-400 dark:hover:border-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
+                        className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 hover:border-gray-400 dark:hover:border-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
                         disabled={uploading || userRole === "3"}
                       />
                       {uploading && (
                         <div className="absolute inset-0 bg-white/80 dark:bg-gray-700/80 rounded-lg flex items-center justify-center">
-                          <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                          <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
+                            <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
-                            <span className="text-sm font-medium">Uploading...</span>
+                            <span className="text-xs font-medium">Uploading...</span>
                           </div>
                         </div>
                       )}
                     </div>
                   </div>
-                  <div className="mb-4">
-                    <div className="space-y-2">
+                  <div className="mb-3">
+                    <div className="space-y-1.5">
                       {(files || []).map((file) => (
                         <div
                           key={file.id}
-                          className="flex items-center justify-between p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 transition-colors"
+                          className="flex items-center justify-between p-2 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 transition-colors"
                         >
-                          <div className="flex items-center gap-3">
-                            <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                          <div className="flex items-center gap-2">
+                            <svg className="w-4 h-4 text-gray-500 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
                             </svg>
                             <a
                               href={file.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-sm text-gray-700 dark:text-gray-300 hover:text-green-600 dark:hover:text-green-400 transition-colors font-medium"
+                              className="text-xs text-gray-700 dark:text-gray-300 hover:text-green-600 dark:hover:text-green-400 transition-colors font-medium"
                             >
                               {file.name}
                             </a>
                           </div>
                           <button
                             onClick={() => deleteFile(file.id)}
-                            className="px-2 py-1 text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                            className="px-1.5 py-0.5 text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                           >
                             Delete
                           </button>
                         </div>
                       ))}
                       {files.length === 0 && (
-                        <div className="text-center py-6 text-gray-500 dark:text-gray-400">
-                          <svg className="w-12 h-12 mx-auto mb-2 text-gray-300 dark:text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                        <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                          <svg className="w-10 h-10 mx-auto mb-1.5 text-gray-300 dark:text-gray-600" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
                           </svg>
-                          <p className="text-sm">No files uploaded yet</p>
+                          <p className="text-xs">No files uploaded yet</p>
                           <p className="text-xs mt-1">Upload files to enhance your assistant's knowledge</p>
                         </div>
                       )}
                     </div>
                   </div>
 
+
+
                   {error && <div className="mt-4 text-red-500">{error}</div>}
                 </>
               )}
             </div>
             <div className="w-3/5 pr-2">
+
               <MessageList
                 messages={messages}
                 onSendMessage={sendMessageToAssistant}
@@ -2330,15 +2822,17 @@ const Main: React.FC = () => {
                 enterFullscreenMode={enterFullscreenMode}
                 openPDFModal={openPDFModal}
                 companyId={companyId}
+                isAiThinking={isAiThinking}
+                onCreateNewThread={createNewThread}
               />
             </div>
           </>
         ) : (
           <Tab.Group as="div" className="flex flex-col w-full h-full">
-            <Tab.List className="flex bg-gray-100 dark:bg-gray-900 p-2 sticky top-0 z-10">
+            <Tab.List className="flex bg-gray-100 dark:bg-gray-900 p-1.5 sticky top-0 z-10">
               <Tab
                 className={({ selected }) =>
-                  `w-1/2 py-2 text-sm font-medium text-center rounded-lg ${
+                  `w-1/2 py-1.5 text-xs font-medium text-center rounded-lg ${
                     selected
                       ? "bg-white text-green-600 dark:bg-gray-800 dark:text-green-400"
                       : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -2349,7 +2843,7 @@ const Main: React.FC = () => {
               </Tab>
               <Tab
                 className={({ selected }) =>
-                  `w-1/2 py-2 text-sm font-medium text-center rounded-lg ${
+                  `w-1/2 py-1.5 text-xs font-medium text-center rounded-lg ${
                     selected
                       ? "bg-white text-green-600 dark:bg-gray-800 dark:text-green-400"
                       : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -2360,29 +2854,29 @@ const Main: React.FC = () => {
               </Tab>
             </Tab.List>
             <Tab.Panels className="flex-1 overflow-hidden">
-              <Tab.Panel className="h-full overflow-auto p-4 dark:bg-gray-900">
+              <Tab.Panel className="h-full overflow-auto p-3 dark:bg-gray-900">
                 {loading ? (
                   <div className="flex items-center justify-center h-full">
-                    <div className="flex flex-col items-center w-3/4 max-w-lg text-center p-15">
+                    <div className="flex flex-col items-center w-3/4 max-w-lg text-center p-3">
                       <img
                         alt="Logo"
-                        className="w-24 h-24 p-15"
+                        className="w-20 h-20 p-3"
                         src={logoUrl}
                       />
-                      <div className="mt-2 text-xs p-15 dark:text-gray-200">
+                      <div className="mt-1.5 text-xs p-3 dark:text-gray-200">
                         Fetching Assistant...
                       </div>
                       <LoadingIcon
                         icon="three-dots"
-                        className="w-20 h-20 p-4"
+                        className="w-16 h-16 p-3"
                       />
                     </div>
                   </div>
                 ) : (
                   <>
-                    <div className="mb-4">
+                    <div className="mb-3">
                       <label
-                        className="mb-2 text-lg font-medium capitalize dark:text-gray-200"
+                        className="mb-1.5 text-sm font-medium capitalize dark:text-gray-200"
                         htmlFor="name"
                       >
                         Name
@@ -2391,7 +2885,7 @@ const Main: React.FC = () => {
                           id="name"
                           name="name"
                           type="text"
-                          className="w-full p-3 border border-gray-300 rounded-lg text-sm bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 pr-10"
+                          className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 pr-8 font-mono"
                           placeholder="Name your assistant"
                           value={assistantInfo.name}
                           onChange={handleInputChange}
@@ -2399,9 +2893,9 @@ const Main: React.FC = () => {
                           disabled={userRole === "3"}
                         />
                     </div>
-                    <div className="mb-4">
+                    <div className="mb-3">
                       <label
-                        className="mb-2 text-lg font-medium dark:text-gray-200"
+                        className="mb-1.5 text-sm font-medium dark:text-gray-200"
                         htmlFor="description"
                       >
                         Description
@@ -2409,7 +2903,7 @@ const Main: React.FC = () => {
                       <textarea
                         id="description"
                         name="description"
-                                                    className="w-full p-3 border border-gray-300 rounded-lg h-24 text-sm bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                                    className="w-full p-2 border border-gray-300 rounded-lg h-20 text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
                         placeholder="Add a short description of what this assistant does"
                         value={assistantInfo.description}
                         onChange={handleInputChange}
@@ -2417,9 +2911,9 @@ const Main: React.FC = () => {
                         disabled={userRole === "3"}
                       />
                     </div>
-                    <div className="mb-4">
+                    <div className="mb-3">
                       <label
-                        className="mb-2 text-lg font-medium dark:text-gray-200"
+                        className="mb-1.5 text-sm font-medium dark:text-gray-200"
                         htmlFor="instructions"
                       >
                         Instructions
@@ -2428,12 +2922,12 @@ const Main: React.FC = () => {
                         <textarea
                           id="instructions"
                           name="instructions"
-                          className="w-full p-3 border border-gray-300 rounded-lg h-[600px] text-sm bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+                          className="w-full p-2 border border-gray-300 rounded-lg h-[500px] text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
                           placeholder="Tell your assistant what to do"
                           value={assistantInfo.instructions}
                           onChange={handleInputChange}
                           onFocus={handleFocus}
-                          rows={35}
+                          rows={30}
                           disabled={userRole === "3"}
                         />
                         <button
@@ -2441,12 +2935,12 @@ const Main: React.FC = () => {
                             console.log("Opening fullscreen modal");
                             setIsFullscreenModalOpen(true);
                           }}
-                          className="absolute top-2 right-2 p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                          className="absolute top-1.5 right-1.5 p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                           title="Edit in fullscreen"
                         >
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
-                            className="h-4 w-4"
+                            className="h-3 w-3"
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
@@ -2459,29 +2953,14 @@ const Main: React.FC = () => {
                         </button>
                         
                         {/* Template Buttons - Positioned at bottom left inside textarea */}
-                        <div className="absolute bottom-2 left-2 flex gap-2">
-                          <button
-                            onClick={saveTemplate}
-                            className="px-3 py-2 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-2"
-                            disabled={userRole === "3"}
-                          >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-4 w-4"
-                              viewBox="0 0 20 20"
-                              fill="currentColor"
-                            >
-                              <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h-2v5.586l-1.293-1.293z" />
-                            </svg>
-                            Save Current
-                          </button>
+                        <div className="absolute bottom-1.5 left-1.5 flex gap-1.5">
                           <button
                             onClick={() => setIsTemplateModalOpen(true)}
-                            className="px-3 py-2 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-2"
+                            className="px-2 py-1.5 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-1.5 text-xs"
                           >
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
-                              className="h-4 w-4"
+                              className="h-3 w-3"
                               viewBox="0 0 20 20"
                               fill="currentColor"
                             >
@@ -2490,7 +2969,7 @@ const Main: React.FC = () => {
                                 clipRule="evenodd"
                               />
                             </svg>
-                            View Templates
+                            Version History
                           </button>
                         </div>
                         
@@ -2576,8 +3055,6 @@ const Main: React.FC = () => {
 
 
 
-
-
                     {/* Response Delay Setting for mobile */}
                     <div className="mb-5 p-4 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-100 dark:border-green-800 shadow-sm">
                       <div className="space-y-4">
@@ -2633,6 +3110,7 @@ const Main: React.FC = () => {
                 )}
               </Tab.Panel>
               <Tab.Panel className="h-full flex flex-col">
+
                 <MessageList
                   messages={messages}
                   onSendMessage={sendMessageToAssistant}
@@ -2642,6 +3120,8 @@ const Main: React.FC = () => {
                   enterFullscreenMode={enterFullscreenMode}
                   openPDFModal={openPDFModal}
                   companyId={companyId}
+                  isAiThinking={isAiThinking}
+                  onCreateNewThread={createNewThread}
                 />
               </Tab.Panel>
             </Tab.Panels>
@@ -2688,11 +3168,11 @@ const Main: React.FC = () => {
                 leaveFrom="opacity-100 scale-100"
                 leaveTo="opacity-0 scale-95"
               >
-                <Dialog.Panel className="w-screen h-screen transform overflow-hidden bg-white dark:bg-gray-800 p-6 text-left align-middle shadow-xl transition-all">
-                  <div className="flex justify-between items-center mb-4">
+                                  <Dialog.Panel className="w-screen h-screen transform overflow-hidden bg-white dark:bg-gray-800 p-4 text-left align-middle shadow-xl transition-all">
+                  <div className="flex justify-between items-center mb-3">
                     <Dialog.Title
                       as="h3"
-                      className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100"
+                      className="text-base font-medium leading-6 text-gray-900 dark:text-gray-100"
                     >
                       Edit Instructions
                     </Dialog.Title>
@@ -2702,7 +3182,7 @@ const Main: React.FC = () => {
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
-                        className="h-6 w-6"
+                        className="h-5 w-5"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -2718,7 +3198,7 @@ const Main: React.FC = () => {
                   </div>
                   <div className="relative w-full h-[calc(100vh-180px)]">
                     <textarea
-                      className="w-full h-full p-4 text-base bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500 font-mono"
+                      className="w-full h-full p-3 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500 font-mono"
                       value={assistantInfo.instructions}
                       onChange={handleInputChange}
                       name="instructions"
@@ -2727,29 +3207,14 @@ const Main: React.FC = () => {
                     />
                     
                     {/* Template Buttons - Positioned at bottom left inside textarea */}
-                    <div className="absolute bottom-2 left-2 flex gap-2">
-                      <button
-                        onClick={saveTemplate}
-                        className="px-3 py-2 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-2"
-                        disabled={userRole === "3"}
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-4 w-4"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                        >
-                          <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h-2v5.586l-1.293-1.293z" />
-                        </svg>
-                        Save Current
-                      </button>
+                    <div className="absolute bottom-1.5 left-1.5 flex gap-1.5">
                       <button
                         onClick={() => setIsTemplateModalOpen(true)}
-                        className="px-3 py-2 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-2"
+                        className="px-2 py-1.5 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-1.5 text-xs"
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
-                          className="h-4 w-4"
+                          className="h-3 w-3"
                           viewBox="0 0 20 20"
                           fill="currentColor"
                         >
@@ -2758,14 +3223,14 @@ const Main: React.FC = () => {
                             clipRule="evenodd"
                           />
                         </svg>
-                        View Saved Versions
+                        Version History
                       </button>
                     </div>
                     
                     {/* Save Instructions Button - Positioned at bottom right inside textarea */}
                     <button
                       onClick={updateAssistantInfo}
-                      className={`absolute bottom-2 right-2 px-4 py-2 ${isSaving ? 'bg-green-600 dark:bg-green-700' : 'bg-green-500 dark:bg-green-600'} text-white border-2 border-green-600 dark:border-green-500 rounded-lg hover:bg-green-600 dark:hover:bg-green-700 hover:border-green-700 dark:hover:border-green-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-2 ${
+                      className={`absolute bottom-1.5 right-1.5 px-3 py-1.5 ${isSaving ? 'bg-green-600 dark:bg-green-700' : 'bg-green-500 dark:bg-green-600'} text-white border-2 border-green-600 dark:border-green-500 rounded-lg hover:bg-green-600 dark:hover:bg-green-700 hover:border-green-700 dark:hover:border-green-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 text-xs ${
                         userRole === "3"
                           ? "opacity-50 cursor-not-allowed"
                           : ""
@@ -2773,14 +3238,14 @@ const Main: React.FC = () => {
                       disabled={userRole === "3"}
                     >
                       {isSaving ? (
-                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
                       ) : (
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
-                          className="h-4 w-4"
+                          className="h-3 w-3"
                           viewBox="0 0 20 20"
                           fill="currentColor"
                         >
@@ -2792,6 +3257,251 @@ const Main: React.FC = () => {
                         </svg>
                       )}
                       {isSaving ? 'Saving...' : 'Save Instructions'}
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* Template Modal */}
+      <Transition appear show={isTemplateModalOpen} as={Fragment}>
+        <Dialog
+          as="div"
+          className="relative z-50"
+          onClose={() => setIsTemplateModalOpen(false)}
+        >
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-25" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 p-4 text-left align-middle shadow-xl transition-all">
+                  <Dialog.Title
+                    as="h3"
+                    className="text-base font-medium leading-6 text-gray-900 dark:text-gray-100 mb-3"
+                  >
+                    Version History
+                  </Dialog.Title>
+                  <div className="max-h-[60vh] overflow-y-auto">
+                    {templates.length === 0 ? (
+                      <p className="text-gray-500 dark:text-gray-400 text-center py-3">
+                        No templates saved yet
+                      </p>
+                    ) : (
+                      templates.map((template) => (
+                        <div
+                          key={template.id}
+                          className="mb-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200"
+                        >
+                          <div className="flex justify-between items-center mb-1.5">
+                            <span className="text-xs text-gray-600 dark:text-gray-300">
+                              {template.name}
+                            </span>
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={() => {
+                                  loadTemplate(template);
+                                  setIsTemplateModalOpen(false);
+                                }}
+                                className="px-2 py-1 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors duration-200 text-xs flex items-center gap-1"
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  className="h-3 w-3"
+                                  viewBox="0 0 20 20"
+                                  fill="currentColor"
+                                >
+                                  <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h-2v5.586l-1.293-1.293z" />
+                                </svg>
+                                Load
+                              </button>
+                              <button
+                                onClick={() => deleteTemplate(template.id)}
+                                className="px-2 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors duration-200 text-xs flex items-center gap-1"
+                                disabled={userRole === "3"}
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  className="h-3 w-3"
+                                  viewBox="0 0 20 20"
+                                  fill="currentColor"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
+                            {template.instructions}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      className="inline-flex justify-center rounded-md border border-transparent bg-gray-100 dark:bg-gray-600 px-3 py-1.5 text-xs font-medium text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+                      onClick={() => setIsTemplateModalOpen(false)}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* AI Tools Modal */}
+      <Transition appear show={isAiToolsModalOpen} as={Fragment}>
+        <Dialog
+          as="div"
+          className="relative z-50"
+          onClose={() => setIsAiToolsModalOpen(false)}
+        >
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-25" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-4xl transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 p-4 text-left align-middle shadow-xl transition-all">
+                  <div className="flex justify-between items-center mb-4">
+                    <Dialog.Title
+                      as="h3"
+                      className="text-lg font-bold leading-6 text-gray-900 dark:text-gray-100"
+                    >
+                      {aiToolsData[selectedToolCategory as keyof typeof aiToolsData]?.title}
+                    </Dialog.Title>
+                    <button
+                      onClick={() => setIsAiToolsModalOpen(false)}
+                      className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  <div className="mb-4">
+                    <p className="text-gray-600 dark:text-gray-400 text-sm">
+                      {aiToolsData[selectedToolCategory as keyof typeof aiToolsData]?.description}
+                    </p>
+                  </div>
+
+                  <div className="max-h-[60vh] overflow-y-auto space-y-3">
+                    {aiToolsData[selectedToolCategory as keyof typeof aiToolsData]?.examples.map((tool, index) => (
+                      <div
+                        key={index}
+                        className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                            {tool.name}
+                          </h4>
+                          <button
+                            onClick={() => copyToClipboard(tool.example)}
+                            className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors duration-200 text-xs flex items-center gap-1.5"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-3 w-3"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                            >
+                              <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                              <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                            </svg>
+                            Copy
+                          </button>
+                        </div>
+                        
+                        <div className="mb-2">
+                          <div className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg p-2 font-mono text-xs text-gray-800 dark:text-gray-200 break-all">
+                            {tool.example}
+                          </div>
+                        </div>
+                        
+                        <p className="text-gray-600 dark:text-gray-400 text-xs">
+                          {tool.description}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
+                    <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-1.5 text-sm">How to Use These Tools</h4>
+                    <div className="space-y-2 text-xs text-blue-800 dark:text-blue-200">
+                      <p>
+                        <strong>Copy & Paste Instructions:</strong> Copy any example above and paste it directly into your chat with the AI. The AI will understand what you want and use the appropriate function.
+                      </p>
+                      <strong>Pro Tip:</strong> You can modify the examples by changing dates, names, or other details to match your specific needs before copying them.
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      type="button"
+                      className="inline-flex justify-center rounded-md border border-transparent bg-gray-100 dark:bg-gray-600 px-3 py-1.5 text-xs font-medium text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+                      onClick={() => setIsAiToolsModalOpen(false)}
+                    >
+                      Close
                     </button>
                   </div>
                 </Dialog.Panel>
