@@ -75,6 +75,7 @@ interface MessageListProps {
   openPDFModal: (documentUrl: string, documentName?: string) => void;
   companyId: string | null;
   isAiThinking: boolean;
+  aiProgress: string[];
   // Thread management props
   onCreateNewThread: () => void;
 }
@@ -171,6 +172,7 @@ const MessageList: React.FC<MessageListProps> = ({
   openPDFModal,
   companyId,
   isAiThinking,
+  aiProgress,
   onCreateNewThread,
 }) => {
   const [newMessage, setNewMessage] = useState("");
@@ -371,6 +373,7 @@ const MessageList: React.FC<MessageListProps> = ({
             </div>
           </div>
         )}
+
       </div>
       
       {/* Fullscreen Button - Positioned inside chatbox */}
@@ -491,6 +494,7 @@ const Main: React.FC = () => {
   const [aiDelay, setAiDelay] = useState<number>(0);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isAiThinking, setIsAiThinking] = useState<boolean>(false);
+  const [aiProgress, setAiProgress] = useState<string[]>([]);
   
   // Thread management state
   const [editingThreadName, setEditingThreadName] = useState<string | null>(null);
@@ -1279,6 +1283,9 @@ const Main: React.FC = () => {
   const sendMessageToAssistant = async (messageText: string) => {
     console.log('🚀 [SEND MESSAGE] Starting sendMessageToAssistant with message:', messageText);
     
+    // Initialize progress tracking
+    setAiProgress(['🚀 Preparing to send message...']);
+    
     // Ensure we have a threadId, create one if needed
     let currentThreadId = threadId;
     if (!currentThreadId) {
@@ -1326,6 +1333,7 @@ const Main: React.FC = () => {
 
     // Show AI thinking indicator
     setIsAiThinking(true);
+    setAiProgress(prev => [...prev, '💭 AI is thinking...']);
     console.log('🤔 [UI] AI thinking indicator activated');
 
     try {
@@ -1342,6 +1350,9 @@ const Main: React.FC = () => {
       console.log('📜 [HISTORY] Sending conversation history to AI:', conversationHistory);
       console.log('📝 [STATE] Current messages state:', messages);
       console.log('🆔 [ASSISTANT] Using assistantId:', assistantId);
+      
+      setAiProgress(prev => [...prev, '📡 Connecting to AI assistant...']);
+      
       const apiUrl = `https://juta-dev.ngrok.dev/api/assistant-test/`;
       const requestParams = {
         message: messageText,
@@ -1358,12 +1369,18 @@ const Main: React.FC = () => {
       // Test if the ngrok endpoint is reachable first
       try {
         console.log('🔍 [NETWORK] Testing ngrok endpoint reachability...');
+        setAiProgress(prev => [...prev, '🔍 Testing network connection...']);
+        
         const healthCheck = await axios.get('https://juta-dev.ngrok.dev/', { timeout: 5000 });
         console.log('✅ [NETWORK] Ngrok endpoint is reachable, status:', healthCheck.status);
+        setAiProgress(prev => [...prev, '✅ Connection established']);
       } catch (networkError) {
         console.error('❌ [NETWORK] Ngrok endpoint unreachable:', networkError);
+        setAiProgress(prev => [...prev, '❌ Network connection failed']);
         throw new Error('Ngrok endpoint is not accessible');
       }
+      
+      setAiProgress(prev => [...prev, '🤖 Sending request to AI assistant...']);
       
       const res = await axios.get(apiUrl, {
         params: requestParams,
@@ -1383,29 +1400,35 @@ const Main: React.FC = () => {
       console.log('✅ [API] Response received, status:', res.status);
       console.log('📋 [API] Full response data:', res.data);
       
-      const data = res.data;
+      setAiProgress(prev => [...prev, '📥 Processing AI response...']);
+      
+      const response = res.data;
 
-      if (!data || !data.answer) {
-        console.error('❌ [API ERROR] Invalid response structure:', data);
-        throw new Error('Invalid response from API - missing answer field');
+      if (!response || !response.success || !response.data || !response.data.answer) {
+        console.error('❌ [API ERROR] Invalid response structure:', response);
+        throw new Error('Invalid response from API - missing answer field in data');
       }
 
-      console.log('📝 [RESPONSE] Raw bot answer:', data.answer);
+      const botAnswer = response.data.answer;
+      console.log('📝 [RESPONSE] Raw bot answer:', botAnswer);
 
       // Split the bot's response into individual messages using || separator
-      const botMessages = data.answer.split('||').filter((line: string) => line.trim() !== '');
+      const botMessages = botAnswer.split('||').filter((line: string) => line.trim() !== '');
       console.log('✂️ [SPLIT] Bot response split into messages:', botMessages);
       console.log('📊 [SPLIT] Number of bot message parts:', botMessages.length);
       
       // Check for AI responses based on the BOT's message, not the user's
       console.log('🔍 [AI CHECK] Checking for AI responses...');
-      const aiResponses = await checkAIResponses(data.answer, false);
+      setAiProgress(prev => [...prev, '🔍 Checking for additional responses...']);
+      
+      const aiResponses = await checkAIResponses(botAnswer, false);
       console.log('🤖 [AI CHECK] AI Responses found for bot message:', aiResponses);
       console.log('📊 [AI CHECK] Number of AI responses:', aiResponses.length);
       
       // Create messages array - each || separated part becomes a separate message
       const newMessages: ChatMessage[] = [];
       console.log('📝 [PROCESS] Starting to process bot message parts...');
+      setAiProgress(prev => [...prev, '📝 Formatting response messages...']);
       
       // Process each bot message part and insert AI responses after the triggering part
       for (let i = 0; i < botMessages.length; i++) {
@@ -1443,6 +1466,7 @@ const Main: React.FC = () => {
       // Add all messages to the chat (newest first)
       // The image should appear after the greeting message that triggered it
       console.log('📝 [UPDATE] Updating messages state...');
+      setAiProgress(prev => [...prev, '💾 Saving conversation...']);
       setMessages((prevMessages) => {
         console.log('📝 [UPDATE] Previous messages:', prevMessages);
         const updatedMessages = [...reversedNewMessages, ...prevMessages];
@@ -1461,6 +1485,7 @@ const Main: React.FC = () => {
       });
       
       console.log('✅ [SUCCESS] Message processing completed successfully');
+      setAiProgress(prev => [...prev, '✅ Response complete!']);
       
     } catch (error) {
       console.error("❌ [FATAL ERROR] Error in sendMessageToAssistant:", error);
@@ -1471,9 +1496,13 @@ const Main: React.FC = () => {
         status: (error as any).response?.status
       });
       setError("Failed to send message");
+      setAiProgress(prev => [...prev, '❌ Error occurred']);
     } finally {
-      // Hide AI thinking indicator
+      // Hide AI thinking indicator and clear progress after a brief delay
       setIsAiThinking(false);
+      setTimeout(() => {
+        setAiProgress([]);
+      }, 2000); // Clear progress after 2 seconds to let user see final status
       console.log('🤔 [UI] AI thinking indicator deactivated');
       console.log('🏁 [END] sendMessageToAssistant function completed');
     }
@@ -2355,6 +2384,22 @@ const Main: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* AI Progress Display for Fullscreen - ChatGPT Style */}
+          {aiProgress.length > 0 && (
+            <div className="flex justify-start mb-6 animate-fadeIn">
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl rounded-bl-md px-5 py-4 max-w-lg shadow-sm border border-blue-200 dark:border-blue-700">
+                <div className="text-sm text-blue-700 dark:text-blue-300 space-y-2 max-h-40 overflow-y-auto">
+                  {aiProgress.map((step: string, index: number) => (
+                    <div key={index} className="flex items-start space-x-3 animate-fadeIn">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full mt-1.5 flex-shrink-0"></div>
+                      <span className="text-sm">{step}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Fullscreen Message Input */}
@@ -2823,6 +2868,7 @@ const Main: React.FC = () => {
                 openPDFModal={openPDFModal}
                 companyId={companyId}
                 isAiThinking={isAiThinking}
+                aiProgress={aiProgress}
                 onCreateNewThread={createNewThread}
               />
             </div>
@@ -3121,6 +3167,7 @@ const Main: React.FC = () => {
                   openPDFModal={openPDFModal}
                   companyId={companyId}
                   isAiThinking={isAiThinking}
+                  aiProgress={aiProgress}
                   onCreateNewThread={createNewThread}
                 />
               </Tab.Panel>
