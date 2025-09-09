@@ -267,6 +267,7 @@ function Main() {
     phoneIndex: number;
     status: string;
     qrCode: string | null;
+    phoneInfo: string | null;
   }
 
   interface BotStatusResponse {
@@ -308,6 +309,7 @@ function Main() {
   const [blastMessageModal, setBlastMessageModal] = useState(false);
   const [blastMessage, setBlastMessage] = useState("");
   const [progress, setProgress] = useState<number>(0);
+  const [hoveredContactTags, setHoveredContactTags] = useState<string | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
   const contactsPerPage = 200;
@@ -317,7 +319,6 @@ function Main() {
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(
     null
   );
-  const [excludedTags, setExcludedTags] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [showColumnsModal, setShowColumnsModal] = useState(false);
@@ -407,7 +408,131 @@ function Main() {
   const [activeTab, setActiveTab] = useState<"tags" | "users">("tags");
   const [selectedTagFilters, setSelectedTagFilters] = useState<string[]>([]);
   const [selectedUserFilters, setSelectedUserFilters] = useState<string[]>([]);
+  const [excludedTagFilters, setExcludedTagFilters] = useState<string[]>([]);
+  const [excludedUserFilters, setExcludedUserFilters] = useState<string[]>([]);
   const [activeFilterTab, setActiveFilterTab] = useState("tags");
+
+  // Helper function to get user filter state: 'none' | 'include' | 'exclude'
+  const getUserFilterState = (userName: string): 'none' | 'include' | 'exclude' => {
+    if (selectedUserFilters.includes(userName)) return 'include';
+    if (excludedUserFilters.includes(userName)) return 'exclude';
+    return 'none';
+  };
+
+  // Helper function to set user filter state
+  const setUserFilterState = (userName: string, state: 'none' | 'include' | 'exclude') => {
+    // Remove from both arrays first
+    setSelectedUserFilters(prev => prev.filter(u => u !== userName));
+    setExcludedUserFilters(prev => prev.filter(u => u !== userName));
+    
+    // Add to appropriate array based on state
+    if (state === 'include') {
+      setSelectedUserFilters(prev => [...prev, userName]);
+    } else if (state === 'exclude') {
+      setExcludedUserFilters(prev => [...prev, userName]);
+    }
+  };
+
+  // Three-state filter component for users
+  const ThreeStateUserFilter = ({ userName, className }: { userName: string; className?: string }) => {
+    const currentState = getUserFilterState(userName);
+    
+    const handleClick = () => {
+      let nextState: 'none' | 'include' | 'exclude';
+      switch (currentState) {
+        case 'none':
+          nextState = 'include';
+          break;
+        case 'include':
+          nextState = 'exclude';
+          break;
+        case 'exclude':
+          nextState = 'none';
+          break;
+      }
+      setUserFilterState(userName, nextState);
+    };
+
+    return (
+      <button
+        onClick={handleClick}
+        className={`w-5 h-5 rounded-lg border-2 transition-all duration-200 flex items-center justify-center ${className || ''}`}
+        style={{
+          borderColor: currentState === 'none' ? 'rgba(255, 255, 255, 0.3)' : 
+                      currentState === 'include' ? '#14b8a6' : '#ef4444',
+          backgroundColor: currentState === 'none' ? 'rgba(255, 255, 255, 0.05)' :
+                          currentState === 'include' ? '#14b8a6' : '#ef4444',
+        }}
+      >
+        {currentState === 'include' && (
+          <Lucide icon="Check" className="w-3 h-3 text-white" />
+        )}
+        {currentState === 'exclude' && (
+          <Lucide icon="X" className="w-3 h-3 text-white" />
+        )}
+      </button>
+    );
+  };
+  const getTagFilterState = (tagName: string): 'none' | 'include' | 'exclude' => {
+    if (selectedTagFilters.includes(tagName)) return 'include';
+    if (excludedTagFilters.includes(tagName)) return 'exclude';
+    return 'none';
+  };
+
+  // Helper function to set tag filter state
+  const setTagFilterState = (tagName: string, state: 'none' | 'include' | 'exclude') => {
+    // Remove from both arrays first
+    setSelectedTagFilters(prev => prev.filter(t => t !== tagName));
+    setExcludedTagFilters(prev => prev.filter(t => t !== tagName));
+    
+    // Add to appropriate array based on state
+    if (state === 'include') {
+      setSelectedTagFilters(prev => [...prev, tagName]);
+    } else if (state === 'exclude') {
+      setExcludedTagFilters(prev => [...prev, tagName]);
+    }
+  };
+
+  // Three-state filter component
+  const ThreeStateTagFilter = ({ tagName, className }: { tagName: string; className?: string }) => {
+    const currentState = getTagFilterState(tagName);
+    
+    const handleClick = () => {
+      let nextState: 'none' | 'include' | 'exclude';
+      switch (currentState) {
+        case 'none':
+          nextState = 'include';
+          break;
+        case 'include':
+          nextState = 'exclude';
+          break;
+        case 'exclude':
+          nextState = 'none';
+          break;
+      }
+      setTagFilterState(tagName, nextState);
+    };
+
+    return (
+      <button
+        onClick={handleClick}
+        className={`w-5 h-5 rounded-lg border-2 transition-all duration-200 flex items-center justify-center ${className || ''}`}
+        style={{
+          borderColor: currentState === 'none' ? 'rgba(255, 255, 255, 0.3)' : 
+                      currentState === 'include' ? '#10b981' : '#ef4444',
+          backgroundColor: currentState === 'none' ? 'rgba(255, 255, 255, 0.05)' :
+                          currentState === 'include' ? '#10b981' : '#ef4444',
+        }}
+      >
+        {currentState === 'include' && (
+          <Lucide icon="Check" className="w-3 h-3 text-white" />
+        )}
+        {currentState === 'exclude' && (
+          <Lucide icon="X" className="w-3 h-3 text-white" />
+        )}
+      </button>
+    );
+  };
   const [selectedContact, setSelectedContact] = useState<any>(null);
   const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
   const [showPlaceholders, setShowPlaceholders] = useState(false);
@@ -418,6 +543,7 @@ function Main() {
   const [phoneOptions, setPhoneOptions] = useState<number[]>([]);
   const [phoneNames, setPhoneNames] = useState<{ [key: number]: string }>({});
   const [employeeSearch, setEmployeeSearch] = useState("");
+  const [tagSearchQuery, setTagSearchQuery] = useState('');
 
   const [sortField, setSortField] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -454,10 +580,10 @@ function Main() {
     contact: true,
     phone: true,
     tags: true,
-    ic: true,
-    expiryDate: true,
-    vehicleNumber: true,
-    branch: true,
+    ic: false,
+    expiryDate: false,
+    vehicleNumber: false,
+    branch: false,
     notes: true,
     createdAt: true,
     actions: true,
@@ -468,10 +594,8 @@ function Main() {
     "contact",
     "phone",
     "tags",
-    "ic",
-    "expiryDate",
-    "vehicleNumber",
-    "branch",
+    // These will be conditionally added based on companyId
+    ...(companyId === "079" ? ["ic", "expiryDate", "vehicleNumber", "branch"] : []),
     "notes",
     "createdAt",
     "actions",
@@ -489,13 +613,21 @@ function Main() {
         checkbox: true,
         contact: true,
         phone: true,
-        vehicleNumber: true, // Ensure vehicle number column is always visible
-        branch: true, // Ensure branch column is always visible
         actions: true,
+        // These will be updated based on companyId in useEffect
+        vehicleNumber: false, 
+        branch: false,
+        ic: false,
+        expiryDate: false,
       };
     }
     return {
       ...defaultVisibleColumns,
+      // These will be updated based on companyId in useEffect
+      vehicleNumber: false,
+      branch: false,
+      ic: false,
+      expiryDate: false,
       ...(contacts[0]?.customFields
         ? Object.keys(contacts[0].customFields).reduce(
             (acc, field) => ({
@@ -541,10 +673,29 @@ function Main() {
     setVisibleColumns((prev) => ({
       ...defaultVisibleColumns,
       ...prev,
-      vehicleNumber: true, // Ensure vehicle number column is always visible
-      branch: true, // Ensure branch column is always visible
+      vehicleNumber: companyId === "079",
+      branch: companyId === "079",
+      ic: companyId === "079",
+      expiryDate: companyId === "079",
     }));
-  }, []);
+  }, [companyId]);
+
+  // Close tooltip when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (hoveredContactTags) {
+        setHoveredContactTags(null);
+      }
+    };
+
+    if (hoveredContactTags) {
+      document.addEventListener('click', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [hoveredContactTags]);
 
   // Add this handler function
   const handleColumnReorder = (result: DropResult) => {
@@ -881,6 +1032,7 @@ function Main() {
         return [];
     }
   };
+  
   const handleRemoveTagsFromContact = async (
     contact: Contact,
     tagsToRemove: string[]
@@ -922,27 +1074,75 @@ function Main() {
         return;
       }
 
-      // Remove tags from contact via SQL backend
-      const response = await axios.post(`${baseUrl}/api/contacts/remove-tags`, {
-        companyId,
-        contact_id: contact.contact_id,
-        tagsToRemove,
-      });
-
-      if (response.data.success) {
-        // Update local state
-        setContacts((prevContacts) =>
-          prevContacts.map((c) =>
-            c.contact_id === contact.contact_id
-              ? { ...c, tags: response.data.updatedTags }
-              : c
-          )
-        );
-        toast.success("Tags removed successfully!");
-        await fetchContacts();
-      } else {
-        toast.error(response.data.message || "Failed to remove tags.");
+      // Remove tags from contact via API
+      const contactId = contact.contact_id || contact.id;
+      if (!contactId) {
+        toast.error("Contact ID not found");
+        return;
       }
+
+      const response = await fetch(
+        `${baseUrl}/api/contacts/${companyId}/${contactId}/tags`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tags: tagsToRemove }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Failed to remove tags from contact:", errorText);
+        toast.error("Failed to remove tags from contact");
+        return;
+      }
+
+      const data = await response.json();
+
+      // Calculate the updated tags by removing the specified tags from existing tags
+      const currentContact = contacts.find(
+        (c) => c.id === contactId || c.contact_id === contactId
+      );
+      const currentTags = currentContact?.tags || [];
+      const updatedTags = currentTags.filter((tag) => !tagsToRemove.includes(tag));
+
+      // Update both contacts and filteredContacts states immediately
+      const updateContactsList = (prevContacts: Contact[]) =>
+        prevContacts.map((contact) =>
+          contact.id === contactId || contact.contact_id === contactId
+        ? { ...contact, tags: updatedTags }
+        : contact
+        );
+
+      setContacts(updateContactsList);
+      setFilteredContacts((prevFilteredContacts) =>
+        updateContactsList(prevFilteredContacts)
+      );
+
+      // Update selectedContact if it's the same contact
+      if (
+        selectedContact &&
+        (selectedContact.id === contactId ||
+          selectedContact.contact_id === contactId)
+      ) {
+        setSelectedContact((prevContact: Contact) => ({
+          ...prevContact,
+          tags: updatedTags,
+        }));
+      }
+
+      // Update currentContact if it's the same contact
+      if (
+        currentContact &&
+        (currentContact.id === contactId ||
+          currentContact.contact_id === contactId)
+      ) {
+        setCurrentContact((prevContact) =>
+          prevContact ? { ...prevContact, tags: updatedTags } : prevContact
+        );
+      }
+
+      toast.success("Tags removed successfully!");
     } catch (error) {
       console.error("Error removing tags:", error);
       toast.error("Failed to remove tags.");
@@ -1369,28 +1569,36 @@ function Main() {
     );
   };
 
-  const handleExcludeTag = (tag: string) => {
-    setExcludedTags((prev) => [...prev, tag]);
-  };
-
-  const handleRemoveExcludedTag = (tag: string) => {
-    setExcludedTags((prev) => prev.filter((t) => t !== tag));
-  };
-
   const formatPhoneNumber = (phone: string): string => {
-    // Remove all non-digit characters
-    const digits = phone.replace(/\D/g, "");
-
-    // If the number starts with '0', replace it with '60'
-    // Otherwise, ensure it starts with '60'
-    const formattedNumber = digits.startsWith("0")
-      ? `60${digits.slice(1)}`
-      : digits.startsWith("60")
-      ? digits
-      : `60${digits}`;
-
-    // Add the '+' at the beginning
-    return `+${formattedNumber}`;
+    if (!phone || phone.trim() === "") return "";
+    
+    let cleanPhone = phone.replace(/[^\d+]/g, "");
+    
+    if (cleanPhone.startsWith("+")) {
+      return cleanPhone;
+    }
+    
+    cleanPhone = cleanPhone.replace(/\+/g, "");
+    
+    if (cleanPhone.startsWith("0")) {
+      return `+60${cleanPhone.slice(1)}`;
+    }
+    
+    const commonCountryCodes = [
+      "60", "65", "66", "84", "86", "82", "81", "91", "61", "1", "44", "49", "33", "39", "34", "31", "46", "47", "45", "41", "43", "32", "30", "351", "353", "358", "372", "371", "370", "386", "385", "381", "385", "380", "375", "373"
+    ];
+    
+    for (const countryCode of commonCountryCodes.sort((a, b) => b.length - a.length)) {
+      if (cleanPhone.startsWith(countryCode)) {
+        return `+${cleanPhone}`;
+      }
+    }
+    
+    if (cleanPhone.length >= 8) {
+      return `+60${cleanPhone}`;
+    }
+    
+    return `+${cleanPhone}`;
   };
 
   const handleSaveNewContact = async () => {
@@ -1503,6 +1711,8 @@ function Main() {
         "An error occurred while adding the contact: " +
           (error.response?.data?.message || error.message)
       );
+    } finally {
+      setLoading(false);
     }
   };
   const handleSaveNewTag = async () => {
@@ -2939,179 +3149,164 @@ function Main() {
       toast.error("You don't have permission to perform this action.");
       return;
     }
-    if (currentContact) {
-      try {
-        // Get user/company info from localStorage or your app state
-        const userEmail = localStorage.getItem("userEmail");
-        if (!userEmail) {
-          toast.error("No user email found");
-          return;
-        }
+    if (!currentContact) {
+      toast.error("No contact selected for deletion.");
+      return;
+    }
 
-        // Fetch user config to get companyId
-        const userResponse = await fetch(
-          `${baseUrl}/api/user/config?email=${encodeURIComponent(userEmail)}`,
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-              Accept: "application/json",
-            },
-            credentials: "include",
-          }
-        );
+    // Set loading state and show initial notification
+    setLoading(true);
+    toast.info("Starting to delete contact. This may take some time...");
 
-        if (!userResponse.ok) {
-          toast.error("Failed to fetch user config");
-          return;
-        }
+    // Optimistic UI update - remove contact immediately for better UX
+    setContacts((prevContacts) =>
+      prevContacts.filter((contact) => contact.contact_id !== currentContact.contact_id)
+    );
 
-        const userData = await userResponse.json();
-        const companyId = userData?.company_id;
-        if (!companyId) {
-          toast.error("Company ID not found!");
-          return;
-        }
-
-        // Get the contact_id
-        const contact_id = currentContact.contact_id;
-
-        toast.info("Preparing to delete contact...");
-
-        // Step 1: Remove assignments first using the dedicated endpoint
-        try {
-          const assignmentsResponse = await fetch(
-            `${baseUrl}/api/assignments/contact/${contact_id}?companyId=${companyId}`,
-            {
-              method: "DELETE",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              credentials: "include",
-            }
-          );
-
-          if (assignmentsResponse.ok) {
-            console.log("Assignments removed successfully");
-          } else if (assignmentsResponse.status === 404) {
-            console.log("No assignments found for this contact");
-          } else {
-            console.warn(
-              "Failed to remove assignments:",
-              assignmentsResponse.status
-            );
-          }
-        } catch (error) {
-          console.warn("Error removing assignments:", error);
-        }
-
-        // Step 2: Delete the contact
-        toast.info("Deleting contact...");
-
-        const response = await fetch(
-          `${baseUrl}/api/contacts/${contact_id}?companyId=${companyId}`,
-          {
-            method: "DELETE",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            credentials: "include",
-          }
-        );
-
-        if (response.ok) {
-          toast.success("Contact deleted successfully!");
-
-          // Update local state
-          setContacts((prevContacts) =>
-            prevContacts.filter((contact) => contact.contact_id !== contact_id)
-          );
-          setScheduledMessages((prev) =>
-            prev.filter((msg) => !msg.chatIds.includes(contact_id))
-          );
-          setDeleteConfirmationModal(false);
-          setCurrentContact(null);
-
-          await fetchContacts();
-          await fetchScheduledMessages();
-        } else {
-          const errorData = await response.json().catch(() => ({}));
-          console.error("Delete failed:", errorData);
-
-          // Check if this is a constraint error that can be resolved with force delete
-          const canForceDelete =
-            errorData.message &&
-            (errorData.message.includes("active assignments") ||
-              errorData.message.includes("associated messages") ||
-              errorData.message.includes(
-                "Use /api/contacts/{contactId}/force"
-              ));
-
-          if (canForceDelete) {
-            // Offer to force delete with cascade
-            if (
-              window.confirm(
-                "This contact has database dependencies. Would you like to force delete it and remove all related data? This is irreversible."
-              )
-            ) {
-              try {
-                const forceDeleteResponse = await fetch(
-                  `${baseUrl}/api/contacts/${contact_id}/force?companyId=${companyId}`,
-                  {
-                    method: "DELETE",
-                    headers: {
-                      "Content-Type": "application/json",
-                    },
-                    credentials: "include",
-                  }
-                );
-
-                if (forceDeleteResponse.ok) {
-                  toast.success("Contact force deleted successfully!");
-
-                  // Update local state
-                  setContacts((prevContacts) =>
-                    prevContacts.filter(
-                      (contact) => contact.contact_id !== contact_id
-                    )
-                  );
-                  setScheduledMessages((prev) =>
-                    prev.filter((msg) => !msg.chatIds.includes(contact_id))
-                  );
-                  setDeleteConfirmationModal(false);
-                  setCurrentContact(null);
-
-                  await fetchContacts();
-                  await fetchScheduledMessages();
-                  return;
-                } else {
-                  const forceErrorData = await forceDeleteResponse.json();
-                  toast.error(
-                    `Force delete failed: ${
-                      forceErrorData.message || "Unknown error"
-                    }`
-                  );
-                }
-              } catch (forceError) {
-                console.error("Force delete error:", forceError);
-                toast.error("Force delete failed");
-              }
-            }
-          } else if (response.status === 409) {
-            // Handle conflict status - contact has dependencies
-            toast.error(
-              "Cannot delete contact: Contact has associated data. Please remove dependencies first."
-            );
-          } else {
-            toast.error("Failed to delete contact");
-          }
-        }
-      } catch (error) {
-        console.error("Error deleting contact:", error);
-        toast.error("An error occurred while deleting the contact.");
+    try {
+      // Get user data and company info from your NeonDB backend
+      const userEmail = localStorage.getItem("userEmail");
+      if (!userEmail) {
+        console.error("No user email found");
+        setLoading(false);
+        return;
       }
+
+      // Get user and company data from NeonDB backend
+      const userCompanyResponse = await fetch(
+        `${baseUrl}/api/user-company-data?email=${encodeURIComponent(userEmail)}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+        }
+      );
+
+      if (!userCompanyResponse.ok) {
+        console.error("Failed to get user company data");
+        setLoading(false);
+        return;
+      }
+
+      const { userData, companyData } = await userCompanyResponse.json();
+      const companyId = userData.companyId;
+
+      // Prepare contact ID for deletion
+      const contact_id = currentContact.contact_id;
+
+      if (!contact_id) {
+        toast.error("No valid contact ID found for deletion.");
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch(
+        `${baseUrl}/api/contacts/${contact_id}?companyId=${companyId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+        }
+      );
+
+      if (response.ok) {
+        // Update local state
+        setContacts((prevContacts) =>
+          prevContacts.filter((contact) => contact.contact_id !== contact_id)
+        );
+        setDeleteConfirmationModal(false);
+        setCurrentContact(null);
+
+        // Refresh lists
+        await fetchScheduledMessages();
+
+        toast.success("Contact deleted successfully from the database!");
+
+        await fetchContacts();
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Delete failed:", errorData);
+
+        // Check if this is a constraint error that can be resolved with force delete
+        const canForceDelete =
+          errorData.message &&
+          (errorData.message.includes("active assignments") ||
+            errorData.message.includes("associated messages") ||
+            errorData.message.includes("Use /api/contacts/{contactId}/force"));
+
+        if (canForceDelete) {
+          // Offer to force delete with cascade
+          if (
+            window.confirm(
+              "This contact has database dependencies. Would you like to force delete it and remove all related data? This is irreversible."
+            )
+          ) {
+            try {
+              const forceDeleteResponse = await fetch(
+                `${baseUrl}/api/contacts/${contact_id}/force?companyId=${companyId}`,
+                {
+                  method: "DELETE",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  credentials: "include",
+                }
+              );
+
+              if (forceDeleteResponse.ok) {
+                toast.success("Contact force deleted successfully!");
+
+                // Update local state
+                setContacts((prevContacts) =>
+                  prevContacts.filter((contact) => contact.contact_id !== contact_id)
+                );
+                setScheduledMessages((prev) =>
+                  prev.filter((msg) => !msg.chatIds.includes(contact_id))
+                );
+                setDeleteConfirmationModal(false);
+                setCurrentContact(null);
+
+                await fetchContacts();
+                await fetchScheduledMessages();
+                return;
+              } else {
+                const forceErrorData = await forceDeleteResponse.json();
+                toast.error(
+                  `Force delete failed: ${forceErrorData.message || "Unknown error"}`
+                );
+              }
+            } catch (forceError) {
+              console.error("Force delete error:", forceError);
+              toast.error("Force delete failed");
+            }
+          }
+        } else if (response.status === 409) {
+          // Handle conflict status - contact has dependencies
+          toast.error(
+            "Cannot delete contact: Contact has associated data. Please remove dependencies first."
+          );
+        } else {
+          toast.error("Failed to delete contact from database.");
+        }
+        console.error("Delete failed:", errorData);
+        // Refresh to get accurate data
+        fetchContacts();
+      }
+    } catch (error) {
+      console.error("Error deleting contact:", error);
+      toast.error("An error occurred while deleting the contact and associated data.");
+      // Refresh to get accurate data
+      fetchContacts();
+    } finally {
+      // Always reset loading state
+      setLoading(false);
     }
   };
+
   const handleMassDelete = async () => {
     if (userRole === "3") {
       toast.error("You don't have permission to perform this action.");
@@ -3137,288 +3332,110 @@ function Main() {
     );
 
     try {
-      const user = auth.currentUser;
-      if (!user) {
-        console.error("No authenticated user");
+      // Get user data and company info from your NeonDB backend
+      const userEmail = localStorage.getItem("userEmail"); // Assuming you store user email in localStorage
+      if (!userEmail) {
+        console.error("No user email found");
         setIsMassDeleting(false);
         return;
       }
 
-      const docUserRef = doc(firestore, "user", user.email!);
-      const docUserSnapshot = await getDoc(docUserRef);
-      if (!docUserSnapshot.exists()) {
-        console.error("No such document for user!");
+      // Get user and company data from NeonDB backend
+      const userCompanyResponse = await fetch(
+        `${baseUrl}/api/user-company-data?email=${encodeURIComponent(userEmail)}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+        }
+      );
+
+      if (!userCompanyResponse.ok) {
+        console.error("Failed to get user company data");
         setIsMassDeleting(false);
         return;
       }
 
-      const userData = docUserSnapshot.data();
+      const { userData, companyData } = await userCompanyResponse.json();
       const companyId = userData.companyId;
-      const docRef = doc(firestore, "companies", companyId);
-      const docSnapshot = await getDoc(docRef);
-      if (!docSnapshot.exists()) {
-        console.error("No such document for company!");
+
+      // Prepare contact IDs for mass deletion
+      const contactIds = selectedContacts.map(contact => contact.contact_id).filter(Boolean);
+
+      if (contactIds.length === 0) {
+        toast.error("No valid contact IDs found for deletion.");
         setIsMassDeleting(false);
         return;
       }
 
-      // Get all active templates once
-      const templatesRef = collection(
-        firestore,
-        `companies/${companyId}/followUpTemplates`
+      // Perform mass deletion using the new backend endpoint
+      const massDeleteResponse = await fetch(
+        `${baseUrl}/api/contacts/mass-delete`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            contactIds: contactIds,
+            companyId: companyId,
+          }),
+        }
       );
-      const templatesSnapshot = await getDocs(templatesRef);
-      const activeTemplates = templatesSnapshot.docs
-        .filter((doc) => doc.data().status === "active")
-        .map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
 
-      // Create batch for contact deletion
-      const batch = writeBatch(firestore);
+      const deleteResult = await massDeleteResponse.json();
 
-      const companyData = docSnapshot.data();
-      const baseUrl = companyData.apiUrl || "https://juta-dev.ngrok.dev";
-
-      // Process each contact
-      let contactsProcessed = 0;
-      const totalToProcess = selectedContacts.length;
-
-      for (const contact of selectedContacts) {
-        // Show progress to user
-        contactsProcessed++;
-        if (
-          contactsProcessed % 50 === 0 ||
-          contactsProcessed === totalToProcess
-        ) {
-          toast.info(
-            `Processing ${contactsProcessed} of ${totalToProcess} contacts...`,
-            { autoClose: 2000, updateId: "mass-delete-progress" }
-          );
-        }
-        // Remove follow-up templates
-        for (const template of activeTemplates) {
-          try {
-            const phoneNumber = contact.phone?.replace(/\D/g, "");
-            const followUpResponse = await fetch(
-              `${baseUrl}/api/tag/followup`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  requestType: "removeTemplate",
-                  phone: phoneNumber,
-                  first_name:
-                    contact.contactName || contact.firstName || phoneNumber,
-                  phoneIndex: userData.phone || 0,
-                  templateId: template.id,
-                  idSubstring: companyId,
-                }),
-              }
-            );
-
-            if (!followUpResponse.ok) {
-              const errorText = await followUpResponse.text();
-              console.error("Failed to remove template messages:", errorText);
-            } else {
-            }
-          } catch (error) {
-            console.error("Error removing template messages:", error);
-          }
-        }
-
-        // Format contact's phone number for scheduled messages
-        const contactChatId =
-          contact.phone?.replace(/\D/g, "") + "@s.whatsapp.net";
-
-        // Get and handle scheduled messages
-        const scheduledMessagesRef = collection(
-          firestore,
-          `companies/${companyId}/scheduledMessages`
+      if (massDeleteResponse.ok) {
+        // Update local state
+        setContacts((prevContacts) =>
+          prevContacts.filter(
+            (contact) =>
+              !selectedContacts.some((selected) => selected.id === contact.id)
+          )
         );
-        const scheduledSnapshot = await getDocs(scheduledMessagesRef);
+        setSelectedContacts([]);
+        setShowMassDeleteModal(false);
 
-        const messagePromises = scheduledSnapshot.docs.map(async (doc) => {
-          const messageData = doc.data();
-          if (messageData.chatIds?.includes(contactChatId)) {
-            if (messageData.chatIds.length === 1) {
-              try {
-                await axios.delete(
-                  `${baseUrl}/api/schedule-message/${companyId}/${doc.id}`
-                );
-              } catch (error) {
-                console.error(
-                  `Error deleting scheduled message ${doc.id}:`,
-                  error
-                );
-              }
-            } else {
-              try {
-                await axios.put(
-                  `${baseUrl}/api/schedule-message/${companyId}/${doc.id}`,
-                  {
-                    ...messageData,
-                    chatIds: messageData.chatIds.filter(
-                      (id: string) => id !== contactChatId
-                    ),
-                    messages:
-                      messageData.messages?.filter(
-                        (msg: any) => msg.chatId !== contactChatId
-                      ) || [],
-                  }
-                );
-              } catch (error) {
-                console.error(
-                  `Error updating scheduled message ${doc.id}:`,
-                  error
-                );
-              }
-            }
-          }
-        });
+        // Refresh lists
+        await fetchScheduledMessages();
 
-        await Promise.all(messagePromises);
-
-        // Step 1: Remove assignments from SQL backend
-        try {
-          const assignmentsResponse = await fetch(
-            `${baseUrl}/api/assignments/contact/${contact.contact_id}?companyId=${companyId}`,
-            {
-              method: "DELETE",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              credentials: "include",
-            }
-          );
-
-          if (assignmentsResponse.ok) {
-            console.log(
-              `Assignments removed for contact ${contact.contact_id}`
-            );
-          } else if (assignmentsResponse.status === 404) {
-            console.log(
-              `No assignments found for contact ${contact.contact_id}`
-            );
-          } else {
-            console.warn(
-              `Failed to remove assignments for contact ${contact.contact_id}:`,
-              assignmentsResponse.status
-            );
-          }
-        } catch (error) {
-          console.warn(
-            `Error removing assignments for contact ${contact.contact_id}:`,
-            error
-          );
-        }
-
-        // Step 2: Delete contact from SQL backend
-        try {
-          const response = await fetch(
-            `${baseUrl}/api/contacts/${contact.contact_id}?companyId=${companyId}`,
-            {
-              method: "DELETE",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              credentials: "include",
-            }
-          );
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            console.warn(
-              `Failed to delete contact ${contact.contact_id} from SQL backend:`,
-              errorData
-            );
-
-            // Try force delete if regular delete fails
-            if (response.status === 409) {
-              try {
-                const forceDeleteResponse = await fetch(
-                  `${baseUrl}/api/contacts/${contact.contact_id}/force?companyId=${companyId}`,
-                  {
-                    method: "DELETE",
-                    headers: {
-                      "Content-Type": "application/json",
-                    },
-                    credentials: "include",
-                  }
-                );
-
-                if (forceDeleteResponse.ok) {
-                  console.log(
-                    `Contact ${contact.contact_id} force deleted from SQL backend`
-                  );
-                } else {
-                  console.warn(
-                    `Force delete failed for contact ${contact.contact_id}`
-                  );
-                }
-              } catch (forceError) {
-                console.warn(
-                  `Force delete error for contact ${contact.contact_id}:`,
-                  forceError
-                );
-              }
-            }
-          } else {
-            console.log(
-              `Contact ${contact.contact_id} deleted from SQL backend`
-            );
-          }
-        } catch (error) {
-          console.warn(
-            `Error deleting contact ${contact.contact_id} from SQL backend:`,
-            error
-          );
-        }
-
-        // Add contact deletion to Firestore batch
-        const contactRef = doc(
-          firestore,
-          `companies/${companyId}/contacts`,
-          contact.id!
+        toast.success(
+          `${deleteResult.deletedCount} contacts deleted successfully from the database!`
         );
-        batch.delete(contactRef);
+
+        if (deleteResult.failures && deleteResult.failures.length > 0) {
+          toast.warn(
+            `${deleteResult.failures.length} contacts could not be deleted. Check console for details.`
+          );
+          console.warn("Failed deletions:", deleteResult.failures);
+        }
+
+        await fetchContacts();
+      } else {
+        toast.error(
+          deleteResult.message || "Failed to delete contacts from database."
+        );
+        console.error("Mass delete failed:", deleteResult);
+        // Refresh to get accurate data
+        fetchContacts();
       }
-
-      // Execute the batch delete for contacts
-      await batch.commit();
-
-      // Update local state
-      setContacts((prevContacts) =>
-        prevContacts.filter(
-          (contact) =>
-            !selectedContacts.some((selected) => selected.id === contact.id)
-        )
-      );
-      setSelectedContacts([]);
-      setShowMassDeleteModal(false);
-
-      // Refresh lists
-      await fetchScheduledMessages();
-
-      toast.success(
-        `${selectedContacts.length} contacts deleted successfully from both Firestore and SQL backend!`
-      );
-      await fetchContacts();
     } catch (error) {
       console.error("Error deleting contacts:", error);
       toast.error(
-        "An error occurred while deleting the contacts and associated messages."
+        "An error occurred while deleting the contacts and associated data."
       );
       // Refresh to get accurate data
       fetchContacts();
     } finally {
       // Always reset loading state
       setIsMassDeleting(false);
+      setLoading(false);
     }
   };
+
   const handleSaveContact = async () => {
     if (currentContact) {
       try {
@@ -3526,6 +3543,7 @@ function Main() {
 
           setEditContactModal(false);
           setCurrentContact(null);
+          setLoading(false);
           await fetchContacts();
           toast.success("Contact updated successfully!");
         } else {
@@ -3630,7 +3648,8 @@ function Main() {
   const clearAllFilters = () => {
     setSelectedTagFilters([]);
     setSelectedUserFilters([]);
-    setExcludedTags([]);
+    setExcludedTagFilters([]);
+    setExcludedUserFilters([]);
     setActiveDateFilter(null);
   };
 
@@ -3737,8 +3756,11 @@ function Main() {
         selectedUserFilters.some((filter) =>
           tags.includes(filter.toLowerCase())
         );
-      const notExcluded = !excludedTags.some((tag) =>
+      const notExcluded = !excludedTagFilters.some((tag) =>
         tags.includes(tag.toLowerCase())
+      );
+      const notExcludedUser = !excludedUserFilters.some((user) =>
+        tags.includes(user.toLowerCase())
       );
 
       // Date filter logic
@@ -3838,6 +3860,7 @@ function Main() {
         matchesTagFilters &&
         matchesUserFilters &&
         notExcluded &&
+        notExcludedUser &&
         matchesDateFilter
       );
     });
@@ -3847,7 +3870,8 @@ function Main() {
 
     selectedTagFilters,
     selectedUserFilters,
-    excludedTags,
+    excludedTagFilters,
+    excludedUserFilters,
     activeDateFilter,
   ]);
 
@@ -5486,75 +5510,6 @@ function Main() {
   const [qrCodes, setQrCodes] = useState<QRCodeData[]>([]);
   const [isLoadingStatus, setIsLoadingStatus] = useState(false);
   const [selectedPhone, setSelectedPhone] = useState<number | null>(null);
-  const [isSyncingFirebase, setIsSyncingFirebase] = useState(false);
-  // ... existing code ...
-  const handleConfirmSyncFirebase = async () => {
-    setShowSyncConfirmationModal(false);
-    setIsSyncingFirebase(true);
-    try {
-      const userEmail = localStorage.getItem("userEmail");
-      if (!userEmail) {
-        toast.error("No user email found");
-        setIsSyncingFirebase(false);
-        return;
-      }
-      // Get user config to get companyId
-      const userResponse = await fetch(
-        `${baseUrl}/api/user/config?email=${encodeURIComponent(userEmail)}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          credentials: "include",
-        }
-      );
-      if (!userResponse.ok) {
-        toast.error("Failed to fetch user config");
-        setIsSyncingFirebase(false);
-        return;
-      }
-      const userData = await userResponse.json();
-      const companyId = userData.company_id;
-      setCompanyId(companyId);
-      // Call the sync-firebase-to-neon endpoint
-      const syncResponse = await fetch(
-        `${baseUrl}/api/sync-firebase-to-neon/${companyId}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          credentials: "include",
-        }
-      );
-      if (!syncResponse.ok) {
-        const errorData = await syncResponse.json();
-        throw new Error(
-          errorData.error || "Failed to start Firebase-to-Neon synchronization"
-        );
-      }
-      const responseData = await syncResponse.json();
-      if (responseData.success) {
-        toast.success("Firebase-to-Neon synchronization started successfully");
-      } else {
-        throw new Error(
-          responseData.error ||
-            "Failed to start Firebase-to-Neon synchronization"
-        );
-      }
-    } catch (error) {
-      console.error("Error syncing from Firebase to Neon:", error);
-      toast.error(
-        "An error occurred while syncing from Firebase to Neon: " +
-          (error instanceof Error ? error.message : String(error))
-      );
-    } finally {
-      setIsSyncingFirebase(false);
-    }
-  };
 
   // Add this helper function to get status color and text
   const getStatusInfo = (status: string) => {
@@ -5646,6 +5601,7 @@ function Main() {
               phoneIndex: phone.phoneIndex,
               status: phone.status,
               qrCode: phone.qrCode,
+              phoneInfo: typeof phone.phoneInfo === 'string' ? phone.phoneInfo : null,
             }));
             setQrCodes(qrCodesData);
           } else if (
@@ -5658,6 +5614,7 @@ function Main() {
                 phoneIndex: 0,
                 status: data.status,
                 qrCode: data.qrCode,
+                phoneInfo: typeof data.phoneInfo === 'string' ? data.phoneInfo : null,
               },
             ];
             setQrCodes(qrCodesData);
@@ -6230,26 +6187,107 @@ function Main() {
             </div>
 
             {/* Enhanced Active Filters */}
-            {(selectedTagFilters.length > 0 || selectedContacts.length > 0) && (
+            {(selectedTagFilters.length > 0 || excludedTagFilters.length > 0 || selectedUserFilters.length > 0 || excludedUserFilters.length > 0 || selectedContacts.length > 0) && (
               <div className="relative flex flex-wrap items-center gap-4 mt-8 pt-6 border-t border-white/30 dark:border-slate-600/40">
-                {/* Tag Filters */}
+                {/* Included Tag Filters */}
                 {selectedTagFilters.map((tag, index) => (
                   <div
-                    key={index}
-                    className="group flex items-center bg-gradient-to-r from-blue-500/15 to-indigo-500/10 dark:from-blue-400/15 dark:to-indigo-400/10 backdrop-blur-xl border border-blue-200/50 dark:border-blue-700/50 text-blue-700 dark:text-blue-300 px-4 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 hover:bg-blue-500/25 dark:hover:bg-blue-400/25 hover:scale-105 transform-gpu hover:shadow-lg"
+                    key={`include-${index}`}
+                    className="group flex items-center bg-gradient-to-r from-emerald-500/15 to-green-500/10 dark:from-emerald-400/15 dark:to-green-400/10 backdrop-blur-xl border border-emerald-200/50 dark:border-emerald-700/50 text-emerald-700 dark:text-emerald-300 px-4 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 hover:bg-emerald-500/25 dark:hover:bg-emerald-400/25 hover:scale-105 transform-gpu hover:shadow-lg"
                   >
                     <div className="flex items-center space-x-2">
-                      <div className="p-1 rounded-full bg-gradient-to-br from-blue-500/30 to-indigo-500/30 dark:from-blue-400/30 dark:to-indigo-400/30">
+                      <div className="p-1 rounded-full bg-gradient-to-br from-emerald-500/30 to-green-500/30 dark:from-emerald-400/30 dark:to-green-400/30">
                         <Lucide
-                          icon="Tag"
-                          className="w-3 h-3 text-blue-600 dark:text-blue-400"
+                          icon="Check"
+                          className="w-3 h-3 text-emerald-600 dark:text-emerald-400"
                         />
                       </div>
-                      <span>Tag: {tag}</span>
+                      <span>Include: {tag}</span>
                     </div>
                     <button
                       className="ml-3 p-1 rounded-full hover:bg-red-500/20 dark:hover:bg-red-400/20 transition-all duration-200 group-hover:scale-110"
-                      onClick={() => removeTagFilter(tag)}
+                      onClick={() => setTagFilterState(tag, 'none')}
+                    >
+                      <Lucide
+                        icon="X"
+                        className="w-3.5 h-3.5 text-red-500 hover:text-red-600"
+                      />
+                    </button>
+                  </div>
+                ))}
+
+                {/* Excluded Tag Filters */}
+                {excludedTagFilters.map((tag, index) => (
+                  <div
+                    key={`exclude-${index}`}
+                    className="group flex items-center bg-gradient-to-r from-red-500/15 to-pink-500/10 dark:from-red-400/15 dark:to-pink-400/10 backdrop-blur-xl border border-red-200/50 dark:border-red-700/50 text-red-700 dark:text-red-300 px-4 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 hover:bg-red-500/25 dark:hover:bg-red-400/25 hover:scale-105 transform-gpu hover:shadow-lg"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <div className="p-1 rounded-full bg-gradient-to-br from-red-500/30 to-pink-500/30 dark:from-red-400/30 dark:to-pink-400/30">
+                        <Lucide
+                          icon="X"
+                          className="w-3 h-3 text-red-600 dark:text-red-400"
+                        />
+                      </div>
+                      <span>Exclude: {tag}</span>
+                    </div>
+                    <button
+                      className="ml-3 p-1 rounded-full hover:bg-red-500/20 dark:hover:bg-red-400/20 transition-all duration-200 group-hover:scale-110"
+                      onClick={() => setTagFilterState(tag, 'none')}
+                    >
+                      <Lucide
+                        icon="X"
+                        className="w-3.5 h-3.5 text-red-500 hover:text-red-600"
+                      />
+                    </button>
+                  </div>
+                ))}
+
+                {/* Included User Filters */}
+                {selectedUserFilters.map((user, index) => (
+                  <div
+                    key={`include-user-${index}`}
+                    className="group flex items-center bg-gradient-to-r from-teal-500/15 to-cyan-500/10 dark:from-teal-400/15 dark:to-cyan-400/10 backdrop-blur-xl border border-teal-200/50 dark:border-teal-700/50 text-teal-700 dark:text-teal-300 px-4 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 hover:bg-teal-500/25 dark:hover:bg-teal-400/25 hover:scale-105 transform-gpu hover:shadow-lg"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <div className="p-1 rounded-full bg-gradient-to-br from-teal-500/30 to-cyan-500/30 dark:from-teal-400/30 dark:to-cyan-400/30">
+                        <Lucide
+                          icon="User"
+                          className="w-3 h-3 text-teal-600 dark:text-teal-400"
+                        />
+                      </div>
+                      <span>User: {user}</span>
+                    </div>
+                    <button
+                      className="ml-3 p-1 rounded-full hover:bg-red-500/20 dark:hover:bg-red-400/20 transition-all duration-200 group-hover:scale-110"
+                      onClick={() => setUserFilterState(user, 'none')}
+                    >
+                      <Lucide
+                        icon="X"
+                        className="w-3.5 h-3.5 text-red-500 hover:text-red-600"
+                      />
+                    </button>
+                  </div>
+                ))}
+
+                {/* Excluded User Filters */}
+                {excludedUserFilters.map((user, index) => (
+                  <div
+                    key={`exclude-user-${index}`}
+                    className="group flex items-center bg-gradient-to-r from-red-500/15 to-pink-500/10 dark:from-red-400/15 dark:to-pink-400/10 backdrop-blur-xl border border-red-200/50 dark:border-red-700/50 text-red-700 dark:text-red-300 px-4 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 hover:bg-red-500/25 dark:hover:bg-red-400/25 hover:scale-105 transform-gpu hover:shadow-lg"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <div className="p-1 rounded-full bg-gradient-to-br from-red-500/30 to-pink-500/30 dark:from-red-400/30 dark:to-pink-400/30">
+                        <Lucide
+                          icon="UserX"
+                          className="w-3 h-3 text-red-600 dark:text-red-400"
+                        />
+                      </div>
+                      <span>Exclude User: {user}</span>
+                    </div>
+                    <button
+                      className="ml-3 p-1 rounded-full hover:bg-red-500/20 dark:hover:bg-red-400/20 transition-all duration-200 group-hover:scale-110"
+                      onClick={() => setUserFilterState(user, 'none')}
                     >
                       <Lucide
                         icon="X"
@@ -6734,9 +6772,47 @@ function Main() {
                                     </span>
                                   )}
                                   {contact.tags && contact.tags.length > 2 && (
-                                    <span className="inline-flex items-center px-4 py-2 rounded-2xl text-xs font-bold bg-gradient-to-r from-slate-400/20 via-slate-500/15 to-slate-600/20 dark:from-slate-400/25 dark:via-slate-500/20 dark:to-slate-600/25 text-slate-600 dark:text-slate-400 backdrop-blur-xl border-2 border-slate-300/60 dark:border-slate-600/60 shadow-lg shadow-slate-500/20 dark:shadow-slate-500/30 hover:scale-110 transition-transform duration-300 cursor-pointer">
-                                      +{contact.tags.length - 2} more
-                                    </span>
+                                    <div className="relative">
+                                      <span 
+                                        className="inline-flex items-center px-4 py-2 rounded-2xl text-xs font-bold bg-gradient-to-r from-slate-400/20 via-slate-500/15 to-slate-600/20 dark:from-slate-400/25 dark:via-slate-500/20 dark:to-slate-600/25 text-slate-600 dark:text-slate-400 backdrop-blur-xl border-2 border-slate-300/60 dark:border-slate-600/60 shadow-lg shadow-slate-500/20 dark:shadow-slate-500/30 hover:scale-110 transition-transform duration-300 cursor-pointer hover:border-blue-400/70 dark:hover:border-blue-500/70 hover:text-blue-600 dark:hover:text-blue-400"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setHoveredContactTags(hoveredContactTags === contact.contact_id ? null : contact.contact_id);
+                                        }}
+                                      >
+                                        +{contact.tags.length - 2} more
+                                      </span>
+                                      {/* Custom Tooltip */}
+                                      {hoveredContactTags === contact.contact_id && (
+                                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-50">
+                                          <div className="p-3 space-y-2 max-w-xs bg-slate-800 dark:bg-slate-900 rounded-lg shadow-xl border border-slate-600 dark:border-slate-700">
+                                            <div className="text-xs font-semibold text-white mb-2">All Tags:</div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                              {contact.tags.slice(2).map((tag, tagIndex) => (
+                                                <span
+                                                  key={tagIndex + 2}
+                                                  className={`inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium backdrop-blur-sm border ${
+                                                    employeeNames.some(
+                                                      (name) =>
+                                                        name.toLowerCase() ===
+                                                        tag.toLowerCase()
+                                                    )
+                                                      ? "bg-emerald-500/20 text-emerald-200 border-emerald-400/30"
+                                                      : "bg-blue-500/20 text-blue-200 border-blue-400/30"
+                                                  }`}
+                                                >
+                                                  {tag}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                          {/* Tooltip Arrow */}
+                                          <div className="absolute top-full left-1/2 transform -translate-x-1/2">
+                                            <div className="w-2 h-2 bg-slate-800 dark:bg-slate-900 border-r border-b border-slate-600 dark:border-slate-700 transform rotate-45"></div>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
                               </td>
@@ -8103,23 +8179,25 @@ function Main() {
                         />
                       </div>
 
-                      <div className="space-y-2">
-                        <label className="block text-sm font-medium text-white/80">
-                          Branch
-                        </label>
-                        <FormInput
-                          type="text"
-                          value={newContact.branch}
-                          onChange={(e) =>
-                            setNewContact({
-                              ...newContact,
-                              branch: e.target.value,
-                            })
-                          }
-                          placeholder="Enter branch"
-                          className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:border-blue-400/50 focus:ring-2 focus:ring-blue-400/20 transition-all duration-200 backdrop-blur-sm"
-                        />
-                      </div>
+                      {companyId === "079" && (
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium text-white/80">
+                            Branch
+                          </label>
+                          <FormInput
+                            type="text"
+                            value={newContact.branch}
+                            onChange={(e) =>
+                              setNewContact({
+                                ...newContact,
+                                branch: e.target.value,
+                              })
+                            }
+                            placeholder="Enter branch"
+                            className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:border-blue-400/50 focus:ring-2 focus:ring-blue-400/20 transition-all duration-200 backdrop-blur-sm"
+                          />
+                        </div>
+                      )}
 
                       <div className="space-y-2 md:col-span-2">
                         <label className="block text-sm font-medium text-white/80">
@@ -8142,71 +8220,73 @@ function Main() {
                   </div>
 
                   {/* Additional Details Section */}
-                  <div className="space-y-6">
-                    <div className="flex items-center space-x-3 pb-4 border-b border-white/10">
-                      <div className="p-2 rounded-xl bg-purple-500/10 backdrop-blur-sm border border-purple-400/20">
-                        <Lucide
-                          icon="FileText"
-                          className="w-5 h-5 text-purple-400"
-                        />
+                  {companyId === "079" && (
+                    <div className="space-y-6">
+                      <div className="flex items-center space-x-3 pb-4 border-b border-white/10">
+                        <div className="p-2 rounded-xl bg-purple-500/10 backdrop-blur-sm border border-purple-400/20">
+                          <Lucide
+                            icon="FileText"
+                            className="w-5 h-5 text-purple-400"
+                          />
+                        </div>
+                        <h4 className="text-lg font-semibold bg-gradient-to-r from-purple-300 to-purple-100 bg-clip-text text-transparent">
+                          Additional Details
+                        </h4>
                       </div>
-                      <h4 className="text-lg font-semibold bg-gradient-to-r from-purple-300 to-purple-100 bg-clip-text text-transparent">
-                        Additional Details
-                      </h4>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium text-white/80">
+                            Vehicle Number
+                          </label>
+                          <FormInput
+                            type="text"
+                            value={newContact.vehicleNumber}
+                            onChange={(e) =>
+                              setNewContact({
+                                ...newContact,
+                                vehicleNumber: e.target.value,
+                              })
+                            }
+                            placeholder="Enter vehicle number"
+                            className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:border-purple-400/50 focus:ring-2 focus:ring-purple-400/20 transition-all duration-200 backdrop-blur-sm"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium text-white/80">
+                            IC Number
+                          </label>
+                          <FormInput
+                            type="text"
+                            value={newContact.ic}
+                            onChange={(e) =>
+                              setNewContact({ ...newContact, ic: e.target.value })
+                            }
+                            placeholder="Enter IC number"
+                            className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:border-purple-400/50 focus:ring-2 focus:ring-purple-400/20 transition-all duration-200 backdrop-blur-sm"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium text-white/80">
+                            Expiry Date
+                          </label>
+                          <FormInput
+                            type="date"
+                            value={newContact.expiryDate}
+                            onChange={(e) =>
+                              setNewContact({
+                                ...newContact,
+                                expiryDate: e.target.value,
+                              })
+                            }
+                            className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:border-purple-400/50 focus:ring-2 focus:ring-purple-400/20 transition-all duration-200 backdrop-blur-sm"
+                          />
+                        </div>
+                      </div>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <label className="block text-sm font-medium text-white/80">
-                          Vehicle Number
-                        </label>
-                        <FormInput
-                          type="text"
-                          value={newContact.vehicleNumber}
-                          onChange={(e) =>
-                            setNewContact({
-                              ...newContact,
-                              vehicleNumber: e.target.value,
-                            })
-                          }
-                          placeholder="Enter vehicle number"
-                          className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:border-purple-400/50 focus:ring-2 focus:ring-purple-400/20 transition-all duration-200 backdrop-blur-sm"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="block text-sm font-medium text-white/80">
-                          IC Number
-                        </label>
-                        <FormInput
-                          type="text"
-                          value={newContact.ic}
-                          onChange={(e) =>
-                            setNewContact({ ...newContact, ic: e.target.value })
-                          }
-                          placeholder="Enter IC number"
-                          className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:border-purple-400/50 focus:ring-2 focus:ring-purple-400/20 transition-all duration-200 backdrop-blur-sm"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="block text-sm font-medium text-white/80">
-                          Expiry Date
-                        </label>
-                        <FormInput
-                          type="date"
-                          value={newContact.expiryDate}
-                          onChange={(e) =>
-                            setNewContact({
-                              ...newContact,
-                              expiryDate: e.target.value,
-                            })
-                          }
-                          className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:border-purple-400/50 focus:ring-2 focus:ring-purple-400/20 transition-all duration-200 backdrop-blur-sm"
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Notes Section */}
                   <div className="space-y-6">
@@ -8381,6 +8461,35 @@ function Main() {
                           </p>
                         </div>
 
+                        {companyId === "079" && (
+                          <div className="p-6 rounded-2xl bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 hover:bg-white/10 dark:hover:bg-slate-700/20 transition-all duration-300 shadow-inner">
+                            <div className="flex items-center space-x-3 mb-3">
+                              <label className="text-sm font-bold text-white/70 dark:text-slate-400 uppercase tracking-wider">
+                                Branch
+                              </label>
+                            </div>
+                            <p className="text-xl font-semibold text-white dark:text-slate-100">
+                              {currentContact.branch || "No branch"}
+                            </p>
+                          </div>
+                        )}
+
+                        {companyId === "079" && (
+                          <div className="p-6 rounded-2xl bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 hover:bg-white/10 dark:hover:bg-slate-700/20 transition-all duration-300 shadow-inner">
+                            <div className="flex items-center space-x-3 mb-3">
+                              <label className="text-sm font-bold text-white/70 dark:text-slate-400 uppercase tracking-wider">
+                                Vehicle Number
+                              </label>
+                            </div>
+                            <p className="text-xl font-semibold text-white dark:text-slate-100">
+                              {currentContact.vehicleNumber ||
+                                "No vehicle number"}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-6">
                         <div className="p-6 rounded-2xl bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 hover:bg-white/10 dark:hover:bg-slate-700/20 transition-all duration-300 shadow-inner">
                           <div className="flex items-center space-x-3 mb-3">
                             <label className="text-sm font-bold text-white/70 dark:text-slate-400 uppercase tracking-wider">
@@ -8389,57 +8498,6 @@ function Main() {
                           </div>
                           <p className="text-xl font-semibold text-white dark:text-slate-100">
                             {currentContact.address1 || "No address"}
-                          </p>
-                        </div>
-
-                        <div className="p-6 rounded-2xl bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 hover:bg-white/10 dark:hover:bg-slate-700/20 transition-all duration-300 shadow-inner">
-                          <div className="flex items-center space-x-3 mb-3">
-                            <label className="text-sm font-bold text-white/70 dark:text-slate-400 uppercase tracking-wider">
-                              Branch
-                            </label>
-                          </div>
-                          <p className="text-xl font-semibold text-white dark:text-slate-100">
-                            {currentContact.branch || "No branch"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="space-y-6">
-                        <div className="p-6 rounded-2xl bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 hover:bg-white/10 dark:hover:bg-slate-700/20 transition-all duration-300 shadow-inner">
-                          <div className="flex items-center space-x-3 mb-3">
-                            <label className="text-sm font-bold text-white/70 dark:text-slate-400 uppercase tracking-wider">
-                              Vehicle Number
-                            </label>
-                          </div>
-                          <p className="text-xl font-semibold text-white dark:text-slate-100">
-                            {currentContact.vehicleNumber ||
-                              "No vehicle number"}
-                          </p>
-                        </div>
-
-                        <div className="p-6 rounded-2xl bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 hover:bg-white/10 dark:hover:bg-slate-700/20 transition-all duration-300 shadow-inner">
-                          <div className="flex items-center space-x-3 mb-3">
-                            <label className="text-sm font-bold text-white/70 dark:text-slate-400 uppercase tracking-wider">
-                              IC Number
-                            </label>
-                          </div>
-                          <p className="text-xl font-semibold text-white dark:text-slate-100">
-                            {currentContact.ic || "No IC number"}
-                          </p>
-                        </div>
-
-                        <div className="p-6 rounded-2xl bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 hover:bg-white/10 dark:hover:bg-slate-700/20 transition-all duration-300 shadow-inner">
-                          <div className="flex items-center space-x-3 mb-3">
-                            <label className="text-sm font-bold text-white/70 dark:text-slate-400 uppercase tracking-wider">
-                              Expiry Date
-                            </label>
-                          </div>
-                          <p className="text-xl font-semibold text-white dark:text-slate-100">
-                            {currentContact.expiryDate
-                              ? new Date(
-                                  currentContact.expiryDate
-                                ).toLocaleDateString()
-                              : "No expiry date"}
                           </p>
                         </div>
 
@@ -8461,8 +8519,70 @@ function Main() {
                               : "Unknown"}
                           </p>
                         </div>
+
+                        {companyId === "079" && (
+                          <div className="p-6 rounded-2xl bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 hover:bg-white/10 dark:hover:bg-slate-700/20 transition-all duration-300 shadow-inner">
+                            <div className="flex items-center space-x-3 mb-3">
+                              <label className="text-sm font-bold text-white/70 dark:text-slate-400 uppercase tracking-wider">
+                                IC Number
+                              </label>
+                            </div>
+                            <p className="text-xl font-semibold text-white dark:text-slate-100">
+                              {currentContact.ic || "No IC number"}
+                            </p>
+                          </div>
+                        )}
+
+                        {companyId === "079" && (
+                          <div className="p-6 rounded-2xl bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 hover:bg-white/10 dark:hover:bg-slate-700/20 transition-all duration-300 shadow-inner">
+                            <div className="flex items-center space-x-3 mb-3">
+                              <label className="text-sm font-bold text-white/70 dark:text-slate-400 uppercase tracking-wider">
+                                Expiry Date
+                              </label>
+                            </div>
+                            <p className="text-xl font-semibold text-white dark:text-slate-100">
+                              {currentContact.expiryDate
+                                ? new Date(
+                                    currentContact.expiryDate
+                                  ).toLocaleDateString()
+                                : "No expiry date"}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
+
+                    {/* Custom Fields Section */}
+                    {currentContact.customFields && Object.keys(currentContact.customFields).length > 0 && (
+                      <div className="p-6 rounded-2xl bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 shadow-inner">
+                        <div className="flex items-center space-x-3 mb-4">
+                          <Lucide
+                            icon="Settings"
+                            className="w-5 h-5 text-indigo-400"
+                          />
+                          <label className="text-lg font-bold text-white/90 dark:text-slate-200">
+                            Custom Fields
+                          </label>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {Object.entries(currentContact.customFields).map(([key, value]) => (
+                            <div
+                              key={key}
+                              className="p-4 rounded-xl bg-white/5 dark:bg-slate-600/10 backdrop-blur-sm border border-white/10 dark:border-slate-500/20 hover:bg-white/10 dark:hover:bg-slate-600/20 transition-all duration-200"
+                            >
+                              <div className="space-y-2">
+                                <label className="text-xs font-bold text-indigo-300/80 dark:text-indigo-400/80 uppercase tracking-wider">
+                                  {key.replace(/_/g, ' ')}
+                                </label>
+                                <p className="text-sm font-medium text-white/90 dark:text-slate-200 break-words">
+                                  {value || "Not specified"}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Notes Section */}
                     {currentContact.notes && (
@@ -8761,56 +8881,91 @@ function Main() {
                 <div className="mt-8 space-y-8">
                   {/* Tag Filters */}
                   <div className="space-y-4">
-                    <div className="flex items-center space-x-2">
-                      <Lucide
-                        icon="Tags"
-                        className="w-5 h-5 text-emerald-400"
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Lucide
+                          icon="Tags"
+                          className="w-5 h-5 text-emerald-400"
+                        />
+                        <h4 className="text-lg font-semibold text-white/90 dark:text-slate-200">
+                          Filter by Tags
+                        </h4>
+                      </div>
+                    </div>
+                    {/* Search Input for Tags */}
+                    <div className="relative group">
+                      <div className="absolute left-4 top-1/2 transform -translate-y-1/2 p-1.5 rounded-lg bg-gradient-to-br from-emerald-500/20 to-teal-500/20 dark:from-emerald-400/20 dark:to-teal-400/20 backdrop-blur-sm border border-emerald-200/40 dark:border-emerald-700/40 group-focus-within:scale-110 transition-transform duration-300">
+                        <Lucide
+                          icon="Search"
+                          className="w-4 h-4 text-emerald-600 dark:text-emerald-400"
+                        />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Search tags..."
+                        value={tagSearchQuery}
+                        onChange={(e) => setTagSearchQuery(e.target.value)}
+                        className="w-full pl-16 pr-4 py-4 bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 rounded-2xl focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-400/60 transition-all duration-300 shadow-lg hover:shadow-xl text-white dark:text-slate-200 font-medium placeholder:text-white/50 dark:placeholder:text-slate-400"
                       />
-                      <h4 className="text-lg font-semibold text-white/90 dark:text-slate-200">
-                        Filter by Tags
-                      </h4>
                     </div>
                     <div className="space-y-3 max-h-60 overflow-y-auto bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl rounded-2xl p-6 border border-white/20 dark:border-slate-600/20 shadow-inner">
-                      {tagList.map((tag) => (
+                      {tagList
+                      .filter((tag) =>
+                        tag.name.toLowerCase().includes(tagSearchQuery.toLowerCase())
+                      )
+                      .map((tag) => (
                         <label
                           key={tag.id}
                           className="group flex items-center p-3 rounded-xl hover:bg-white/10 dark:hover:bg-slate-600/20 transition-all duration-200 cursor-pointer border border-transparent hover:border-white/10"
                         >
                           <div className="relative">
-                            <input
-                              type="checkbox"
-                              checked={selectedTagFilters.includes(tag.name)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedTagFilters((prev) => [
-                                    ...prev,
-                                    tag.name,
-                                  ]);
-                                } else {
-                                  setSelectedTagFilters((prev) =>
-                                    prev.filter((t) => t !== tag.name)
-                                  );
-                                }
-                              }}
-                              className="w-5 h-5 rounded-lg border-2 border-white/30 text-emerald-500 focus:ring-emerald-500/20 focus:ring-2 bg-white/5 backdrop-blur-sm transition-all duration-200"
+                            <ThreeStateTagFilter 
+                              tagName={tag.name}
+                              className="transition-all duration-200"
                             />
                             <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-emerald-400/20 to-teal-400/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
                           </div>
                           <span className="ml-4 text-sm font-medium text-white/80 dark:text-slate-300 group-hover:text-white transition-colors duration-200">
                             {tag.name}
                           </span>
+                          <div className="ml-auto flex items-center space-x-2 text-xs text-white/50">
+                            {getTagFilterState(tag.name) === 'include' && (
+                              <span className="text-emerald-400">Include</span>
+                            )}
+                            {getTagFilterState(tag.name) === 'exclude' && (
+                              <span className="text-red-400">Exclude</span>
+                            )}
+                            {getTagFilterState(tag.name) === 'none' && (
+                              <span className="text-gray-400">Click to filter</span>
+                            )}
+                          </div>
                         </label>
                       ))}
+                      {tagList.filter((tag) =>
+                        tag.name.toLowerCase().includes(tagSearchQuery.toLowerCase())
+                      ).length === 0 && tagSearchQuery && (
+                        <div className="text-center py-8">
+                          <Lucide
+                            icon="Search"
+                            className="w-12 h-12 mx-auto mb-4 text-white/30"
+                          />
+                          <p className="text-sm text-white/60">
+                            No tags found matching "{tagSearchQuery}"
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   {/* User Filters */}
                   <div className="space-y-4">
-                    <div className="flex items-center space-x-2">
-                      <Lucide icon="Users" className="w-5 h-5 text-teal-400" />
-                      <h4 className="text-lg font-semibold text-white/90 dark:text-slate-200">
-                        Filter by Assigned User
-                      </h4>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Lucide icon="Users" className="w-5 h-5 text-teal-400" />
+                        <h4 className="text-lg font-semibold text-white/90 dark:text-slate-200">
+                          Filter by Assigned User
+                        </h4>
+                      </div>
                     </div>
                     <div className="space-y-3 max-h-60 overflow-y-auto bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl rounded-2xl p-6 border border-white/20 dark:border-slate-600/20 shadow-inner">
                       {(() => {
@@ -8835,33 +8990,54 @@ function Main() {
                             className="group flex items-center p-3 rounded-xl hover:bg-white/10 dark:hover:bg-slate-600/20 transition-all duration-200 cursor-pointer border border-transparent hover:border-white/10"
                           >
                             <div className="relative">
-                              <input
-                                type="checkbox"
-                                checked={selectedUserFilters.includes(
-                                  employee.name
-                                )}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedUserFilters((prev) => [
-                                      ...prev,
-                                      employee.name,
-                                    ]);
-                                  } else {
-                                    setSelectedUserFilters((prev) =>
-                                      prev.filter((u) => u !== employee.name)
-                                    );
-                                  }
-                                }}
-                                className="w-5 h-5 rounded-lg border-2 border-white/30 text-teal-500 focus:ring-teal-500/20 focus:ring-2 bg-white/5 backdrop-blur-sm transition-all duration-200"
+                              <ThreeStateUserFilter 
+                                userName={employee.name}
+                                className="transition-all duration-200"
                               />
                               <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-teal-400/20 to-cyan-400/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
                             </div>
                             <span className="ml-4 text-sm font-medium text-white/80 dark:text-slate-300 group-hover:text-white transition-colors duration-200">
                               {employee.name}
                             </span>
+                            <div className="ml-auto flex items-center space-x-2 text-xs text-white/50">
+                              {getUserFilterState(employee.name) === 'include' && (
+                                <span className="text-teal-400">Include</span>
+                              )}
+                              {getUserFilterState(employee.name) === 'exclude' && (
+                                <span className="text-red-400">Exclude</span>
+                              )}
+                              {getUserFilterState(employee.name) === 'none' && (
+                                <span className="text-gray-400">Click to filter</span>
+                              )}
+                            </div>
                           </label>
                         ));
                       })()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filter Legend */}
+                <div className="mt-6 p-4 bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-slate-600/20">
+                  <div className="text-xs text-white/70 dark:text-slate-400 space-y-2">
+                    <div className="font-semibold text-white/90 dark:text-slate-200 mb-2">Filter Guide:</div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 rounded border-2 border-white/30 bg-white/5 flex items-center justify-center">
+                        <span className="text-[8px] text-gray-400">○</span>
+                      </div>
+                      <span>Unfiltered - Shows all contacts</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 rounded border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center">
+                        <Lucide icon="Check" className="w-2 h-2 text-white" />
+                      </div>
+                      <span>Include - Shows only contacts with this tag/user</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 rounded border-2 border-red-500 bg-red-500 flex items-center justify-center">
+                        <Lucide icon="X" className="w-2 h-2 text-white" />
+                      </div>
+                      <span>Exclude - Hides contacts with this tag/user</span>
                     </div>
                   </div>
                 </div>
@@ -8872,6 +9048,8 @@ function Main() {
                     onClick={() => {
                       setSelectedTagFilters([]);
                       setSelectedUserFilters([]);
+                      setExcludedTagFilters([]);
+                      setExcludedUserFilters([]);
                     }}
                     className="px-6 py-3 bg-white/5 hover:bg-white/10 dark:bg-slate-700/20 dark:hover:bg-slate-600/30 backdrop-blur-sm border border-white/20 dark:border-slate-600/20 text-white/90 hover:text-white rounded-2xl transition-all duration-200 font-medium"
                   >
@@ -9034,7 +9212,15 @@ function Main() {
                 </div>
 
                 <div className="space-y-3 max-h-60 overflow-y-auto mt-8">
-                  {Object.entries(visibleColumns).map(([column, isVisible]) => {
+                  {Object.entries(visibleColumns)
+                    .filter(([column]) => {
+                      // Filter out company-specific fields if not companyId 079
+                      if (companyId !== "079" && ["branch", "vehicleNumber", "ic", "expiryDate"].includes(column)) {
+                        return false;
+                      }
+                      return true;
+                    })
+                    .map(([column, isVisible]) => {
                     // Check if this is a custom field
                     const isCustomField = column.startsWith("customField_");
                     const displayName = isCustomField
@@ -9469,15 +9655,12 @@ function Main() {
                     Sync Database?
                   </h3>
                   <div className="text-white/80 dark:text-slate-300 text-sm leading-relaxed space-y-2">
-                    <p>
-                      This action will sync the database and may take some time.
-                    </p>
                     <p className="text-amber-300 font-medium">
-                      It may affect your current data.
+                      This action will sync the database <br />
+                      and may take some time.
                     </p>
                     <p className="text-xs text-white/60 mt-3 bg-white/5 rounded-xl p-3 border border-white/10">
-                      You can choose to sync from Neon (default) or from
-                      Firebase to Neon.
+                      It may affect your current data.
                     </p>
                   </div>
                 </div>
@@ -9491,40 +9674,23 @@ function Main() {
                       <span>Cancel</span>
                     </div>
                   </button>
-                  <button
-                    className="px-6 py-3 bg-gradient-to-r from-indigo-500 via-blue-500 to-cyan-500 hover:from-indigo-600 hover:via-blue-600 hover:to-cyan-600 border-0 text-white rounded-2xl transition-all duration-200 font-semibold shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                    onClick={handleConfirmSync}
-                    disabled={isSyncing || isSyncingFirebase}
-                  >
-                    {isSyncing ? (
-                      <div className="flex items-center space-x-2">
+                      <button
+                      className="px-8 py-3 bg-gradient-to-r from-yellow-500 via-amber-500 to-orange-500 hover:from-yellow-600 hover:via-amber-600 hover:to-orange-600 border-0 text-white rounded-2xl transition-all duration-200 font-semibold shadow-lg shadow-yellow-500/25 hover:shadow-yellow-500/40 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                      onClick={handleConfirmSync}
+                      disabled={isSyncing}
+                      >
+                      {isSyncing ? (
+                        <div className="flex items-center space-x-2">
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         <span>Syncing...</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center space-x-2">
-                        <Lucide icon="Database" className="w-4 h-4" />
-                        <span>Sync (Neon)</span>
-                      </div>
-                    )}
-                  </button>
-                  <button
-                    className="px-6 py-3 bg-gradient-to-r from-emerald-500 via-green-500 to-teal-500 hover:from-emerald-600 hover:via-green-600 hover:to-teal-600 border-0 text-white rounded-2xl transition-all duration-200 font-semibold shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                    onClick={handleConfirmSyncFirebase}
-                    disabled={isSyncing || isSyncingFirebase}
-                  >
-                    {isSyncingFirebase ? (
-                      <div className="flex items-center space-x-2">
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        <span>Syncing...</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center space-x-2">
-                        <Lucide icon="Cloud" className="w-4 h-4" />
-                        <span>Sync Firebase</span>
-                      </div>
-                    )}
-                  </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-2">
+                        <Lucide icon="RefreshCw" className="w-4 h-4" />
+                        <span>Confirm Sync</span>
+                        </div>
+                      )}
+                      </button>
                 </div>
               </div>
             </Dialog.Panel>
@@ -9621,59 +9787,68 @@ function Main() {
                 </div>
 
                 <div className="mt-8 space-y-8">
-                  {/* Recipients Selection */}
-                  <div className="space-y-4">
+                    {/* Recipients Selection */}
+                    <div className="space-y-4">
                     <div className="flex items-center space-x-3">
                       <Lucide icon="Users" className="w-5 h-5 text-blue-400" />
                       <label className="text-lg font-semibold text-white/90 dark:text-slate-200">
-                        Recipients ({selectedContacts.length} selected)
+                      Recipients ({selectedContacts.length} selected)
                       </label>
                     </div>
                     <div className="bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl rounded-2xl p-6 max-h-48 overflow-y-auto border border-white/20 dark:border-slate-600/20 shadow-inner">
                       {selectedContacts.length > 0 ? (
-                        <div className="space-y-3">
-                          {selectedContacts
-                            .slice(0, 10)
-                            .map((contact, index) => (
-                              <div
-                                key={index}
-                                className="flex items-center p-3 bg-white/10 dark:bg-slate-600/20 rounded-xl backdrop-blur-sm border border-white/10"
-                              >
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-sm font-medium mr-3 shadow-lg">
-                                  {contact.contactName
-                                    ?.charAt(0)
-                                    ?.toUpperCase() || "U"}
-                                </div>
-                                <span className="text-white/90 dark:text-slate-200 font-medium">
-                                  {contact.contactName || contact.phone}
-                                </span>
-                              </div>
-                            ))}
-                          {selectedContacts.length > 10 && (
-                            <div className="text-sm text-white/70 dark:text-slate-400 bg-white/5 dark:bg-slate-600/10 rounded-xl p-3 text-center backdrop-blur-sm border border-white/10">
-                              ... and {selectedContacts.length - 10} more
-                              contacts
+                      <div className="space-y-3">
+                        {selectedContacts
+                        .slice(0, 10)
+                        .map((contact, index) => (
+                          <div
+                          key={index}
+                          className="flex items-center justify-between p-3 bg-white/10 dark:bg-slate-600/20 rounded-xl backdrop-blur-sm border border-white/10"
+                          >
+                          <div className="flex items-center">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-sm font-medium mr-3 shadow-lg">
+                            {contact.contactName
+                              ?.charAt(0)
+                              ?.toUpperCase() || "U"}
                             </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="text-center text-white/60 dark:text-slate-400 py-8">
-                          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-white/10 to-slate-500/20 dark:from-slate-700/50 dark:to-slate-600/50 flex items-center justify-center mx-auto mb-4 backdrop-blur-sm border border-white/10">
-                            <Lucide
-                              icon="Users"
-                              className="w-8 h-8 opacity-50"
-                            />
+                            <span className="text-white/90 dark:text-slate-200 font-medium">
+                            {contact.contactName || contact.phone}
+                            </span>
                           </div>
-                          <p className="font-medium text-white/80">
-                            No contacts selected
-                          </p>
-                          <p className="text-xs mt-1 text-white/60">
-                            Please select contacts first to send messages
-                          </p>
+                          <button
+                            onClick={() => handleContactCheckboxChange(contact)}
+                            className="w-8 h-8 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 transition-all duration-200 flex items-center justify-center backdrop-blur-sm border border-red-400/20 hover:border-red-400/40"
+                            title="Remove contact"
+                          >
+                            <Lucide icon="X" className="w-4 h-4" />
+                          </button>
+                          </div>
+                        ))}
+                        {selectedContacts.length > 10 && (
+                        <div className="text-sm text-white/70 dark:text-slate-400 bg-white/5 dark:bg-slate-600/10 rounded-xl p-3 text-center backdrop-blur-sm border border-white/10">
+                          ... and {selectedContacts.length - 10} more
+                          contacts
                         </div>
+                        )}
+                      </div>
+                      ) : (
+                      <div className="text-center text-white/60 dark:text-slate-400 py-8">
+                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-white/10 to-slate-500/20 dark:from-slate-700/50 dark:to-slate-600/50 flex items-center justify-center mx-auto mb-4 backdrop-blur-sm border border-white/10">
+                        <Lucide
+                          icon="Users"
+                          className="w-8 h-8 opacity-50"
+                        />
+                        </div>
+                        <p className="font-medium text-white/80">
+                        No contacts selected
+                        </p>
+                        <p className="text-xs mt-1 text-white/60">
+                        Please select contacts first to send messages
+                        </p>
+                      </div>
                       )}
                     </div>
-                  </div>
+                    </div>
 
                   {/* Phone Selection */}
                   <div className="space-y-4">
@@ -9707,6 +9882,7 @@ function Main() {
                           Object.keys(phoneNames).map((index) => {
                             const phoneIndexOption = parseInt(index);
                             const qrCode = qrCodes[phoneIndexOption];
+                            const phoneInfo = qrCode?.phoneInfo || `Phone ${phoneIndexOption + 1}`;
                             const statusInfo = qrCode
                               ? getStatusInfo(qrCode.status)
                               : isLoadingStatus
@@ -9728,7 +9904,7 @@ function Main() {
                                 value={phoneIndexOption}
                                 className="bg-slate-800 text-white"
                               >
-                                {`${getPhoneName(phoneIndexOption)} - ${
+                                {`${getPhoneName(phoneIndexOption)} - (${phoneInfo}) ${
                                   qrCode ? "✅" : isLoadingStatus ? "⏳" : "❌"
                                 } ${statusInfo.text}`}
                               </option>
@@ -9843,29 +10019,126 @@ function Main() {
                           <Lucide icon="Code" className="w-4 h-4" />
                           Available Placeholders:
                         </p>
-                        <div className="grid grid-cols-2 gap-3 text-xs">
-                          {[
-                            "contactName",
-                            "firstName",
-                            "lastName",
-                            "phone",
-                            "email",
-                            "company",
-                            "branch",
-                            "vehicleNumber",
-                            "ic",
-                            "expiryDate",
-                          ].map((placeholder) => (
-                            <button
-                              key={placeholder}
-                              onClick={() => insertPlaceholder(placeholder)}
-                              className="text-left p-3 rounded-xl bg-white/10 dark:bg-blue-800/30 text-blue-200 dark:text-blue-200 hover:bg-white/20 dark:hover:bg-blue-700/50 transition-all duration-200 border border-blue-400/20 backdrop-blur-sm font-mono"
-                            >
-                              @{"{"}${placeholder}
-                              {"}"}
-                            </button>
-                          ))}
+                        
+                        {/* Standard Placeholders */}
+                        <div className="mb-6">
+                          <h4 className="text-xs font-semibold text-blue-200 mb-3 uppercase tracking-wider">Standard Fields</h4>
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            {[
+                              "contactName",
+                              "firstName",
+                              "lastName",
+                              "phone",
+                              "email",
+                              "company",
+                              "branch",
+                              "vehicleNumber",
+                              "ic",
+                              "expiryDate",
+                            ].map((placeholder) => (
+                              <button
+                                key={placeholder}
+                                onClick={() => insertPlaceholder(placeholder)}
+                                className="text-left p-3 rounded-xl bg-white/10 dark:bg-blue-800/30 text-blue-200 dark:text-blue-200 hover:bg-white/20 dark:hover:bg-blue-700/50 transition-all duration-200 border border-blue-400/20 backdrop-blur-sm font-mono"
+                              >
+                                @{"{"}${placeholder}
+                                {"}"}
+                              </button>
+                            ))}
+                          </div>
                         </div>
+
+                        {/* Custom Fields Placeholders */}
+                        {(() => {
+                          // Get all unique custom field keys from selected contacts
+                          const allCustomFields = new Set<string>();
+                          const customFieldAvailability = new Map<string, number>();
+
+                          selectedContacts.forEach(contact => {
+                            if (contact.customFields) {
+                              Object.keys(contact.customFields).forEach(key => {
+                                allCustomFields.add(key);
+                                customFieldAvailability.set(key, (customFieldAvailability.get(key) || 0) + 1);
+                              });
+                            }
+                          });
+
+                          const customFieldsArray = Array.from(allCustomFields);
+                          const totalSelectedContacts = selectedContacts.length;
+
+                          if (customFieldsArray.length > 0) {
+                            return (
+                              <div>
+                                <h4 className="text-xs font-semibold text-blue-200 mb-3 uppercase tracking-wider">Custom Fields</h4>
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                  {customFieldsArray.map((fieldKey) => {
+                                    const availableCount = customFieldAvailability.get(fieldKey) || 0;
+                                    const isAvailableForAll = availableCount === totalSelectedContacts;
+                                    const availabilityPercentage = Math.round((availableCount / totalSelectedContacts) * 100);
+                                    
+                                    return (
+                                      <div key={fieldKey} className="relative group">
+                                        <button
+                                          onClick={() => isAvailableForAll ? insertPlaceholder(fieldKey) : null}
+                                          disabled={!isAvailableForAll}
+                                          className={`text-left p-3 rounded-xl transition-all duration-200 border backdrop-blur-sm font-mono w-full ${
+                                            isAvailableForAll
+                                              ? 'bg-white/10 dark:bg-blue-800/30 text-blue-200 dark:text-blue-200 hover:bg-white/20 dark:hover:bg-blue-700/50 border-blue-400/20 cursor-pointer'
+                                              : 'bg-gray-500/10 dark:bg-gray-800/20 text-gray-400 dark:text-gray-500 border-gray-500/20 cursor-not-allowed opacity-60'
+                                          }`}
+                                        >
+                                          @{"{"}{fieldKey.toLowerCase().replace(/\s+/g, '_')}
+                                          {"}"}
+                                          {!isAvailableForAll && (
+                                            <div className="flex items-center mt-1">
+                                              <Lucide icon="AlertTriangle" className="w-3 h-3 mr-1" />
+                                              <span className="text-xs">{availabilityPercentage}%</span>
+                                            </div>
+                                          )}
+                                        </button>
+                                        
+                                        {/* Tooltip */}
+                                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 pointer-events-none">
+                                          <div className="bg-slate-800 text-white text-xs rounded-lg px-3 py-2 shadow-lg border border-slate-600 max-w-48">
+                                            <div className="font-medium">{fieldKey}</div>
+                                            <div className="mt-1 text-slate-300">
+                                              {isAvailableForAll ? (
+                                                "Available in all selected contacts"
+                                              ) : (
+                                                `Available in ${availableCount} of ${totalSelectedContacts} contacts (${availabilityPercentage}%)`
+                                              )}
+                                            </div>
+                                            {!isAvailableForAll && (
+                                              <div className="mt-1 text-amber-300 text-xs">
+                                                ⚠️ Not available for all contacts
+                                              </div>
+                                            )}
+                                            <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-800"></div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                
+                                {/* Legend */}
+                                <div className="mt-4 p-3 bg-blue-900/20 rounded-lg border border-blue-400/20">
+                                  <div className="flex items-center justify-between text-xs">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
+                                      <span className="text-blue-200">Available for all</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
+                                      <span className="text-gray-400">Partially available</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
                     )}
                   </div>
@@ -10596,76 +10869,84 @@ function Main() {
                           />
                         </div>
 
-                        <div className="space-y-3">
-                          <label className="flex items-center space-x-2 text-sm font-medium text-white/80 dark:text-slate-300">
-                            <span>Branch</span>
-                          </label>
-                          <FormInput
-                            type="text"
-                            value={currentContact.branch || ""}
-                            onChange={(e) =>
-                              setCurrentContact({
-                                ...currentContact,
-                                branch: e.target.value,
-                              })
-                            }
-                            placeholder="Enter branch"
-                            className="w-full bg-white/5 dark:bg-slate-700/20 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 rounded-2xl text-white dark:text-slate-200 placeholder-white/50 dark:placeholder-slate-400 focus:border-teal-400/50 focus:ring-2 focus:ring-teal-400/20 transition-all duration-200"
-                          />
-                        </div>
+                        {companyId === "079" && (
+                          <div className="space-y-3">
+                            <label className="flex items-center space-x-2 text-sm font-medium text-white/80 dark:text-slate-300">
+                              <span>Branch</span>
+                            </label>
+                            <FormInput
+                              type="text"
+                              value={currentContact.branch || ""}
+                              onChange={(e) =>
+                                setCurrentContact({
+                                  ...currentContact,
+                                  branch: e.target.value,
+                                })
+                              }
+                              placeholder="Enter branch"
+                              className="w-full bg-white/5 dark:bg-slate-700/20 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 rounded-2xl text-white dark:text-slate-200 placeholder-white/50 dark:placeholder-slate-400 focus:border-teal-400/50 focus:ring-2 focus:ring-teal-400/20 transition-all duration-200"
+                            />
+                          </div>
+                        )}
 
-                        <div className="space-y-3">
-                          <label className="flex items-center space-x-2 text-sm font-medium text-white/80 dark:text-slate-300">
-                            <span>Vehicle Number</span>
-                          </label>
-                          <FormInput
-                            type="text"
-                            value={currentContact.vehicleNumber || ""}
-                            onChange={(e) =>
-                              setCurrentContact({
-                                ...currentContact,
-                                vehicleNumber: e.target.value,
-                              })
-                            }
-                            placeholder="Enter vehicle number"
-                            className="w-full bg-white/5 dark:bg-slate-700/20 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 rounded-2xl text-white dark:text-slate-200 placeholder-white/50 dark:placeholder-slate-400 focus:border-indigo-400/50 focus:ring-2 focus:ring-indigo-400/20 transition-all duration-200"
-                          />
-                        </div>
+                        {companyId === "079" && (
+                          <div className="space-y-3">
+                            <label className="flex items-center space-x-2 text-sm font-medium text-white/80 dark:text-slate-300">
+                              <span>Vehicle Number</span>
+                            </label>
+                            <FormInput
+                              type="text"
+                              value={currentContact.vehicleNumber || ""}
+                              onChange={(e) =>
+                                setCurrentContact({
+                                  ...currentContact,
+                                  vehicleNumber: e.target.value,
+                                })
+                              }
+                              placeholder="Enter vehicle number"
+                              className="w-full bg-white/5 dark:bg-slate-700/20 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 rounded-2xl text-white dark:text-slate-200 placeholder-white/50 dark:placeholder-slate-400 focus:border-indigo-400/50 focus:ring-2 focus:ring-indigo-400/20 transition-all duration-200"
+                            />
+                          </div>
+                        )}
 
-                        <div className="space-y-3">
-                          <label className="flex items-center space-x-2 text-sm font-medium text-white/80 dark:text-slate-300">
-                            <span>IC Number</span>
-                          </label>
-                          <FormInput
-                            type="text"
-                            value={currentContact.ic || ""}
-                            onChange={(e) =>
-                              setCurrentContact({
-                                ...currentContact,
-                                ic: e.target.value,
-                              })
-                            }
-                            placeholder="Enter IC number"
-                            className="w-full bg-white/5 dark:bg-slate-700/20 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 rounded-2xl text-white dark:text-slate-200 placeholder-white/50 dark:placeholder-slate-400 focus:border-amber-400/50 focus:ring-2 focus:ring-amber-400/20 transition-all duration-200"
-                          />
-                        </div>
+                        {companyId === "079" && (
+                          <div className="space-y-3">
+                            <label className="flex items-center space-x-2 text-sm font-medium text-white/80 dark:text-slate-300">
+                              <span>IC Number</span>
+                            </label>
+                            <FormInput
+                              type="text"
+                              value={currentContact.ic || ""}
+                              onChange={(e) =>
+                                setCurrentContact({
+                                  ...currentContact,
+                                  ic: e.target.value,
+                                })
+                              }
+                              placeholder="Enter IC number"
+                              className="w-full bg-white/5 dark:bg-slate-700/20 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 rounded-2xl text-white dark:text-slate-200 placeholder-white/50 dark:placeholder-slate-400 focus:border-amber-400/50 focus:ring-2 focus:ring-amber-400/20 transition-all duration-200"
+                            />
+                          </div>
+                        )}
 
-                        <div className="space-y-3">
-                          <label className="flex items-center space-x-2 text-sm font-medium text-white/80 dark:text-slate-300">
-                            <span>Expiry Date</span>
-                          </label>
-                          <FormInput
-                            type="date"
-                            value={currentContact.expiryDate || ""}
-                            onChange={(e) =>
-                              setCurrentContact({
-                                ...currentContact,
-                                expiryDate: e.target.value,
-                              })
-                            }
-                            className="w-full bg-white/5 dark:bg-slate-700/20 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 rounded-2xl text-white dark:text-slate-200 placeholder-white/50 dark:placeholder-slate-400 focus:border-rose-400/50 focus:ring-2 focus:ring-rose-400/20 transition-all duration-200"
-                          />
-                        </div>
+                        {companyId === "079" && (
+                          <div className="space-y-3">
+                            <label className="flex items-center space-x-2 text-sm font-medium text-white/80 dark:text-slate-300">
+                              <span>Expiry Date</span>
+                            </label>
+                            <FormInput
+                              type="date"
+                              value={currentContact.expiryDate || ""}
+                              onChange={(e) =>
+                                setCurrentContact({
+                                  ...currentContact,
+                                  expiryDate: e.target.value,
+                                })
+                              }
+                              className="w-full bg-white/5 dark:bg-slate-700/20 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 rounded-2xl text-white dark:text-slate-200 placeholder-white/50 dark:placeholder-slate-400 focus:border-rose-400/50 focus:ring-2 focus:ring-rose-400/20 transition-all duration-200"
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
 
