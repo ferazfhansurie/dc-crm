@@ -49,6 +49,7 @@ import VirtualContactList from "../../components/VirtualContactList";
 import SearchModal from "@/components/SearchModal";
 import QuickRepliesModal from "@/components/QuickRepliesModal";
 import { time } from "console";
+import { toInteger } from "lodash";
 declare global {
   interface Window {
     OneSignal: any;
@@ -60,6 +61,21 @@ interface Label {
   name: string;
   color: string;
   count: number;
+}
+
+interface AssistantInfo {
+  name: string;
+  description: string;
+  instructions: string;
+  metadata: {
+    files: Array<{
+      id: string;
+      name: string;
+      url: string;
+      vectorStoreId?: string;
+      openAIFileId?: string;
+    }>;
+  };
 }
 
 export interface Contact {
@@ -375,6 +391,7 @@ interface QRCodeData {
   phoneIndex: number;
   status: string;
   qrCode: string | null;
+  phoneInfo?: string | null;
 }
 interface Phone {
   phoneIndex: number;
@@ -712,6 +729,8 @@ function Main() {
   const [currentUserRole, setCurrentUserRole] = useState<string>("");
   const [phoneOptions, setPhoneOptions] = useState<number[]>([]);
   const [baseUrl] = useState<string>("https://juta-dev.ngrok.dev");
+  const [fetching, setFetching] = useState<boolean>(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState<boolean>(false);
 
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [whapiToken, setToken] = useState<string | null>(null);
@@ -839,6 +858,7 @@ function Main() {
 
   // Add state variables for message polling
   const [isPolling, setIsPolling] = useState(false);
+  const [isFetchingMessages, setIsFetchingMessages] = useState(false);
   const [lastMessageTimestamp, setLastMessageTimestamp] = useState<number>(0);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -946,6 +966,15 @@ function Main() {
   const [isGeneratingResponse, setIsGeneratingResponse] = useState(false);
   const [showPlaceholders, setShowPlaceholders] = useState(false);
   const [caption, setCaption] = useState(""); // Add this line to define setCaption
+  const [assistantInfo, setAssistantInfo] = useState<AssistantInfo>({
+    name: "",
+    description: "",
+    instructions: "",
+    metadata: {
+      files: [],
+    },
+  });
+  const [isAssistantInfoLoaded, setIsAssistantInfoLoaded] = useState(false);
 
   // Add new state variables for lazy loading pagination
   const [loadedContacts, setLoadedContacts] = useState<Contact[]>([]);
@@ -963,6 +992,7 @@ function Main() {
     userConfig: false,
     contactsFetch: false,
     contactsProcess: false,
+    messageCaching: false,
     complete: false,
   });
 
@@ -1074,6 +1104,102 @@ function Main() {
       toast.error("Network error. Please check your connection and try again.");
     } finally {
       setIsTopUpLoading(false);
+    }
+  };
+
+  // Sync database function
+  const handleSyncContact = async () => {
+    try {
+      console.log("Starting contact sync...");
+      setFetching(true);
+
+      const userEmail = localStorage.getItem("userEmail");
+      if (!userEmail) {
+        setFetching(false);
+        toast.error("No user email found");
+        return;
+      }
+
+      // Get user config to get companyId
+      const userResponse = await fetch(
+        `${baseUrl}/api/user/config?email=${encodeURIComponent(userEmail)}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          credentials: "include",
+        }
+      );
+
+      if (!userResponse.ok) {
+        setFetching(false);
+        toast.error("Failed to fetch user config");
+        return;
+      }
+
+      const userData = await userResponse.json();
+      const companyId = userData.company_id;
+      setCompanyId(companyId);
+
+      // Get company data
+      const companyResponse = await fetch(
+        `${baseUrl}/api/companies/${companyId}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          credentials: "include",
+        }
+      );
+
+      if (!companyResponse.ok) {
+        setFetching(false);
+        toast.error("Failed to fetch company data");
+        return;
+      }
+
+      const companyData = await companyResponse.json();
+
+      // Call the sync contacts endpoint
+      const syncResponse = await fetch(
+        `${baseUrl}/api/sync-contacts/${companyId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          credentials: "include",
+        }
+      );
+
+      if (!syncResponse.ok) {
+        const errorData = await syncResponse.json();
+        throw new Error(
+          errorData.error || "Failed to start contact synchronization"
+        );
+      }
+
+      const responseData = await syncResponse.json();
+      if (responseData.success) {
+        toast.success("Contact synchronization started successfully");
+      } else {
+        throw new Error(
+          responseData.error || "Failed to start contact synchronization"
+        );
+      }
+    } catch (error) {
+      console.error("Error syncing contacts:", error);
+      toast.error(
+        "An error occurred while syncing contacts: " +
+          (error instanceof Error ? error.message : String(error))
+      );
+    } finally {
+      setFetching(false);
     }
   };
 
@@ -1310,6 +1436,9 @@ function Main() {
   const [scheduledMessages, setScheduledMessages] = useState<
     ScheduledMessage[]
   >([]);
+  const [selectedScheduledMessages, setSelectedScheduledMessages] = useState<
+    Set<string>
+  >(new Set());
   const [currentScheduledMessage, setCurrentScheduledMessage] =
     useState<ScheduledMessage | null>(null);
   const [editScheduledMessageModal, setEditScheduledMessageModal] =
@@ -1327,6 +1456,7 @@ function Main() {
     null
   );
   const [qrCodes, setQrCodes] = useState<QRCodeData[]>([]);
+  const [phoneStatusLoading, setPhoneStatusLoading] = useState<boolean>(true);
   const [categories, setCategories] = useState<string[]>([]);
   const [quickReplyCategory, setQuickReplyCategory] = useState<string>("all");
   const [contactsState, setContactsState] = useState<ContactsState>({
@@ -1343,18 +1473,21 @@ function Main() {
   const planConfig = {
     free: {
       aiMessages: 100,
-      contacts: 100,
+      contacts: Infinity,
       title: "Free Plan",
+      isLifetime: true,
     },
     enterprise: {
       aiMessages: 5000,
-      contacts: 10000,
+      contacts: Infinity,
       title: "Enterprise Plan",
+      isLifetime: false,
     },
     pro: {
       aiMessages: 20000,
-      contacts: 50000,
+      contacts: Infinity,
       title: "Pro Plan",
+      isLifetime: false,
     },
   };
   const getCurrentPlanLimits = () => {
@@ -1367,7 +1500,7 @@ function Main() {
   const [messagePage, setMessagePage] = useState(0);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
-  const MESSAGES_PER_PAGE = 10;
+  const MESSAGES_PER_PAGE = 20;
   // Add these functions after the fetchMessages function (around line 6171)
 
   // Replace the existing loadMoreMessages function (around line 1298) with this corrected version:
@@ -1415,41 +1548,28 @@ function Main() {
   }, [messagePage, allMessages.length, isLoadingMoreMessages, hasMoreMessages]);
 
   // Replace the handleMessageListScroll function (around line 1315) with this button approach:
-  const handleLoadMoreMessages = useCallback(async () => {
+  const handleLoadAllMessages = useCallback(async () => {
     if (isLoadingMoreMessages || !hasMoreMessages) return;
 
     setIsLoadingMoreMessages(true);
 
-    // Simulate loading delay for better UX
+    console.log(
+      `🔍 Loading all messages: ${allMessages.length - displayedMessages.length} remaining of ${allMessages.length} total`
+    );
+
+    // Simple timeout for UX - just display all messages at once
     setTimeout(() => {
-      const nextPage = messagePage + 1;
-      const startIndex = nextPage * MESSAGES_PER_PAGE;
-      const endIndex = startIndex + MESSAGES_PER_PAGE;
-
-      console.log(
-        `�� Debug: page ${nextPage}, start: ${startIndex}, end: ${endIndex}, total: ${allMessages.length}`
-      );
-
-      if (startIndex < allMessages.length) {
-        const newMessages = allMessages.slice(startIndex, endIndex);
-        setDisplayedMessages((prev) => [...newMessages, ...prev]);
-        console.log(displayedMessages);
-        setMessagePage(nextPage);
-        setHasMoreMessages(endIndex < allMessages.length);
-        console.log(`✅ Loaded ${newMessages.length} more messages`);
-      } else {
-        console.log(`🔍 No more messages to load - reached end`);
-        setHasMoreMessages(false);
-      }
-
+      // Just display all messages - no caching needed for this action
+      setDisplayedMessages(allMessages);
+      setHasMoreMessages(false);
+      console.log(`✅ Displayed all ${allMessages.length} messages (no caching)`);
       setIsLoadingMoreMessages(false);
-    }, 500);
+    }, 300);
   }, [
-    messagePage,
     isLoadingMoreMessages,
     hasMoreMessages,
-    selectedChatId,
-    whapiToken,
+    allMessages,
+    displayedMessages.length,
   ]);
 
   // Remove the handleMessageListScroll function entirely
@@ -2325,6 +2445,12 @@ function Main() {
         setScheduledMessages(
           scheduledMessages.filter((msg) => msg.id !== messageId)
         );
+        // Remove from selected messages if it was selected
+        setSelectedScheduledMessages((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(messageId);
+          return newSet;
+        });
         toast.success("Scheduled message deleted successfully!");
       } else {
         throw new Error("Failed to delete scheduled message.");
@@ -2332,6 +2458,61 @@ function Main() {
     } catch (error) {
       console.error("Error deleting scheduled message:", error);
       toast.error("Failed to delete scheduled message.");
+    }
+  };
+
+  const handleSelectAllScheduledMessages = () => {
+    if (selectedScheduledMessages.size === scheduledMessages.length) {
+      // If all are selected, deselect all
+      setSelectedScheduledMessages(new Set());
+    } else {
+      // Select all messages
+      const allIds = new Set(scheduledMessages.map((msg) => msg.id!));
+      setSelectedScheduledMessages(allIds);
+    }
+  };
+
+  const handleToggleScheduledMessage = (messageId: string) => {
+    setSelectedScheduledMessages((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleDeleteSelectedScheduledMessages = async () => {
+    if (selectedScheduledMessages.size === 0) {
+      toast.warning("No messages selected");
+      return;
+    }
+
+    try {
+      const email = getCurrentUserEmail();
+      if (!email || !companyId) return;
+
+      // Delete all selected messages
+      const deletePromises = Array.from(selectedScheduledMessages).map(
+        (messageId) =>
+          axios.delete(`${baseUrl}/api/schedule-message/${companyId}/${messageId}`)
+      );
+
+      await Promise.all(deletePromises);
+
+      // Update the state to remove deleted messages
+      setScheduledMessages((prev) =>
+        prev.filter((msg) => !selectedScheduledMessages.has(msg.id!))
+      );
+      setSelectedScheduledMessages(new Set());
+      toast.success(
+        `${selectedScheduledMessages.size} scheduled messages deleted successfully!`
+      );
+    } catch (error) {
+      console.error("Error deleting selected scheduled messages:", error);
+      toast.error("Failed to delete selected scheduled messages.");
     }
   };
 
@@ -2347,6 +2528,7 @@ function Main() {
       console.log("Phone names available, fetching phone status...");
       const fetchPhoneStatuses = async () => {
         try {
+          setPhoneStatusLoading(true);
           const botStatusResponse = await axios.get(
             `${baseUrl}/api/bot-status/${companyId}`
           );
@@ -2358,6 +2540,8 @@ function Main() {
           if (botStatusResponse.status === 200) {
             const data: BotStatusResponse = botStatusResponse.data;
             console.log("Additional bot status response data:", data);
+            console.log("data.phones:", data.phones, "Array.isArray:", Array.isArray(data.phones));
+            console.log("data.phoneCount:", data.phoneCount, "data.phoneInfo:", data.phoneInfo);
 
             if (data.phones && Array.isArray(data.phones)) {
               const qrCodesData: QRCodeData[] = data.phones.map(
@@ -2365,13 +2549,16 @@ function Main() {
                   phoneIndex: phone.phoneIndex,
                   status: phone.status,
                   qrCode: phone.qrCode,
+                  phoneInfo: phone.phoneInfo || null,
                 })
               );
               console.log(
-                "Setting qrCodes from additional fetch:",
+                "Setting qrCodes from additional fetch (phones array):",
                 qrCodesData
               );
               setQrCodes(qrCodesData);
+              // Mark phone data as loaded
+              setIsPhoneDataLoaded(true);
             } else if (data.phoneCount === 1 && data.phoneInfo) {
               const singlePhoneData = [
                 {
@@ -2385,10 +2572,32 @@ function Main() {
                 singlePhoneData
               );
               setQrCodes(singlePhoneData);
+              // Mark phone data as loaded
+              setIsPhoneDataLoaded(true);
+            } else {
+              // Fallback: if we have status and phoneInfo but don't match the conditions above
+              console.log("Using fallback single phone data setup");
+              const fallbackPhoneData = [
+                {
+                  phoneIndex: 0,
+                  status: data.status || "unknown",
+                  qrCode: data.qrCode || null,
+                  phoneInfo: typeof data.phoneInfo === 'string' ? data.phoneInfo : null,
+                },
+              ];
+              console.log(
+                "Setting qrCodes fallback:",
+                fallbackPhoneData
+              );
+              setQrCodes(fallbackPhoneData);
+              // Mark phone data as loaded
+              setIsPhoneDataLoaded(true);
             }
           }
         } catch (error) {
           console.error("Error in additional phone status fetch:", error);
+        } finally {
+          setPhoneStatusLoading(false);
         }
       };
 
@@ -2408,6 +2617,7 @@ function Main() {
           console.log("Page became visible, refreshing phone status...");
           const fetchPhoneStatuses = async () => {
             try {
+              setPhoneStatusLoading(true);
               const botStatusResponse = await axios.get(
                 `${baseUrl}/api/bot-status/${companyId}`
               );
@@ -2419,6 +2629,7 @@ function Main() {
                       phoneIndex: phone.phoneIndex,
                       status: phone.status,
                       qrCode: phone.qrCode,
+                      phoneInfo: phone.phoneInfo || null,
                     })
                   );
                   setQrCodes(qrCodesData);
@@ -2428,6 +2639,7 @@ function Main() {
                       phoneIndex: 0,
                       status: data.status,
                       qrCode: data.qrCode,
+                      phoneInfo: typeof data.phoneInfo === 'string' ? data.phoneInfo : null,
                     },
                   ]);
                 }
@@ -2437,6 +2649,8 @@ function Main() {
                 "Error refreshing phone status on visibility change:",
                 error
               );
+            } finally {
+              setPhoneStatusLoading(false);
             }
           };
           fetchPhoneStatuses();
@@ -2472,6 +2686,7 @@ function Main() {
                   phoneIndex: phone.phoneIndex,
                   status: phone.status,
                   qrCode: phone.qrCode,
+                  phoneInfo: phone.phoneInfo || null,
                 })
               );
               console.log("🔄 Setting qrCodes from force fetch:", qrCodesData);
@@ -2482,6 +2697,7 @@ function Main() {
                   phoneIndex: 0,
                   status: data.status,
                   qrCode: data.qrCode,
+                  phoneInfo: typeof data.phoneInfo === 'string' ? data.phoneInfo : null,
                 },
               ];
               console.log(
@@ -2514,12 +2730,13 @@ function Main() {
       userConfig: false,
       contactsFetch: false,
       contactsProcess: false,
+      messageCaching: false,
       complete: false,
     });
 
     try {
-      // Step 1: Get user config to get companyId (25%)
-      setRealLoadingProgress(30);
+      // Step 1: Get user config to get companyId (20%)
+      setRealLoadingProgress(20);
       setLoadingSteps((prev) => ({ ...prev, userConfig: true }));
 
       const userResponse = await fetch(
@@ -2539,12 +2756,12 @@ function Main() {
         return;
       }
 
-      setRealLoadingProgress(60);
+      setRealLoadingProgress(30);
       const userData = await userResponse.json();
       const companyId = userData.company_id;
 
-      // Step 2: Fetch contacts from database (50%)
-      setRealLoadingProgress(80);
+      // Step 2: Fetch contacts from database (40%)
+      setRealLoadingProgress(50);
       setLoadingSteps((prev) => ({ ...prev, contactsFetch: true }));
 
       const contactsResponse = await fetch(
@@ -2564,11 +2781,11 @@ function Main() {
         return;
       }
 
-      setRealLoadingProgress(90);
+      setRealLoadingProgress(60);
       const data = await contactsResponse.json();
       console.log("contactsss", data);
-      // Step 3: Process contacts (75%)
-      setRealLoadingProgress(95);
+      // Step 3: Process contacts (50%)
+      setRealLoadingProgress(70);
       setLoadingSteps((prev) => ({ ...prev, contactsProcess: true }));
 
       // Process contacts with real-time progress - ultra fast processing
@@ -2597,13 +2814,6 @@ function Main() {
         )
       );
 
-      // Update progress to 100% immediately
-      setRealLoadingProgress(100);
-      setLoadingSteps((prev) => ({ ...prev, complete: true }));
-
-      // Minimal delay for UI update
-      await new Promise((resolve) => setTimeout(resolve, 5));
-
       // Set total contacts count
       setTotalContacts(allContacts.length);
 
@@ -2627,11 +2837,19 @@ function Main() {
       }
       setLoadedPages(initialLoadedPages);
 
-      // Fetch first page messages for only the first page of contacts (first 20 visible contacts)
+      // Step 4: Start message caching (70% -> 90%)
+      setRealLoadingProgress(75);
+      setLoadingSteps((prev) => ({ ...prev, messageCaching: true }));
+
+      // Fetch first page messages for only the first page of contacts (first 10 visible contacts)
       console.log(
         "Starting background message caching for first page contacts..."
       );
-      const contactsToCache = sortedContacts.slice(0, 20); // Only cache first 20 contacts (first page)
+      
+      // Proactive cleanup before caching
+      cleanupOldMessageCaches();
+      
+      const contactsToCache = sortedContacts.slice(0, 10); // Only cache first 10 contacts to prevent quota issues
       console.log(
         `Caching messages for ${contactsToCache.length} contacts (first page only)`
       );
@@ -2650,6 +2868,10 @@ function Main() {
           console.log(
             `✅ Successfully cached messages for ${contact.contactName}`
           );
+          
+          // Update progress as each contact is cached (75% -> 90%)
+          const progressIncrement = 15 / contactsToCache.length; // 15% total for message caching
+          setRealLoadingProgress(prev => Math.min(90, prev + progressIncrement));
         } catch (error) {
           console.error(
             `❌ Failed to cache messages for ${contact.contactName}:`,
@@ -2676,11 +2898,14 @@ function Main() {
         console.log(
           `📦 ${cachedContacts.length} contacts now have cached messages`
         );
+        
+        // Complete loading after message caching
+        setRealLoadingProgress(100);
+        setLoadingSteps((prev) => ({ ...prev, complete: true }));
       });
 
-      // Step 4: Complete loading (100%)
-      setRealLoadingProgress(100);
-      setLoadingSteps((prev) => ({ ...prev, complete: true }));
+      // Set initial completion state for UI (contacts are ready even if messages are still caching)
+      setRealLoadingProgress(85);
       await new Promise((resolve) => setTimeout(resolve, 200));
     } catch (error) {
       console.error("Error fetching contacts:", error);
@@ -2692,8 +2917,9 @@ function Main() {
         userConfig: false,
         contactsFetch: false,
         contactsProcess: false,
+        messageCaching: false,
         complete: false,
-      });
+        });
     }
   };
 
@@ -3467,7 +3693,35 @@ function Main() {
           setCurrentCompanyId(data.userData.companyId);
           setCompanyName(data.companyData.name);
           const ai = data.companyData.assistants_ids;
-          setIsAssistantAvailable(Array.isArray(ai) && ai.length > 0);
+          const isAssistantAvailable = Array.isArray(ai) && ai.length > 0;
+          setIsAssistantAvailable(isAssistantAvailable);
+
+          // Fetch assistant info if assistant is available
+          if (isAssistantAvailable && ai.length > 0) {
+            const assistantId = ai[0];
+            console.log("assistantId:", assistantId);
+            
+            // Fetch API key from the correct endpoint
+            try {
+              const response2 = await axios.get(
+                `https://juta-dev.ngrok.dev/api/company-config/${data.userData.companyId}`
+              );
+              const { openaiApiKey } = response2.data;
+              console.log("API Key fetched:", openaiApiKey ? "Present" : "Missing");
+              
+              if (assistantId && openaiApiKey) {
+                fetchAssistantInfo(assistantId, openaiApiKey);
+              } else {
+                setIsAssistantInfoLoaded(true); // Mark as loaded if no valid assistant/API key
+              }
+            } catch (apiKeyError) {
+              console.error("Error fetching API key:", apiKeyError);
+              setIsAssistantInfoLoaded(true); // Mark as loaded even on error
+            }
+          } else {
+            // No assistant available, mark as loaded
+            setIsAssistantInfoLoaded(true);
+          }
 
           setPhoneCount(data.companyData.phoneCount);
           console.log("phoneCount:", phoneCount);
@@ -4801,8 +5055,9 @@ function Main() {
   }, [selectedChatId]);
 
   useEffect(() => {
+    console.log("🔍 DEBUGGING: useEffect for fetchConfigFromDatabase running");
     fetchConfigFromDatabase().catch((error) => {
-      console.error("Error in fetchConfigFromDatabase:", error);
+      console.error("🔍 DEBUGGING: Error in fetchConfigFromDatabase:", error);
       // Handle the error appropriately (e.g., show an error message to the user)
     });
   }, []);
@@ -5297,6 +5552,56 @@ function Main() {
                 selectedContact,
                 contacts
               );
+            } else if (data.type === "auth_status") {
+              console.log("📱 [WEBSOCKET] Received auth_status:", data);
+              console.log("📱 [WEBSOCKET] data.phones:", data.phones, "Array.isArray:", Array.isArray(data.phones));
+              console.log("📱 [WEBSOCKET] data.phoneCount:", data.phoneCount, "data.phoneInfo:", data.phoneInfo);
+              
+              // Handle phone status updates
+              if (data.phones && Array.isArray(data.phones)) {
+                const qrCodesData = data.phones.map((phone: any) => ({
+                  phoneIndex: phone.phoneIndex,
+                  status: phone.status,
+                  qrCode: phone.qrCode,
+                  phoneInfo: typeof phone.phoneInfo === 'string' ? phone.phoneInfo : null,
+                }));
+                console.log("📱 [WEBSOCKET] Updating qrCodes from WebSocket (phones array):", qrCodesData);
+                setQrCodes(qrCodesData);
+                setPhoneStatusLoading(false);
+                // Mark phone data as loaded
+                setIsPhoneDataLoaded(true);
+              } else if (data.phoneCount === 1 && data.phoneInfo) {
+                // Single phone format
+                const singlePhoneData = [
+                  {
+                    phoneIndex: 0,
+                    status: data.status,
+                    qrCode: data.qrCode,
+                    phoneInfo: typeof data.phoneInfo === 'string' ? data.phoneInfo : null,
+                  },
+                ];
+                console.log("📱 [WEBSOCKET] Updating qrCodes for single phone from WebSocket:", singlePhoneData);
+                setQrCodes(singlePhoneData);
+                setPhoneStatusLoading(false);
+                // Mark phone data as loaded
+                setIsPhoneDataLoaded(true);
+              } else {
+                // Fallback: if we have status and phoneInfo but don't match the conditions above
+                console.log("📱 [WEBSOCKET] Using fallback single phone data setup");
+                const fallbackPhoneData = [
+                  {
+                    phoneIndex: 0,
+                    status: data.status || "unknown",
+                    qrCode: data.qrCode || null,
+                    phoneInfo: typeof data.phoneInfo === 'string' ? data.phoneInfo : null,
+                  },
+                ];
+                console.log("📱 [WEBSOCKET] Setting qrCodes fallback:", fallbackPhoneData);
+                setQrCodes(fallbackPhoneData);
+                setPhoneStatusLoading(false);
+                // Mark phone data as loaded
+                setIsPhoneDataLoaded(true);
+              }
             } else if (data.type === "error") {
               console.error("WebSocket error message:", data.message);
               setWsError(data.message);
@@ -5433,7 +5738,9 @@ function Main() {
   }, [location.search]);
   */
   async function fetchConfigFromDatabase() {
+    console.log("🔍 DEBUGGING: fetchConfigFromDatabase called");
     const userEmail = localStorage.getItem("userEmail");
+    console.log("🔍 DEBUGGING: userEmail from localStorage:", userEmail);
     if (!userEmail) {
       throw new Error("No user email found");
     }
@@ -5451,7 +5758,9 @@ function Main() {
       );
 
       if (!response.ok) {
-        throw new Error("Failed to fetch config data");
+        const errorText = await response.text();
+        console.error("🔍 DEBUGGING: API error response:", response.status, errorText);
+        throw new Error(`Failed to fetch config data: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
@@ -5473,9 +5782,11 @@ function Main() {
         setMessageMode("phone1");
       }
       // Set phone index data
-      console.log("Full API response data:", data);
-      console.log("companyData:", data.companyData);
-      console.log("Raw phoneNames from API:", data.companyData.phoneNames);
+      console.log("🔍 DEBUGGING: Full API response data:", JSON.stringify(data, null, 2));
+      console.log("🔍 DEBUGGING: companyData keys:", Object.keys(data.companyData || {}));
+      console.log("🔍 DEBUGGING: phoneNames property exists?", 'phoneNames' in (data.companyData || {}));
+      console.log("🔍 DEBUGGING: phoneNames type:", typeof data.companyData?.phoneNames);
+      console.log("🔍 DEBUGGING: Raw phoneNames from API:", data.companyData.phoneNames);
       if (data.companyData.phoneNames) {
         let phoneNamesObject: Record<number, string> = {};
         if (Array.isArray(data.companyData.phoneNames)) {
@@ -5502,6 +5813,9 @@ function Main() {
         if (userPhone === null && Object.keys(phoneNamesObject).length > 0) {
           setUserPhone(0);
         }
+        
+        // Mark phone data as loaded
+        setIsPhoneDataLoaded(true);
       } else {
         console.log(
           "phoneNames is not an array or is undefined:",
@@ -5513,14 +5827,17 @@ function Main() {
           for (let i = 0; i < data.companyData.phoneCount; i++) {
             defaultPhoneNames[i] = `Phone ${i + 1}`;
           }
-          console.log("Created default phone names:", defaultPhoneNames);
-          setPhoneNames(defaultPhoneNames);
-        }
-        // Set default userPhone if no phoneNames available
-        if (userPhone === null) {
-          setUserPhone(0);
-        }
+                  console.log("Created default phone names:", defaultPhoneNames);
+        setPhoneNames(defaultPhoneNames);
       }
+      // Set default userPhone if no phoneNames available
+      if (userPhone === null) {
+        setUserPhone(0);
+      }
+      
+      // Mark phone data as loaded
+      setIsPhoneDataLoaded(true);
+    }
       setToken(data.companyData.whapiToken);
 
       // Set message usage for all plans (including free plan)
@@ -5538,7 +5855,7 @@ function Main() {
       } else if (data.companyData.plan === "pro") {
         quota = (data.usageQuota.aiMessages || 0) + 20000;
       } else {
-        quota = (data.usageQuota.aiMessages || 0) + 100;
+        quota = (data.usageQuota.aiMessages || 0);
       }
       setQuotaData({
         limit: quota,
@@ -5610,6 +5927,49 @@ function Main() {
       setUserPhone(0);
     }
   }, [phoneNames, userPhone]);
+
+  // Fallback: Create default phone names if phoneNames is empty but phoneCount > 0
+  useEffect(() => {
+    if (Object.keys(phoneNames).length === 0 && phoneCount > 0) {
+      console.log("🔍 DEBUGGING: Creating default phone names because phoneNames is empty but phoneCount is", phoneCount);
+      const defaultPhoneNames: Record<number, string> = {};
+      for (let i = 0; i < phoneCount; i++) {
+        defaultPhoneNames[i] = `Phone ${i + 1}`;
+      }
+      console.log("🔍 DEBUGGING: Setting default phone names:", defaultPhoneNames);
+      setPhoneNames(defaultPhoneNames);
+      
+      // Initialize userPhone with first phone if not set
+      if (userPhone === null) {
+        setUserPhone(0);
+      }
+    }
+  }, [phoneNames, phoneCount, userPhone]);
+
+  // Phone detection logic - check if no phones are available or connected after data is loaded
+  const [isPhoneDataLoaded, setIsPhoneDataLoaded] = useState(false);
+  const [hasNoPhones, setHasNoPhones] = useState(false);
+
+  useEffect(() => {
+    // Check if phone data has been loaded from API
+    if (isPhoneDataLoaded) {
+      // Check if there are any phones configured
+      const hasPhoneNames = Object.keys(phoneNames).length > 0;
+      const hasPhoneCount = phoneCount > 0;
+      
+      // Check if any phones are actually connected (ready/authenticated)
+      const hasConnectedPhones = Object.entries(phoneNames).some(([index]) => {
+        const phoneStatus = qrCodes[parseInt(index)]?.status || "unknown";
+        const isConnected = phoneStatus === "ready" || phoneStatus === "authenticated";
+        return isConnected;
+      });
+      
+      const shouldShowNoPhones = !hasPhoneNames || !hasConnectedPhones;
+      setHasNoPhones(shouldShowNoPhones);
+      
+      console.log("🔍 Phone data loaded - hasPhoneNames:", hasPhoneNames, "hasPhoneCount:", hasPhoneCount, "hasConnectedPhones:", hasConnectedPhones, "phoneNames:", phoneNames, "phoneCount:", phoneCount, "qrCodes:", qrCodes, "shouldShowNoPhones:", shouldShowNoPhones);
+    }
+  }, [phoneNames, phoneCount, qrCodes, isPhoneDataLoaded]);
 
   // Add the fetchTags function
   const fetchTags = async (employeeList: string[]) => {
@@ -5684,6 +6044,7 @@ function Main() {
     async (chatId: string, contactId?: string, contactSelect?: Contact) => {
       setMessages([]);
       setAllMessages([]); // Clear all messages as well
+      setIsFetchingMessages(true);
       console.log("selecting chat");
 
       try {
@@ -6071,20 +6432,27 @@ function Main() {
           localStorage.setItem(storageKey, compressedMessages);
         }
       } catch (quotaError) {
+        console.warn("LocalStorage quota exceeded, attempting to clear space...");
+        
         // If still getting quota error, clear old caches
-
         clearOldCaches();
 
-        // Try one more time with very limited messages
-        const minimalMessages = messages.slice(-25);
-        const minimalCompressed = LZString.compress(
-          JSON.stringify({
-            messages: minimalMessages,
-            timestamp: Date.now(),
-            expiry: Date.now() + 30 * 60 * 1000,
-          })
-        );
-        localStorage.setItem(storageKey, minimalCompressed);
+        try {
+          // Try one more time with very limited messages
+          const minimalMessages = messages.slice(-25);
+          const minimalCompressed = LZString.compress(
+            JSON.stringify({
+              messages: minimalMessages,
+              timestamp: Date.now(),
+              expiry: Date.now() + 30 * 60 * 1000,
+            })
+          );
+          localStorage.setItem(storageKey, minimalCompressed);
+          console.log(`💾 Cached ${minimalMessages.length} messages for ${chatId} (reduced due to quota)`);
+        } catch (finalError) {
+          console.warn("Unable to cache messages due to storage constraints:", finalError);
+          // Silently fail - the app should still work without caching
+        }
       }
     } catch (error) {
       console.error("Error storing messages in localStorage:", error);
@@ -6164,7 +6532,16 @@ function Main() {
     try {
       const key = `cached_messages_${chatId}`;
       const stored = localStorage.getItem(key);
-      return stored ? JSON.parse(stored) : null;
+      if (!stored) return null;
+      
+      // Try to decompress first (new format)
+      try {
+        const decompressed = LZString.decompress(stored);
+        return decompressed ? JSON.parse(decompressed) : null;
+      } catch (decompressError) {
+        // Fallback to direct parsing (old format)
+        return JSON.parse(stored);
+      }
     } catch (error) {
       console.error("Error getting cached messages from localStorage:", error);
       return null;
@@ -6174,9 +6551,49 @@ function Main() {
   const setCachedMessages = (chatId: string, messages: any[]) => {
     try {
       const key = `cached_messages_${chatId}`;
-      localStorage.setItem(key, JSON.stringify(messages));
+      
+      // Limit messages to prevent quota issues (keep only last 50 messages per contact)
+      const limitedMessages = messages.slice(-50);
+      
+      // Compress the messages using LZString
+      const compressedMessages = LZString.compress(JSON.stringify(limitedMessages));
+      
+      // Check if we have enough space
+      const estimatedSize = compressedMessages.length;
+      const maxSize = 1024 * 1024; // 1MB limit per contact
+      
+      if (estimatedSize > maxSize) {
+        console.warn(`Message cache too large for ${chatId}, reducing to last 25 messages`);
+        const furtherLimitedMessages = messages.slice(-25);
+        const furtherCompressed = LZString.compress(JSON.stringify(furtherLimitedMessages));
+        localStorage.setItem(key, furtherCompressed);
+      } else {
+        localStorage.setItem(key, compressedMessages);
+      }
+      
+      // Store timestamp for cleanup purposes
+      localStorage.setItem(key + '_timestamp', Date.now().toString());
+      
+      console.log(`💾 Cached ${limitedMessages.length} messages for ${chatId} (compressed: ${estimatedSize} bytes)`);
     } catch (error) {
       console.error("Error setting cached messages to localStorage:", error);
+      
+      // If quota exceeded, try to clean up old caches and retry
+      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+        console.log("🔄 Quota exceeded, cleaning up old message caches...");
+        cleanupOldMessageCaches();
+        
+        // Retry with fewer messages
+        try {
+          const key = `cached_messages_${chatId}`;
+          const limitedMessages = messages.slice(-25); // Even fewer messages
+          const compressedMessages = LZString.compress(JSON.stringify(limitedMessages));
+          localStorage.setItem(key, compressedMessages);
+          console.log(`✅ Successfully cached ${limitedMessages.length} messages after cleanup`);
+        } catch (retryError) {
+          console.error("Failed to cache messages even after cleanup:", retryError);
+        }
+      }
     }
   };
 
@@ -6186,6 +6603,75 @@ function Main() {
       localStorage.removeItem(key);
     } catch (error) {
       console.error("Error clearing cached messages from localStorage:", error);
+    }
+  };
+
+  const getLocalStorageUsage = () => {
+    let totalSize = 0;
+    let messageCacheSize = 0;
+    let messageCacheCount = 0;
+    
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        const value = localStorage.getItem(key);
+        if (value) {
+          totalSize += value.length;
+          if (key.startsWith('cached_messages_')) {
+            messageCacheSize += value.length;
+            messageCacheCount++;
+          }
+        }
+      }
+    }
+    
+    return {
+      totalSize,
+      messageCacheSize,
+      messageCacheCount,
+      totalSizeMB: (totalSize / 1024 / 1024).toFixed(2),
+      messageCacheSizeMB: (messageCacheSize / 1024 / 1024).toFixed(2)
+    };
+  };
+
+  const cleanupOldMessageCaches = () => {
+    try {
+      console.log("🧹 Starting cleanup of old message caches...");
+      const usage = getLocalStorageUsage();
+      console.log(`📊 Current localStorage usage: ${usage.totalSizeMB}MB total, ${usage.messageCacheSizeMB}MB message caches (${usage.messageCacheCount} contacts)`);
+      
+      const keysToRemove: string[] = [];
+      
+      // Get all message cache keys
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('cached_messages_')) {
+          keysToRemove.push(key);
+        }
+      }
+      
+      // Remove oldest caches first (keep only the most recent 8)
+      if (keysToRemove.length > 8) {
+        const sortedKeys = keysToRemove.sort((a, b) => {
+          const aTime = localStorage.getItem(a + '_timestamp') || '0';
+          const bTime = localStorage.getItem(b + '_timestamp') || '0';
+          return parseInt(aTime) - parseInt(bTime);
+        });
+        
+        const keysToDelete = sortedKeys.slice(0, keysToRemove.length - 8);
+        keysToDelete.forEach(key => {
+          localStorage.removeItem(key);
+          localStorage.removeItem(key + '_timestamp');
+        });
+        
+        console.log(`🗑️ Removed ${keysToDelete.length} old message caches`);
+        
+        // Log new usage after cleanup
+        const newUsage = getLocalStorageUsage();
+        console.log(`📊 After cleanup: ${newUsage.totalSizeMB}MB total, ${newUsage.messageCacheSizeMB}MB message caches`);
+      }
+    } catch (error) {
+      console.error("Error during cache cleanup:", error);
     }
   };
 
@@ -6371,6 +6857,8 @@ function Main() {
     if (selectedChatId) {
       console.log(selectedContact);
       console.log(selectedChatId);
+      setMessages([]);
+      setAllMessages([]); // Clear all messages as well
       fetchMessages(selectedChatId, whapiToken!);
 
       // Immediately check for new messages to ensure real-time updates
@@ -6820,7 +7308,7 @@ function Main() {
   // Add polling function to check for new messages every 5 seconds for better real-time updates
   const pollForNewMessages = useCallback(async () => {
     if (!selectedChatId || !userData) return;
-
+   
     try {
       const userEmail = localStorage.getItem("userEmail");
       if (!userEmail) return;
@@ -6858,7 +7346,7 @@ function Main() {
 
       if (newMessages.length > 0) {
         console.log(`Found ${newMessages.length} new messages`);
-
+      setIsFetchingMessages(false);
         // Format new messages using the same logic as fetchMessages
         const formattedNewMessages: any[] = [];
         const reactionsMap: Record<string, any[]> = {};
@@ -7146,13 +7634,11 @@ function Main() {
             });
 
             // Store updated messages in localStorage
-            storeMessagesInLocalStorage(selectedChatId, mergedMessages);
+            //storeMessagesInLocalStorage(selectedChatId, mergedMessages);
 
             // Cache the updated messages for faster loading
-            setCachedMessages(selectedChatId, mergedMessages);
-            console.log(
-              `💾 Cached ${mergedMessages.length} messages for chat ${selectedChatId} (polling update)`
-            );
+          //  setCachedMessages(selectedChatId, mergedMessages);
+         
 
             // Update last message timestamp only for unique new messages
             const latestMessage =
@@ -7500,7 +7986,7 @@ function Main() {
         return aTime - bTime; // Oldest first
       });
 
-      storeMessagesInLocalStorage(selectedChatId, mergedMessages);
+
       setAllMessages(mergedMessages); // Store all messages for filtering
       setMessages(mergedMessages); // Update the main messages state
       console.log(messages);
@@ -11296,6 +11782,51 @@ function Main() {
     return [];
   }, [userData, phoneNames, phoneCount]);
 
+  const fetchAssistantInfo = async (assistantId: string, apiKey: string) => {
+    // Validate inputs before making API call
+    if (!assistantId || !assistantId.trim() || !apiKey || !apiKey.trim()) {
+      console.log("Skipping assistant info fetch - invalid assistantId or apiKey");
+      setIsAssistantInfoLoaded(true); // Mark as loaded even if we skip
+      return;
+    }
+
+    // Check if assistantId looks like a valid OpenAI assistant ID format
+    if (!assistantId.startsWith('asst_')) {
+      console.log("Skipping assistant info fetch - invalid assistant ID format:", assistantId);
+      setIsAssistantInfoLoaded(true); // Mark as loaded even if we skip
+      return;
+    }
+
+    console.log("Fetching assistant info for ID:", assistantId);
+    try {
+      const response = await axios.get(
+        `https://api.openai.com/v1/assistants/${assistantId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "OpenAI-Beta": "assistants=v2",
+          },
+        }
+      );
+      const { name, description = "", instructions = "" } = response.data;
+      setAssistantInfo({
+        name,
+        description,
+        instructions,
+        metadata: { files: [] },
+      });
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        console.log("Assistant not found in OpenAI (404) - ID may be invalid:", assistantId);
+        // Don't set error for 404s, just log it
+      } else {
+        console.error("Error fetching assistant information:", error);
+      }
+    } finally {
+      setIsAssistantInfoLoaded(true); // Mark as loaded regardless of success/failure
+    }
+  };
+
   const sendMessageToAssistant = async (messageText: string) => {
     try {
       const userEmail = localStorage.getItem("userEmail");
@@ -11644,9 +12175,10 @@ function Main() {
 
           <div className="flex flex-col gap-1.5">
             {/* Phone Connection Status Indicator */}
-            {Object.entries(phoneNames).some(([index]) => {
+            {!phoneStatusLoading && Object.entries(phoneNames).some(([index]) => {
               const phoneStatus = qrCodes[parseInt(index)]?.status || "unknown";
               const isConnected = phoneStatus === "ready" || phoneStatus === "authenticated";
+              console.log('Banner check - phoneStatus:', phoneStatus, 'isConnected:', isConnected, 'qrCodes:', qrCodes, 'phoneNames:', phoneNames);
               return !isConnected;
             }) && (
               <div className="flex items-center justify-center space-x-1.5 text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded-lg border border-orange-200 dark:border-orange-800/50">
@@ -11665,13 +12197,16 @@ function Main() {
                 className="w-3 h-3 text-gray-800 dark:text-white"
               />
               <span className="text-gray-800 font-bold dark:text-white">
-                {userData?.phone !== undefined && phoneNames[userData.phone]
-                  ? phoneNames[userData.phone]
-                  : Object.keys(phoneNames).length === 1
-                  ? Object.values(phoneNames)[0]
-                  : Object.keys(phoneNames).length > 1
+                {userData?.phone !== undefined
+                  ? (() => {
+                      const phoneIndex = parseInt(userData.phone);
+                      return phoneNames[phoneIndex] || `Phone ${phoneIndex + 1}`;
+                    })()
+                  : qrCodes && qrCodes.length === 1
+                  ? phoneNames[qrCodes[0].phoneIndex] || `Phone ${qrCodes[0].phoneIndex + 1}`
+                  : qrCodes && qrCodes.length > 1
                   ? "Select phone"
-                  : ``}
+                  : "Phone 1"}
               </span>
               <Lucide
                 icon="ChevronDown"
@@ -11769,11 +12304,19 @@ function Main() {
                     <span className="text-xs font-bold text-gray-900 dark:text-gray-100">
                       {aiMessageUsage || 0}
                       <span className="opacity-70 font-normal">
-                        /{quotaData?.limit || currentPlanLimits.aiMessages}
+                        /{currentPlanLimits.aiMessages || quotaData?.limit || 100}
                       </span>
                     </span>
                   )}
-                
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsTopUpModalOpen(true);
+                    }}
+                    className="px-2 py-1 text-xs bg-primary/90 hover:bg-primary backdrop-blur-sm text-white rounded-lg transition-all duration-300 ease-out hover:scale-105 active:scale-95 font-medium border border-primary/50 shadow-sm hover:shadow-md"
+                  >
+                    Top-up
+                  </button>
                 </div>
               </div>
 
@@ -11781,7 +12324,7 @@ function Main() {
                 <div
                   className={`h-1.5 rounded-full transition-all duration-500 ease-in-out ${
                     (aiMessageUsage || 0) >
-                    (quotaData?.limit || currentPlanLimits.aiMessages || 0)
+                    (currentPlanLimits.aiMessages || quotaData?.limit || 100)
                       ? "bg-gradient-to-r from-red-600 to-red-800"
                       : (quotaData?.limit ||
                           currentPlanLimits.aiMessages ||
@@ -11808,7 +12351,7 @@ function Main() {
                       Math.max(
                         (((quotaData?.limit ||
                           currentPlanLimits.aiMessages ||
-                          1) -
+                          100) -
                           (aiMessageUsage || 0)) /
                           (quotaData?.limit ||
                             currentPlanLimits.aiMessages ||
@@ -11821,7 +12364,7 @@ function Main() {
                   }}
                 ></div>
                 {(aiMessageUsage || 0) >
-                  (quotaData?.limit || currentPlanLimits.aiMessages || 0) && (
+                  (currentPlanLimits.aiMessages || quotaData?.limit || 0) && (
                   <div className="text-xs text-red-600 dark:text-red-400 text-center mt-0.5 font-medium">
                     ⚠️ Limit exceeded by{" "}
                     {(aiMessageUsage || 0) -
@@ -11832,55 +12375,9 @@ function Main() {
                   </div>
                 )}
               </div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-                  <Lucide icon="Contact" className="w-2.5 h-2.5 text-primary" />
-                  Contacts
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-gray-900 dark:text-gray-100">
-                    {contacts.length}
-                    <span className="opacity-70 font-normal">
-                      /{currentPlanLimits.contacts || 0}
-                    </span>
-                  </span>
-                </div>
-              </div>
+          
 
-              <div className="w-full h-1.5 rounded-full bg-gradient-to-r from-emerald-400/10 to-gray-200 dark:from-emerald-400/20 dark:to-gray-700 overflow-hidden">
-                <div
-                  className={`h-1.5 rounded-full transition-all duration-500 ease-in-out ${
-                    contacts.length > (currentPlanLimits.contacts || 0)
-                      ? "bg-gradient-to-r from-red-600 to-red-800"
-                      : (currentPlanLimits.contacts || 0) - contacts.length <
-                        (currentPlanLimits.contacts || 0) * 0.1
-                      ? "bg-gradient-to-r from-red-500 to-red-700"
-                      : (currentPlanLimits.contacts || 0) - contacts.length <
-                        (currentPlanLimits.contacts || 0) * 0.3
-                      ? "bg-gradient-to-r from-yellow-400 to-yellow-600"
-                      : "bg-gradient-to-r from-emerald-500 to-emerald-700"
-                  }`}
-                  style={{
-                    width: `${Math.min(
-                      Math.max(
-                        (((currentPlanLimits.contacts || 1) - contacts.length) /
-                          (currentPlanLimits.contacts || 1)) *
-                          100,
-                        0
-                      ),
-                      100
-                    )}%`,
-                  }}
-                ></div>
-              </div>
               <div className="flex items-center justify-between mt-1"></div>
-              {contacts.length > (currentPlanLimits.contacts || 0) && (
-                <div className="mt-1 text-center">
-                  <span className="text-xs text-orange-600 dark:text-orange-400 font-medium bg-orange-100 dark:bg-orange-900/30 px-2 py-0.5 rounded-full">
-                    ⚠️ Contact limit exceeded - upgrade plan for more contacts
-                  </span>
-                </div>
-              )}
 
               {/* Analytics button */}
               <div className="flex items-center justify-center mt-1 pt-1 border-t border-gray-200 dark:border-gray-600">
@@ -11948,6 +12445,66 @@ function Main() {
                 }}
                 contacts={contacts}
               />
+
+              {/* Sync Database Confirmation Modal */}
+              <Dialog
+                open={isSyncModalOpen}
+                onClose={() => setIsSyncModalOpen(false)}
+                className="relative z-50"
+              >
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
+                <div className="fixed inset-0 flex items-center justify-center p-4">
+                  <Dialog.Panel className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full mx-auto border border-gray-200/50 dark:border-gray-600/50">
+                    <div className="p-6">
+                      <div className="flex items-center space-x-4 mb-6">
+                        <div className="w-12 h-12 bg-gradient-to-r from-green-400 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg">
+                          <Lucide icon="RefreshCw" className="w-6 h-6 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                            Sync Database
+                          </h3>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Synchronize your contacts with the database
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="mb-6">
+                        <p className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed">
+                          This will synchronize all your contacts with the database. This process may take a few minutes to complete. Are you sure you want to continue?
+                        </p>
+                      </div>
+
+                      <div className="flex space-x-3">
+                        <button
+                          onClick={() => setIsSyncModalOpen(false)}
+                          className="flex-1 px-4 py-3 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl font-medium transition-all duration-200"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsSyncModalOpen(false);
+                            handleSyncContact();
+                          }}
+                          disabled={fetching}
+                          className="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl"
+                        >
+                          {fetching ? (
+                            <div className="flex items-center justify-center space-x-2">
+                              <LoadingIcon icon="oval" color="white" className="w-4 h-4" />
+                              <span>Syncing...</span>
+                            </div>
+                          ) : (
+                            "Confirm Sync"
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </Dialog.Panel>
+                </div>
+              </Dialog>
             </div>
 
             {/* Action buttons with WhatsApp Web styling */}
@@ -13104,30 +13661,53 @@ function Main() {
               {selectedChatId && (
                 <>
                   {/* Lazy loading indicator */}
-                  {hasMoreMessages && (
+                  {isFetchingMessages && (
                     <div className="flex justify-center py-4">
-                      <button
-                        onClick={handleLoadMoreMessages}
-                        disabled={isLoadingMoreMessages}
-                        className="relative overflow-hidden px-6 py-3 rounded-xl bg-white/10 dark:bg-gray-800/20 backdrop-blur-xl border border-white/20 dark:border-gray-700/30 text-gray-700 dark:text-gray-200 font-medium text-sm transition-all duration-300 hover:bg-white/20 dark:hover:bg-gray-800/30 hover:border-white/30 dark:hover:border-gray-600/40 hover:shadow-lg hover:shadow-black/10 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white/10 disabled:hover:border-white/20"
-                      >
-                        {isLoadingMoreMessages ? (
-                          <>
-                            <LoadingIcon
-                              icon="rings"
-                              className="w-4 h-4 mr-2 inline-block"
-                            />
-                            Loading...
-                          </>
-                        ) : (
-                          <>
-                            <span className="relative z-10">
-                              Load More Messages
-                            </span>
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent transform -skew-x-12 -translate-x-full animate-shimmer"></div>
-                          </>
-                        )}
-                      </button>
+                      <div className="flex items-center space-x-2 px-6 py-3 rounded-xl bg-blue-500/20 dark:bg-blue-600/20 border border-blue-400/30 dark:border-blue-500/30 text-blue-700 dark:text-blue-300 font-medium text-sm">
+                        <LoadingIcon
+                          icon="rings"
+                          className="w-4 h-4 animate-spin"
+                        />
+                        <span>Loading messages...</span>
+                      </div>
+                    </div>
+                  )}
+                  {(hasMoreMessages || (allMessages.length === 0 && displayedMessages.length === 0 && selectedChatId && !isFetchingMessages)) && (
+                    <div className="flex justify-center py-4">
+                      {allMessages.length === 0 && displayedMessages.length === 0 ? (
+                        // Show loading animation when initially fetching messages
+                        <div className="flex items-center space-x-2 px-6 py-3 rounded-xl bg-blue-500/20 dark:bg-blue-600/20 border border-blue-400/30 dark:border-blue-500/30 text-blue-700 dark:text-blue-300 font-medium text-sm">
+                          <LoadingIcon
+                            icon="rings"
+                            className="w-4 h-4 animate-spin"
+                          />
+                          <span>Loading messages...</span>
+                        </div>
+                      ) : hasMoreMessages ? (
+                        // Show load all messages button when there are more messages
+                        <button
+                          onClick={handleLoadAllMessages}
+                          disabled={isLoadingMoreMessages}
+                          className="relative overflow-hidden px-6 py-3 rounded-xl bg-blue-500/90 dark:bg-blue-600/90 backdrop-blur-xl border border-blue-400/50 dark:border-blue-500/50 text-white font-medium text-sm transition-all duration-300 hover:bg-blue-600 dark:hover:bg-blue-700 hover:border-blue-500 dark:hover:border-blue-600 hover:shadow-lg hover:shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-500/90 disabled:hover:border-blue-400/50"
+                        >
+                          {isFetchingMessages  ? (
+                            <>
+                              <LoadingIcon
+                                icon="rings"
+                                className="w-4 h-4 mr-2 inline-block"
+                              />
+                              Loading...
+                            </>
+                          ) : (
+                            <>
+                              <span className="relative z-10">
+                                Load All Messages
+                              </span>
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent transform -skew-x-12 -translate-x-full animate-shimmer"></div>
+                            </>
+                          )}
+                        </button>
+                      ) : null}
                     </div>
                   )}
                   {displayedMessages
@@ -14647,54 +15227,177 @@ function Main() {
                 />
               </div>
               <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 text-center mb-6 bg-gradient-to-r from-gray-800 to-gray-600 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
-                Welcome to Chat
+                {hasNoPhones
+                  ? "No Phones Connected"
+                  : isAssistantInfoLoaded && (!assistantInfo.instructions || assistantInfo.instructions.trim() === "") 
+                    ? "Welcome to Chat" 
+                    : "Welcome to Chat"
+                }
               </h2>
               <p className="text-gray-700 dark:text-gray-300 text-lg text-center mb-10 max-w-lg leading-relaxed font-medium px-4">
-                Select a contact from the list to start messaging, or create a
-                new conversation to get started.
+                {hasNoPhones
+                  ? "You need to connect your WhatsApp phones before you can start chatting. Please set up your phone connections first."
+                  : isAssistantInfoLoaded && (!assistantInfo.instructions || assistantInfo.instructions.trim() === "") 
+                    ? "Before you can start chatting, you need to configure your AI assistant."
+                    : "Select a contact from the list to start messaging, or create a new conversation to get started."
+                }
               </p>
-              <div className="flex flex-col sm:flex-row gap-6 mb-8">
-                <button
-                  onClick={openNewChatModal}
-                  className="bg-gradient-to-r from-blue-500/80 to-purple-600/80 hover:from-blue-600/90 hover:to-purple-700/90 text-white font-bold py-5 px-10 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105 backdrop-blur-md border border-blue-400/50 dark:border-blue-300/50"
-                >
-                  <div className="flex items-center space-x-3">
-                    <Lucide icon="Plus" className="w-5 h-5" />
-                    <span>Start New Chat</span>
+              {/* Show appropriate buttons based on state */}
+              {hasNoPhones ? (
+                // Show Connect Phones button when no phones are available
+                <div className="flex flex-col sm:flex-row gap-6 mb-8">
+                  <button
+                    onClick={() => navigate('/loading')}
+                    className="bg-gradient-to-r from-green-500/80 to-emerald-600/80 hover:from-green-600/90 hover:to-emerald-700/90 text-white font-bold py-5 px-10 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105 backdrop-blur-md border border-green-400/50 dark:border-green-300/50"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Lucide icon="Wifi" className="w-5 h-5" />
+                      <span>Connect Phones</span>
+                    </div>
+                  </button>
+                </div>
+              ) : !(isAssistantInfoLoaded && (!assistantInfo.instructions || assistantInfo.instructions.trim() === "")) ? (
+                // Show normal chat buttons when phones are available and instructions are set
+                <div className="flex flex-col sm:flex-row gap-6 mb-8">
+                  <button
+                    onClick={openNewChatModal}
+                    className="bg-gradient-to-r from-blue-500/80 to-purple-600/80 hover:from-blue-600/90 hover:to-purple-700/90 text-white font-bold py-5 px-10 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105 backdrop-blur-md border border-blue-400/50 dark:border-blue-300/50"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Lucide icon="Plus" className="w-5 h-5" />
+                      <span>Start New Chat</span>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setIsSearchModalOpen(true)}
+                    className="bg-white/30 hover:bg-white/50 dark:bg-gray-700/30 dark:hover:bg-gray-600/50 text-gray-800 dark:text-gray-200 font-semibold py-5 px-10 rounded-2xl transition-all duration-300 border border-white/50 dark:border-gray-600/50 shadow-lg hover:shadow-xl backdrop-blur-md hover:scale-105 transform"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Lucide icon="Search" className="w-5 h-5" />
+                      <span>Search Contacts</span>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setIsSyncModalOpen(true)}
+                    disabled={fetching}
+                    className="bg-gradient-to-r from-green-500/80 to-emerald-600/80 hover:from-green-600/90 hover:to-emerald-700/90 disabled:from-gray-400/50 disabled:to-gray-500/50 disabled:cursor-not-allowed text-white font-bold py-5 px-10 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105 backdrop-blur-md border border-green-400/50 dark:border-green-300/50"
+                  >
+                    <div className="flex items-center space-x-3">
+                      {fetching ? (
+                        <LoadingIcon icon="oval" color="white" className="w-5 h-5" />
+                      ) : (
+                        <Lucide icon="RefreshCw" className="w-5 h-5" />
+                      )}
+                      <span>{fetching ? "Syncing..." : "Sync Database"}</span>
+                    </div>
+                  </button>
+                </div>
+              ) : null}
+              
+              {/* Onboarding Call-to-Action for empty instructions */}
+              {isAssistantInfoLoaded && (!assistantInfo.instructions || assistantInfo.instructions.trim() === "") && (
+                <div className="w-full max-w-2xl mb-8 p-6 bg-gradient-to-r from-amber-50/80 to-orange-50/80 dark:from-amber-900/20 dark:to-orange-900/20 rounded-2xl border border-amber-200/50 dark:border-amber-700/50 backdrop-blur-xl shadow-xl">
+                  <div className="flex items-start space-x-4">
+                    <div className="flex-shrink-0">
+                      <div className="w-12 h-12 bg-gradient-to-r from-amber-400 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
+                        <Lucide icon="Settings" className="w-6 h-6 text-white animate-spin-slow" />
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-bold text-amber-800 dark:text-amber-200 mb-2">
+                        Complete Your AI Assistant Setup
+                      </h3>
+                      <p className="text-amber-700 dark:text-amber-300 mb-4 text-sm leading-relaxed">
+                        Configure your AI assistant to unlock powerful automation features, smart responses, and enhanced customer interactions.
+                      </p>
+                      <button
+                        onClick={() => navigate('/onboarding')}
+                        className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center space-x-2"
+                      >
+                        <Lucide icon="ArrowRight" className="w-4 h-4" />
+                        <span>Go to Setup</span>
+                      </button>
+                    </div>
                   </div>
-                </button>
-                <button
-                  onClick={() => setIsSearchModalOpen(true)}
-                  className="bg-white/30 hover:bg-white/50 dark:bg-gray-700/30 dark:hover:bg-gray-600/50 text-gray-800 dark:text-gray-200 font-semibold py-5 px-10 rounded-2xl transition-all duration-300 border border-white/50 dark:border-gray-600/50 shadow-lg hover:shadow-xl backdrop-blur-md hover:scale-105 transform"
-                >
-                  <div className="flex items-center space-x-3">
-                    <Lucide icon="Search" className="w-5 h-5" />
-                    <span>Search Contacts</span>
-                  </div>
-                </button>
-              </div>
+                </div>
+              )}
               <div className="text-center">
                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-6 font-semibold">
-                  Quick Tips:
+                  {hasNoPhones
+                    ? "Why Connect Phones:"
+                    : isAssistantInfoLoaded && (!assistantInfo.instructions || assistantInfo.instructions.trim() === "") 
+                      ? "Why Setup is Important:" 
+                      : "Quick Tips:"
+                  }
                 </p>
                 <div className="flex flex-col sm:flex-row gap-6 text-sm text-gray-600 dark:text-gray-300">
-                  <div className="flex items-center space-x-3 p-4 bg-white/40 dark:bg-gray-700/40 rounded-2xl backdrop-blur-xl border border-white/50 dark:border-gray-600/60 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-                    <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-blue-600 rounded-full shadow-lg"></div>
-                    <span className="font-medium">
-                      Click on any contact to start chatting
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-3 p-4 bg-white/40 dark:bg-gray-700/40 rounded-2xl backdrop-blur-xl border border-white/50 dark:border-gray-600/60 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-                    <div className="w-3 h-3 bg-gradient-to-r from-green-400 to-green-600 rounded-full shadow-lg"></div>
-                    <span className="font-medium">
-                      Use search to find specific contacts
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-3 p-4 bg-white/40 dark:bg-gray-700/40 rounded-2xl backdrop-blur-xl border border-white/50 dark:border-gray-600/60 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-                    <span className="font-medium">
-                      Create new conversations anytime
-                    </span>
-                  </div>
+                  {hasNoPhones ? (
+                    // Show phone connection tips when no phones are available
+                    <>
+                      <div className="flex items-center space-x-3 p-4 bg-white/40 dark:bg-gray-700/40 rounded-2xl backdrop-blur-xl border border-white/50 dark:border-gray-600/60 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                        <div className="w-3 h-3 bg-gradient-to-r from-green-400 to-green-600 rounded-full shadow-lg"></div>
+                        <span className="font-medium">
+                          Connect WhatsApp to start messaging
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-3 p-4 bg-white/40 dark:bg-gray-700/40 rounded-2xl backdrop-blur-xl border border-white/50 dark:border-gray-600/60 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                        <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-blue-600 rounded-full shadow-lg"></div>
+                        <span className="font-medium">
+                          Multiple phones for different purposes
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-3 p-4 bg-white/40 dark:bg-gray-700/40 rounded-2xl backdrop-blur-xl border border-white/50 dark:border-gray-600/60 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                        <div className="w-3 h-3 bg-gradient-to-r from-purple-400 to-purple-600 rounded-full shadow-lg"></div>
+                        <span className="font-medium">
+                          Secure and reliable connection
+                        </span>
+                      </div>
+                    </>
+                  ) : isAssistantInfoLoaded && (!assistantInfo.instructions || assistantInfo.instructions.trim() === "") ? (
+                    // Show setup-focused tips when instructions are empty
+                    <>
+                      <div className="flex items-center space-x-3 p-4 bg-white/40 dark:bg-gray-700/40 rounded-2xl backdrop-blur-xl border border-white/50 dark:border-gray-600/60 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                        <div className="w-3 h-3 bg-gradient-to-r from-amber-400 to-orange-500 rounded-full shadow-lg"></div>
+                        <span className="font-medium">
+                          AI will respond to customer messages
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-3 p-4 bg-white/40 dark:bg-gray-700/40 rounded-2xl backdrop-blur-xl border border-white/50 dark:border-gray-600/60 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                        <div className="w-3 h-3 bg-gradient-to-r from-green-400 to-green-600 rounded-full shadow-lg"></div>
+                        <span className="font-medium">
+                          Automate repetitive tasks
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-3 p-4 bg-white/40 dark:bg-gray-700/40 rounded-2xl backdrop-blur-xl border border-white/50 dark:border-gray-600/60 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                        <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-blue-600 rounded-full shadow-lg"></div>
+                        <span className="font-medium">
+                          Improve customer experience
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    // Show normal chat tips when instructions are set
+                    <>
+                      <div className="flex items-center space-x-3 p-4 bg-white/40 dark:bg-gray-700/40 rounded-2xl backdrop-blur-xl border border-white/50 dark:border-gray-600/60 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                        <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-blue-600 rounded-full shadow-lg"></div>
+                        <span className="font-medium">
+                          Click on any contact to start chatting
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-3 p-4 bg-white/40 dark:bg-gray-700/40 rounded-2xl backdrop-blur-xl border border-white/50 dark:border-gray-600/60 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                        <div className="w-3 h-3 bg-gradient-to-r from-green-400 to-green-600 rounded-full shadow-lg"></div>
+                        <span className="font-medium">
+                          Use search to find specific contacts
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-3 p-4 bg-white/40 dark:bg-gray-700/40 rounded-2xl backdrop-blur-xl border border-white/50 dark:border-gray-600/60 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                        <div className="w-3 h-3 bg-gradient-to-r from-purple-400 to-purple-600 rounded-full shadow-lg"></div>
+                        <span className="font-medium">
+                          Create new conversations anytime
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -14922,262 +15625,236 @@ function Main() {
         >
           {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-md"
             onClick={() => setShowPhoneModal(false)}
           />
 
           {/* Modal */}
           <div
-            className="relative w-full max-w-md transform transition-all duration-300 ease-out"
+            className="relative w-full max-w-lg transform transition-all duration-300 ease-out"
             data-phone-modal
             tabIndex={-1}
           >
-            {/* Glassmorphic Container */}
-            <div className="relative overflow-hidden rounded-xl bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl border border-gray-200/50 dark:border-gray-600/50 shadow-2xl dark:shadow-black/20">
-              {/* Subtle gradient overlay */}
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-50/30 via-transparent to-purple-50/30 dark:from-blue-900/20 dark:via-transparent dark:to-purple-900/20" />
+            {/* Modern Glassmorphic Container */}
+            <div className="relative overflow-hidden rounded-2xl bg-white/90 dark:bg-gray-800/90 backdrop-blur-2xl border border-white/20 dark:border-gray-700/50 shadow-2xl dark:shadow-black/40">
+              {/* Animated gradient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/5 to-indigo-500/10 dark:from-blue-400/20 dark:via-purple-400/10 dark:to-indigo-400/20" />
+              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent animate-pulse" />
 
               {/* Content */}
-              <div className="relative p-6">
+              <div className="relative p-8">
                 {/* Header */}
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                      <Lucide
-                        icon="Phone"
-                        className="w-5 h-5 text-blue-600 dark:text-blue-400"
-                      />
+                <div className="flex items-center justify-between mb-8">
+                  <div className="flex items-center space-x-4">
+                    <div className="relative">
+                      <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                        <Lucide
+                          icon="Phone"
+                          className="w-6 h-6 text-white"
+                        />
+                      </div>
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        Select Phone
+                      <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                        Phone Selection
                       </h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-300">
-                        Choose your active phone number
+                      <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                        Choose your active WhatsApp connection
                       </p>
                     </div>
                   </div>
                   <button
                     onClick={() => setShowPhoneModal(false)}
-                    className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all duration-200"
+                    className="p-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-all duration-200 hover:scale-110"
                   >
-                    <Lucide icon="X" className="w-4 h-4" />
+                    <Lucide icon="X" className="w-5 h-5" />
                   </button>
                 </div>
 
                 {/* Phone List */}
-                <div className="space-y-2.5 max-h-64 overflow-y-auto custom-scrollbar">
-                  {Object.entries(phoneNames).map(
-                    ([index, phoneName], itemIndex) => {
-                      const phoneStatus =
-                        qrCodes[parseInt(index)]?.status || "unknown";
+                <div className="space-y-3 max-h-80 overflow-y-auto custom-scrollbar mb-6">
+                  {qrCodes && qrCodes.length > 0 ? (
+                    qrCodes.map((qrCode, itemIndex) => {
+                      const phoneIndexOption = qrCode.phoneIndex;
+                      // Use phoneNames if available, otherwise generate a default name
+                      const phoneName = phoneNames[phoneIndexOption] || `Phone ${phoneIndexOption + 1}`;
+                      const phoneStatus = qrCode?.status || "unknown";
                       const isConnected =
                         phoneStatus === "ready" ||
                         phoneStatus === "authenticated";
                       const isCurrentPhone =
-                        userData?.phone === parseInt(index);
+                        userData?.phone === phoneIndexOption;
+
+                      // Get status display info
+                      const getStatusInfo = (status: string | undefined) => {
+                        switch (status?.toLowerCase()) {
+                          case "ready":
+                          case "authenticated":
+                            return {
+                              text: "Connected",
+                              color: "bg-green-100 text-green-700 dark:bg-green-800/50 dark:text-green-300",
+                              dotColor: "bg-green-500",
+                              icon: "✅"
+                            };
+                          case "qr":
+                            return {
+                              text: "QR Required",
+                              color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-800/50 dark:text-yellow-300",
+                              dotColor: "bg-yellow-500",
+                              icon: "⏳"
+                            };
+                          case "loading":
+                            return {
+                              text: "Loading...",
+                              color: "bg-blue-100 text-blue-700 dark:bg-blue-800/50 dark:text-blue-300",
+                              dotColor: "bg-blue-500",
+                              icon: "⏳"
+                            };
+                          default:
+                            return {
+                              text: "Not Connected",
+                              color: "bg-red-100 text-red-700 dark:bg-red-800/50 dark:text-red-300",
+                              dotColor: "bg-red-500",
+                              icon: "❌"
+                            };
+                        }
+                      };
+
+                      const statusInfo = getStatusInfo(phoneStatus);
 
                       return (
                         <button
-                          key={index}
+                          key={phoneIndexOption}
                           onClick={() => {
-                            handlePhoneChange(parseInt(index));
+                            handlePhoneChange(phoneIndexOption);
                             setShowPhoneModal(false);
                           }}
-                          className={`w-full p-3.5 rounded-lg border transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] ${
+                          className={`group w-full p-4 rounded-xl border-2 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ${
                             isCurrentPhone
-                              ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700/50 shadow-sm"
-                              : "bg-white dark:bg-gray-700/50 border-gray-200 dark:border-gray-600/50 hover:bg-gray-50 dark:hover:bg-gray-600/50 hover:border-blue-300 dark:hover:border-blue-500/50"
+                              ? "bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 border-blue-300 dark:border-blue-600/50 shadow-lg"
+                              : "bg-white/50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600/50 hover:bg-gradient-to-r hover:from-gray-50 hover:to-blue-50 dark:hover:from-gray-600/50 dark:hover:to-blue-900/20 hover:border-blue-300 dark:hover:border-blue-500/50 hover:shadow-md"
                           }`}
                           style={{
-                            animationDelay: `${itemIndex * 75}ms`,
-                            animation: "slideInUp 0.4s ease-out forwards",
+                            animationDelay: `${itemIndex * 100}ms`,
+                            animation: "slideInUp 0.5s ease-out forwards",
                           }}
                         >
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <div
-                                className={`p-2 rounded-md ${
-                                  isCurrentPhone
-                                    ? "bg-blue-100 dark:bg-blue-800/50"
-                                    : "bg-gray-100 dark:bg-gray-600/50"
-                                }`}
-                              >
-                                <Lucide
-                                  icon="Smartphone"
-                                  className={`w-4 h-4 ${
+                            <div className="flex items-center space-x-4">
+                              <div className="relative">
+                                <div
+                                  className={`p-3 rounded-xl shadow-md transition-all duration-300 ${
                                     isCurrentPhone
-                                      ? "text-blue-600 dark:text-blue-400"
-                                      : "text-gray-600 dark:text-gray-400"
+                                      ? "bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-200 dark:shadow-blue-900/50"
+                                      : "bg-gradient-to-br from-gray-400 to-gray-500 group-hover:from-blue-400 group-hover:to-indigo-500"
                                   }`}
-                                />
+                                >
+                                  <Lucide
+                                    icon="Smartphone"
+                                    className="w-5 h-5 text-white"
+                                  />
+                                </div>
+                                {isCurrentPhone && (
+                                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse" />
+                                )}
                               </div>
                               <div className="text-left">
                                 <div
-                                  className={`font-medium ${
+                                  className={`text-lg font-semibold ${
                                     isCurrentPhone
                                       ? "text-blue-900 dark:text-blue-100"
-                                      : "text-gray-900 dark:text-white"
+                                      : "text-gray-900 dark:text-white group-hover:text-blue-900 dark:group-hover:text-blue-100"
                                   }`}
                                 >
-                                  {phoneName}
+                                  {phoneName} {statusInfo.icon}
                                 </div>
-                                {isCurrentPhone && (
-                                  <div className="text-xs text-blue-600 dark:text-blue-400 font-medium">
-                                    Current Phone
-                                  </div>
-                                )}
+                                <div className="flex items-center space-x-2 mt-1">
+                                  {isCurrentPhone && (
+                                    <span className="text-xs bg-blue-100 dark:bg-blue-800/50 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full font-medium">
+                                      Active
+                                    </span>
+                                  )}
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    {qrCode.phoneInfo || `Phone ${phoneIndexOption + 1}`}
+                                  </span>
+                                </div>
                               </div>
                             </div>
 
                             <div className="flex flex-col items-end space-y-2">
-                              <span
-                                className={`text-xs px-2 py-1 rounded-full font-medium ${
-                                  isConnected
-                                    ? "bg-green-100 text-green-700 dark:bg-green-800/50 dark:text-green-300"
-                                    : "bg-red-100 text-red-700 dark:bg-red-800/50 dark:text-red-300"
-                                }`}
+                              <div
+                                className={`flex items-center space-x-2 px-3 py-1.5 rounded-full font-medium text-sm ${statusInfo.color}`}
                               >
-                                {isConnected ? "Connected" : "Not Connected"}
-                              </span>
-
-                              {isCurrentPhone && (
-                                <div className="w-2 h-2 bg-blue-500 dark:bg-blue-400 rounded-full animate-pulse" />
-                              )}
+                                <div
+                                  className={`w-2 h-2 rounded-full ${statusInfo.dotColor}`}
+                                />
+                                <span>
+                                  {statusInfo.text}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </button>
                       );
-                    }
+                    })
+                  ) : (
+                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                      <Lucide icon="Smartphone" className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p className="text-lg font-medium mb-2">No phones available</p>
+                      <p className="text-sm">Please check your configuration</p>
+                    </div>
                   )}
                 </div>
 
-                {/* Footer */}
-                <div className="mt-5 pt-4 border-t border-gray-200 dark:border-gray-600/50">
-                  <div className="text-center">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {Object.keys(phoneNames).length} phone
-                      {Object.keys(phoneNames).length !== 1 ? "s" : ""}{" "}
-                      available
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowPhoneModal(false)}
-                  className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all duration-200"
-                >
-                  <Lucide
-                    icon="X"
-                    className="w-4 h-4"
-                  />
-                </button>
-              </div>
-
-              {/* Phone List */}
-              <div className="space-y-2.5 max-h-64 overflow-y-auto custom-scrollbar">
-                {Object.entries(phoneNames).map(([index, phoneName], itemIndex) => {
-                  const phoneStatus =
-                    qrCodes[parseInt(index)]?.status || "unknown";
-                  const isConnected =
-                    phoneStatus === "ready" ||
-                    phoneStatus === "authenticated";
-                  const isCurrentPhone = userData?.phone === parseInt(index);
-
-                  return (
-                    <button
-                      key={index}
-                      onClick={() => {
-                        handlePhoneChange(parseInt(index));
-                        setShowPhoneModal(false);
-                      }}
-                      className={`w-full p-3.5 rounded-lg border transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] ${
-                        isCurrentPhone
-                          ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700/50 shadow-sm"
-                          : "bg-white dark:bg-gray-700/50 border-gray-200 dark:border-gray-600/50 hover:bg-gray-50 dark:hover:bg-gray-600/50 hover:border-blue-300 dark:hover:border-blue-500/50"
-                      }`}
-                      style={{
-                        animationDelay: `${itemIndex * 75}ms`,
-                        animation: 'slideInUp 0.4s ease-out forwards'
-                      }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className={`p-2 rounded-md ${
-                            isCurrentPhone
-                              ? "bg-blue-100 dark:bg-blue-800/50"
-                              : "bg-gray-100 dark:bg-gray-600/50"
-                          }`}>
-                            <Lucide
-                              icon="Smartphone"
-                              className={`w-4 h-4 ${
-                                isCurrentPhone
-                                  ? "text-blue-600 dark:text-blue-400"
-                                  : "text-gray-600 dark:text-gray-400"
-                              }`}
-                            />
-                          </div>
-                          <div className="text-left">
-                            <div className={`font-medium ${
-                              isCurrentPhone
-                                ? "text-blue-900 dark:text-blue-100"
-                                : "text-gray-900 dark:text-white"
-                            }`}>
-                              {phoneName}
-                            </div>
-                            {isCurrentPhone && (
-                              <div className="text-xs text-blue-600 dark:text-blue-400 font-medium">
-                                Current Phone
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="flex flex-col items-end space-y-2">
-                          <span
-                            className={`text-xs px-2 py-1 rounded-full font-medium ${
-                              isConnected
-                                ? "bg-green-100 text-green-700 dark:bg-green-800/50 dark:text-green-300"
-                                : "bg-red-100 text-red-700 dark:bg-red-800/50 dark:text-red-300"
-                            }`}
-                          >
-                            {isConnected ? "Connected" : "Not Connected"}
-                          </span>
-                          
-                          {isCurrentPhone && (
-                            <div className="w-2 h-2 bg-blue-500 dark:bg-blue-400 rounded-full animate-pulse" />
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Footer */}
-              <div className="mt-5 pt-4 border-t border-gray-200 dark:border-gray-600/50">
-                {/* Check if any phone is not connected */}
-                {Object.entries(phoneNames).some(([index]) => {
-                  const phoneStatus = qrCodes[parseInt(index)]?.status || "unknown";
-                  const isConnected = phoneStatus === "ready" || phoneStatus === "authenticated";
-                  return !isConnected;
-                }) && (
-                  <div className="mb-3">
+                {/* Connect Phones Button - Show when no phones are connected */}
+                {qrCodes && qrCodes.length > 0 &&
+                  !qrCodes.some((qrCode) => {
+                    const phoneStatus = qrCode?.status || "unknown";
+                    const isConnected = phoneStatus === "ready" || phoneStatus === "authenticated";
+                    return isConnected;
+                  }) && (
+                  <div className="mb-6">
                     <button
                       onClick={() => {
+                        console.log('Connect Phones button clicked, navigating to /loading');
                         navigate('/loading');
                         setShowPhoneModal(false);
                       }}
-                      className="w-full px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-lg transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center space-x-2 shadow-md"
+                      className="group relative w-full px-6 py-4 bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center space-x-3 shadow-lg hover:shadow-xl border border-blue-400/30 overflow-hidden"
                     >
-                      <Lucide icon="Wifi" className="w-4 h-4" />
-                      <span>Connect Phones</span>
+                      {/* Animated background effect */}
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 ease-out"></div>
+                      
+                      {/* Button content */}
+                      <div className="relative flex items-center space-x-3">
+                        <div className="p-1.5 bg-white/20 rounded-lg group-hover:bg-white/30 transition-colors duration-300">
+                          <Lucide icon="Wifi" className="w-5 h-5" />
+                        </div>
+                        <div className="flex flex-col items-start">
+                          <span className="text-base font-bold">Connect Phones</span>
+                          <span className="text-xs text-blue-100 group-hover:text-white transition-colors duration-300">
+                            Set up WhatsApp connection
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* Arrow icon */}
+                      <div className="relative ml-2 group-hover:translate-x-1 transition-transform duration-300">
+                        <Lucide icon="ArrowRight" className="w-4 h-4" />
+                      </div>
                     </button>
                   </div>
                 )}
-                <div className="text-center">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {Object.keys(phoneNames).length} phone{Object.keys(phoneNames).length !== 1 ? 's' : ''} available
-                  </p>
+
+                {/* Footer */}
+                <div className="pt-4 border-t border-gray-200/50 dark:border-gray-600/50">
+                  <div className="text-center">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {qrCodes ? qrCodes.length : 0} phone
+                      {qrCodes && qrCodes.length !== 1 ? "s" : ""} available
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -15934,6 +16611,7 @@ function Main() {
                                       phoneIndex: phone.phoneIndex,
                                       status: phone.status,
                                       qrCode: phone.qrCode,
+                                      phoneInfo: phone.phoneInfo || null,
                                     }));
                                   setQrCodes(qrCodesData);
                                   toast.success("Phone status refreshed!");
@@ -15946,6 +16624,7 @@ function Main() {
                                       phoneIndex: 0,
                                       status: data.status,
                                       qrCode: data.qrCode,
+                                      phoneInfo: typeof data.phoneInfo === 'string' ? data.phoneInfo : null,
                                     },
                                   ]);
                                   toast.success("Phone status refreshed!");
@@ -16430,12 +17109,45 @@ function Main() {
                 <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-2xl"></div>
 
                 <div className="bg-gradient-to-r from-yellow-500/30 to-orange-500/30 dark:from-yellow-500/40 dark:to-orange-500/40 px-4 py-3 border-b border-white/40 dark:border-gray-500/60 backdrop-blur-2xl flex items-center justify-between relative z-10">
-                  <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 bg-gradient-to-r from-yellow-600 to-orange-600 dark:from-yellow-400 dark:to-orange-400 bg-clip-text text-transparent">
-                    Scheduled Messages
-                  </h3>
-                  <span className="text-xs text-gray-600 dark:text-gray-300 bg-white/30 dark:bg-gray-800/50 px-2 py-1 rounded-full backdrop-blur-sm border border-white/30 dark:border-gray-600/50">
-                    {scheduledMessages.length} scheduled
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 bg-gradient-to-r from-yellow-600 to-orange-600 dark:from-yellow-400 dark:to-orange-400 bg-clip-text text-transparent">
+                      Scheduled Messages
+                    </h3>
+                    {scheduledMessages.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={
+                            scheduledMessages.length > 0 &&
+                            selectedScheduledMessages.size === scheduledMessages.length
+                          }
+                          onChange={handleSelectAllScheduledMessages}
+                          className="w-4 h-4 text-yellow-600 bg-white/50 border-yellow-300 rounded focus:ring-yellow-500 focus:ring-2"
+                        />
+                        <label
+                          onClick={handleSelectAllScheduledMessages}
+                          className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer font-medium"
+                        >
+                          Select All
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedScheduledMessages.size > 0 && (
+                      <button
+                        onClick={handleDeleteSelectedScheduledMessages}
+                        className="px-3 py-1 bg-red-500/80 text-white text-xs rounded-full hover:bg-red-600 transition-all duration-200 font-medium shadow-lg hover:shadow-xl flex items-center gap-1"
+                        title={`Delete ${selectedScheduledMessages.size} selected messages`}
+                      >
+                        <Lucide icon="Trash2" className="w-3 h-3" />
+                        Delete ({selectedScheduledMessages.size})
+                      </button>
+                    )}
+                    <span className="text-xs text-gray-600 dark:text-gray-300 bg-white/30 dark:bg-gray-800/50 px-2 py-1 rounded-full backdrop-blur-sm border border-white/30 dark:border-gray-600/50">
+                      {scheduledMessages.length} scheduled
+                    </span>
+                  </div>
                 </div>
                 <div className="p-4">
                   {scheduledMessages.length > 0 ? (
@@ -16447,15 +17159,27 @@ function Main() {
                         {scheduledMessages.map((message) => (
                           <div
                             key={message.id}
-                            className="flex-none w-[320px] bg-gradient-to-br from-yellow-500/20 to-orange-500/20 dark:from-yellow-500/30 dark:to-orange-500/30 backdrop-blur-md rounded-2xl p-4 border border-yellow-300/50 dark:border-yellow-600/50 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
+                            className={`flex-none w-[320px] bg-gradient-to-br from-yellow-500/20 to-orange-500/20 dark:from-yellow-500/30 dark:to-orange-500/30 backdrop-blur-md rounded-2xl p-4 border shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 ${
+                              selectedScheduledMessages.has(message.id!)
+                                ? "border-yellow-500 dark:border-yellow-400 ring-2 ring-yellow-500/50"
+                                : "border-yellow-300/50 dark:border-yellow-600/50"
+                            }`}
                           >
                             <div className="flex flex-col h-full">
                               <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                                  {new Date(
-                                    message.scheduledTime
-                                  ).toLocaleString()}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedScheduledMessages.has(message.id!)}
+                                    onChange={() => handleToggleScheduledMessage(message.id!)}
+                                    className="w-4 h-4 text-yellow-600 bg-white/50 border-yellow-300 rounded focus:ring-yellow-500 focus:ring-2"
+                                  />
+                                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                    {new Date(
+                                      message.scheduledTime
+                                    ).toLocaleString()}
+                                  </span>
+                                </div>
                                 <span
                                   className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                                     message.status === "scheduled"
@@ -16858,9 +17582,9 @@ function Main() {
                               <span className="text-lg font-semibold text-blue-600 dark:text-blue-400">
                                 /{" "}
                                 {(
-                                  quotaData?.limit ||
                                   currentPlanLimits.aiMessages ||
-                                  500
+                                  quotaData?.limit ||
+                                  100
                                 ).toLocaleString()}
                               </span>
                             </div>
@@ -16870,13 +17594,13 @@ function Main() {
                                 style={{
                                   width: `${Math.min(
                                     Math.max(
-                                      (((quotaData?.limit ||
-                                        currentPlanLimits.aiMessages ||
-                                        500) -
+                                      (((currentPlanLimits.aiMessages ||
+                                        quotaData?.limit ||
+                                        100) -
                                         (aiMessageUsage || 0)) /
-                                        (quotaData?.limit ||
-                                          currentPlanLimits.aiMessages ||
-                                          500)) *
+                                        (currentPlanLimits.aiMessages ||
+                                          quotaData?.limit ||
+                                          100)) *
                                         100,
                                       0
                                     ),
@@ -16889,17 +17613,17 @@ function Main() {
                             </div>
                             <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
                               {Math.max(
-                                (((quotaData?.limit ||
-                                  currentPlanLimits.aiMessages ||
-                                  500) -
+                                (((currentPlanLimits.aiMessages ||
+                                  quotaData?.limit ||
+                                  100) -
                                   (aiMessageUsage || 0)) /
-                                  (quotaData?.limit ||
-                                    currentPlanLimits.aiMessages ||
-                                    500)) *
+                                  (currentPlanLimits.aiMessages ||
+                                    quotaData?.limit ||
+                                    100)) *
                                   100,
                                 0
                               ).toFixed(1)}
-                              % quota remaining this month
+                              % quota remaining{currentPlanLimits.isLifetime ? '' : ' this month'}
                             </p>
                           </div>
                         </div>
@@ -16925,53 +17649,22 @@ function Main() {
                                 {contacts.length.toLocaleString()}
                               </span>
                               <span className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">
-                                /{" "}
-                                {(
-                                  currentPlanLimits.contacts || 0
-                                ).toLocaleString()}
+                                contacts
                               </span>
                             </div>
                             <div className="relative w-full bg-emerald-200/50 dark:bg-emerald-800/50 rounded-full h-4 overflow-hidden">
                               <div
                                 className="absolute inset-0 bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-500 rounded-full transition-all duration-700 ease-out shadow-sm"
                                 style={{
-                                  width: `${Math.min(
-                                    Math.max(
-                                      (((currentPlanLimits.contacts || 1) -
-                                        contacts.length) /
-                                        (currentPlanLimits.contacts || 1)) *
-                                        100,
-                                      0
-                                    ),
-                                    100
-                                  )}%`,
+                                  width: "100%",
                                 }}
                               >
                                 <div className="w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
                               </div>
                             </div>
                             <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
-                              {Math.max(
-                                (((currentPlanLimits.contacts || 1) -
-                                  contacts.length) /
-                                  (currentPlanLimits.contacts || 1)) *
-                                  100,
-                                0
-                              ).toFixed(1)}
-                              % quota remaining for this account
+                              Unlimited contacts available
                             </p>
-                            {contacts.length > currentPlanLimits.contacts && (
-                              <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-700/50">
-                                <p className="text-xs text-orange-700 dark:text-orange-300 font-medium">
-                                  ⚠️ You have{" "}
-                                  {(
-                                    contacts.length - currentPlanLimits.contacts
-                                  ).toLocaleString()}{" "}
-                                  contacts over your plan limit. Consider
-                                  upgrading to manage all contacts effectively.
-                                </p>
-                              </div>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -17603,26 +18296,30 @@ function Main() {
           {/* Modal Content */}
           <div className="relative flex flex-col w-full h-full bg-white dark:bg-gray-900 overflow-hidden">
             {/* Header */}
-            <div className="relative bg-gradient-to-r from-slate-600 via-gray-600 to-slate-700 p-6">
-              <div className="flex items-center justify-between">
+            <div className="relative bg-white/10 dark:bg-gray-800/10 backdrop-blur-2xl border-b border-white/20 dark:border-gray-600/30 p-6">
+              {/* Background gradient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/5 to-indigo-500/10 dark:from-blue-400/20 dark:via-purple-400/10 dark:to-indigo-400/20" />
+              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent" />
+              
+              <div className="relative flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-white/15 backdrop-blur-sm rounded-xl flex items-center justify-center border border-white/20">
-                    <Lucide icon="Sparkles" className="w-6 h-6 text-white" />
+                  <div className="w-12 h-12 bg-white/20 dark:bg-gray-700/30 backdrop-blur-sm rounded-xl flex items-center justify-center border border-white/30 dark:border-gray-600/30 shadow-lg">
+                    <Lucide icon="Sparkles" className="w-6 h-6 text-gray-800 dark:text-white" />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold text-white">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                       AI Response Top-up & Plans
                     </h2>
-                    <p className="text-gray-200 text-sm mt-1">
+                    <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">
                       Upgrade your plan or top up your AI responses
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setIsTopUpModalOpen(false)}
-                  className="p-2 hover:bg-white/15 rounded-xl transition-all duration-200 border border-white/20"
+                  className="p-2 hover:bg-white/20 dark:hover:bg-gray-700/30 rounded-xl transition-all duration-200 border border-white/30 dark:border-gray-600/30 backdrop-blur-sm shadow-lg hover:shadow-xl"
                 >
-                  <Lucide icon="X" className="w-6 h-6 text-white" />
+                  <Lucide icon="X" className="w-6 h-6 text-gray-800 dark:text-white" />
                 </button>
               </div>
             </div>
@@ -17630,68 +18327,73 @@ function Main() {
             {/* Content */}
             <div className="flex-1 p-8 overflow-y-auto bg-gray-50 dark:bg-gray-800">
               <div className="max-w-7xl mx-auto">
-                {/* AI Response Calculator - Moved to Top */}
-                <div className="mb-10 p-6 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 rounded-2xl border border-green-200/50 dark:border-green-700/50">
-                  <div className="text-center mb-6">
-                    <h3 className="text-2xl font-bold text-green-900 dark:text-green-100">
-                      AI Response Calculator
-                    </h3>
-                    <p className="text-green-600 dark:text-green-400 text-sm mt-1">
-                      Calculate how many AI responses you need and get instant
-                      pricing
-                    </p>
+                {/* AI Response Calculator - Compact Design */}
+                <div className="mb-4 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+                  <div className="text-center mb-4">
+                    <div className="inline-flex items-center gap-2 mb-2">
+                      <Lucide icon="Calculator" className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      <h4 className="text-lg font-bold text-gray-900 dark:text-white">
+                        AI Response Calculator
+                      </h4>
+                    </div>
                   </div>
 
-                  <div className="max-w-md mx-auto">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-green-200 dark:border-green-700">
-                      <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Amount in RM
+                  <div className="max-w-sm mx-auto">
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Amount (RM)
                         </label>
                         <input
                           type="number"
-                          min="1"
-                          step="1"
-                          value={topUpAmount}
-                          onChange={(e) =>
-                            setTopUpAmount(parseInt(e.target.value) || 0)
-                          }
-                          className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-gray-700 dark:text-white text-center text-lg font-semibold"
-                          placeholder="Enter amount in RM"
+                          min="10"
+                          step="10"
+                          defaultValue="10"
+                          className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-white font-semibold text-center text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                          onChange={(e) => {
+                            const amount = parseInt(e.target.value) || 0;
+                            const responses = amount * 10;
+                            const resultDiv = document.getElementById('calc-result');
+                            const buyButton = document.getElementById('buy-button') as HTMLAnchorElement;
+                            if (resultDiv) {
+                              resultDiv.innerHTML = 
+                                '<div class="text-center">' +
+                                  '<div class="text-lg font-bold text-emerald-600 dark:text-emerald-400">' +
+                                    responses.toLocaleString() + ' Responses' +
+                                  '</div>' +
+                                '</div>';
+                            }
+                            if (buyButton) {
+                              buyButton.href = `https://wa.me/601121677522?text=Hi%20i%20would%20like%20to%20purchase%20${responses}%20AI%20Responses%20for%20RM%20${amount}`;
+                              buyButton.innerHTML = `Buy RM ${amount}`;
+                            }
+                          }}
                         />
                       </div>
-
-                      <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                            RM {calculateTopUpPrice()}
-                          </div>
-                          <div className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                            for {calculateAIResponses()} AI Responses
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            (RM 10 = 100 AI responses)
-                          </div>
-                          <div className="mt-2 text-xs text-green-600 dark:text-green-400 font-medium">
-                            💡 Great value for your AI needs!
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          You Get
+                        </label>
+                        <div id="calc-result" className="px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded border">
+                          <div className="text-center">
+                            <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                              100 Responses
+                            </div>
                           </div>
                         </div>
                       </div>
+                    </div>
 
-                      <button
-                        onClick={() => handleTopUpPurchase()}
-                        disabled={topUpAmount < 1 || isTopUpLoading}
-                        className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95"
+                    <div className="text-center">
+                      <a
+                        id="buy-button"
+                        href="https://wa.me/601121677522?text=Hi%20i%20would%20like%20to%20purchase%20100%20AI%20Responses%20for%20RM%2010"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded transition-colors duration-200 text-sm"
                       >
-                        {isTopUpLoading ? (
-                          <div className="flex items-center justify-center">
-                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                            Processing...
-                          </div>
-                        ) : (
-                          `Buy Now - RM ${calculateTopUpPrice()}`
-                        )}
-                      </button>
+                        Buy RM 10
+                      </a>
                     </div>
                   </div>
                 </div>
@@ -17715,7 +18417,7 @@ function Main() {
                         {currentPlanLimits.aiMessages}
                       </div>
                       <div className="text-sm text-blue-700 dark:text-blue-300">
-                        Monthly Limit ({currentPlanLimits.title})
+                        {currentPlanLimits.isLifetime ? 'Lifetime Limit' : 'Monthly Limit'} ({currentPlanLimits.title})
                       </div>
                     </div>
                     <div className="text-center">
@@ -17739,159 +18441,116 @@ function Main() {
                 </div>
 
                 {/* Pricing Plans */}
-                <div className="mb-10">
-                  <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-8">
-                    Choose Your Plan
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    {/* Free Plan */}
-                    <div className="relative bg-white dark:bg-gray-800 rounded-2xl p-6 border-2 border-gray-200 dark:border-gray-700 hover:border-primary dark:hover:border-primary transition-all duration-300 hover:shadow-xl hover:scale-105">
-                      <div className="text-center">
-                        <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">
-                          Free Plan
-                        </h4>
-                        <div className="text-2xl font-black text-primary mb-3">
-                          RM 0
-                          <span className="text-sm font-normal text-gray-600 dark:text-gray-400">
-                            /month
-                          </span>
+                <div className="mb-6">
+                  <div className="text-center mb-8">
+                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 mb-3">
+                      <Lucide icon="Crown" className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                      Pricing Plans
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-300">
+                      Choose the perfect plan for your business needs
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Pay-as-you-go Plan */}
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 shadow-lg">
+                      <div className="text-center mb-6">
+                        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 mb-3">
+                          <Lucide icon="Zap" className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                         </div>
-                        <p className="text-gray-600 dark:text-gray-400 mb-4 text-xs">
-                          Perfect for getting started. Get 100 AI responses
-                          monthly and 100 contacts with full access to all
-                          system features.
+                        <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                          Pay-as-you-go
+                        </h4>
+                        <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">
+                          RM 0.10
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                          / AI Response
+                        </div>
+                        <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
+                          100 free lifetime AI responses, then pay only for what you use with full access to all features.
                         </p>
-                        <div className="w-full bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400 font-semibold py-2 px-4 rounded-xl text-sm text-center">
+                        <div className="w-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold py-2 px-4 rounded-lg text-sm text-center">
                           Current Plan
                         </div>
                       </div>
-                      <div className="mt-4 space-y-2">
+                      <div className="space-y-3">
                         {[
-                          "100 AI Responses",
-                          "100 Contacts",
+                          "Pay per AI Response",
                           "AI Follow-Up System",
                           "AI Booking System",
                           "AI Tagging System",
-                          "AI Assign System",
-                          "Mobile App Access",
-                          "Desktop App Access",
+                          "Mobile & Desktop App",
                         ].map((benefit, index) => (
                           <div
                             key={index}
-                            className="flex items-center text-xs text-gray-700 dark:text-gray-300"
+                            className="flex items-center text-sm text-gray-700 dark:text-gray-300"
                           >
-                            <Lucide
-                              icon="Check"
-                              className="w-3 h-3 text-green-500 mr-2 flex-shrink-0"
-                            />
+                            <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center mr-3 flex-shrink-0">
+                              <Lucide
+                                icon="Check"
+                                className="w-3 h-3 text-white"
+                              />
+                            </div>
                             {benefit}
                           </div>
                         ))}
                       </div>
                     </div>
 
-                    {/* Standard Plan */}
-                    <div className="relative bg-white dark:bg-gray-800 rounded-2xl p-6 border-2 border-gray-200 dark:border-gray-700 hover:border-primary dark:hover:border-primary transition-all duration-300 hover:shadow-xl hover:scale-105">
-                      <div className="text-center">
-                        <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">
-                          Standard Plan
-                        </h4>
-                        <div className="text-2xl font-black text-primary mb-3">
-                          RM 500
-                          <span className="text-sm font-normal text-gray-600 dark:text-gray-400">
-                            /month
-                          </span>
-                        </div>
-                        <p className="text-gray-600 dark:text-gray-400 mb-4 text-xs">
-                          Perfect for small businesses. Get 1000 AI responses
-                          monthly and 5000 contacts with full access to all
-                          system features.
-                        </p>
-                        <a
-                          href="https://api.payex.io/Payment/Details?key=78cd6WScl365InsA&amount=500&payment_type=fpx&description=Standard%20Plan&signature=8f619e38ff161beeb887286cc69b2aaf1bdf278df51249436c7ce0063179a617"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block w-full bg-primary hover:bg-primary/80 text-white font-semibold py-2 px-4 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 text-sm text-center"
-                        >
-                          Upgrade Now
-                        </a>
-                      </div>
-                      <div className="mt-4 space-y-2">
-                        {[
-                          "1000 AI Responses Monthly",
-                          "5000 Contacts",
-                          "AI Follow-Up System",
-                          "AI Booking System",
-                          "AI Tagging System",
-                          "AI Assign System",
-                          "Mobile App Access",
-                          "Desktop App Access",
-                        ].map((benefit, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center text-xs text-gray-700 dark:text-gray-300"
-                          >
-                            <Lucide
-                              icon="Check"
-                              className="w-3 h-3 text-green-500 mr-2 flex-shrink-0"
-                            />
-                            {benefit}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Pro Support Plan - Most Popular */}
-                    <div className="relative bg-white dark:bg-gray-800 rounded-2xl p-6 border-2 border-primary shadow-xl scale-105">
+                    {/* Premium Support Plan - Most Popular */}
+                    <div className="relative bg-white dark:bg-gray-800 rounded-2xl border-2 border-orange-300 dark:border-orange-600 p-6 shadow-lg">
                       <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                        <span className="bg-primary text-white text-xs font-bold px-3 py-1 rounded-full">
+                        <div className="bg-gradient-to-r from-orange-500 to-pink-500 text-white text-xs font-bold px-3 py-1 rounded-full">
                           Most Popular
-                        </span>
-                      </div>
-                      <div className="text-center">
-                        <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">
-                          Pro Support Plan
-                        </h4>
-                        <div className="text-2xl font-black text-primary mb-3">
-                          RM 950
-                          <span className="text-sm font-normal text-gray-600 dark:text-gray-400">
-                            /month
-                          </span>
                         </div>
-                        <p className="text-gray-600 dark:text-gray-400 mb-4 text-xs">
-                          Premium support with 5,000 AI responses monthly and
-                          10,000 contacts. We handle your prompting, follow-ups,
-                          and maintenance.
+                      </div>
+                      
+                      <div className="text-center mb-6 mt-2">
+                        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-900/30 mb-3">
+                          <Lucide icon="Target" className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+                        </div>
+                        <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                          Premium Support Plan
+                        </h4>
+                        <div className="text-3xl font-bold text-orange-600 dark:text-orange-400 mb-1">
+                          RM 950
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                          /month
+                        </div>
+                        <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
+                          Premium support with 5,000 AI responses monthly. Full setup and maintenance included.
                         </p>
                         <a
                           href="https://api.payex.io/Payment/Details?key=78cd6WScl365InsA&amount=950&payment_type=fpx&description=Pro%20Plan&signature=c33c1d57c6ddb0976c02f5dab08bc683b25e01d099e92e707b82a607268e28a7"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="block w-full bg-primary hover:bg-primary/80 text-white font-semibold py-2 px-4 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 text-sm text-center"
+                          className="block w-full bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 text-sm text-center"
                         >
                           Upgrade Now
                         </a>
                       </div>
-                      <div className="mt-4 space-y-2">
+                      <div className="space-y-3">
                         {[
                           "5,000 AI Responses Monthly",
-                          "10,000 Contacts",
+                          "AI Setup & Maintenance",
                           "AI Follow-Up System",
                           "AI Booking System",
-                          "AI Tagging System",
-                          "AI Assign System",
-                          "Mobile App Access",
-                          "Desktop App Access",
-                          "Full Maintenance & Support",
+                          "Mobile & Desktop App",
                         ].map((benefit, index) => (
                           <div
                             key={index}
-                            className="flex items-center text-xs text-gray-700 dark:text-gray-300"
+                            className="flex items-center text-sm text-gray-700 dark:text-gray-300"
                           >
-                            <Lucide
-                              icon="Check"
-                              className="w-3 h-3 text-green-500 mr-2 flex-shrink-0"
-                            />
+                            <div className="w-4 h-4 rounded-full bg-orange-500 flex items-center justify-center mr-3 flex-shrink-0">
+                              <Lucide
+                                icon="Check"
+                                className="w-3 h-3 text-white"
+                              />
+                            </div>
                             {benefit}
                           </div>
                         ))}
@@ -17899,52 +18558,50 @@ function Main() {
                     </div>
 
                     {/* Enterprise Plan */}
-                    <div className="relative bg-white dark:bg-gray-800 rounded-2xl p-6 border-2 border-gray-200 dark:border-gray-700 hover:border-primary dark:hover:border-primary transition-all duration-300 hover:shadow-xl hover:scale-105">
-                      <div className="text-center">
-                        <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 shadow-lg">
+                      <div className="text-center mb-6">
+                        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 mb-3">
+                          <Lucide icon="Building" className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                        </div>
+                        <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
                           Enterprise Plan
                         </h4>
-                        <div className="text-2xl font-black text-primary mb-3">
-                          RM XXXX+
-                          <span className="text-sm font-normal text-gray-600 dark:text-gray-400">
-                            /month
-                          </span>
+                        <div className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-1">
+                          RM 3,088+
                         </div>
-                        <p className="text-gray-600 dark:text-gray-400 mb-4 text-xs">
-                          Complete solution with 20,000 AI responses, 50,000
-                          contacts, custom integrations, full setup and
-                          maintenance included.
+                        <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                          /month
+                        </div>
+                        <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
+                          Complete solution with 20,000 AI responses, custom automations, and full maintenance.
                         </p>
                         <a
                           href="https://wa.me/601121677522?text=Hi%20i%20would%20like%20to%20know%20more%20about%20your%20enterprise%20plan"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="block w-full bg-primary hover:bg-primary/80 text-white font-semibold py-2 px-4 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 text-sm"
+                          className="block w-full bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 text-sm"
                         >
                           Learn More
                         </a>
                       </div>
-                      <div className="mt-4 space-y-2">
+                      <div className="space-y-3">
                         {[
                           "20,000 AI Responses Monthly",
-                          "50,000 Contacts",
+                          "Custom Automations",
+                          "AI Setup & Maintenance",
                           "AI Follow-Up System",
-                          "AI Booking System",
-                          "AI Tagging System",
-                          "AI Assign System",
-                          "Mobile App Access",
-                          "Desktop App Access",
-                          "Full Maintenance & Support",
-                          "Full AI Setup & Custom Automations",
+                          "Mobile & Desktop App",
                         ].map((benefit, index) => (
                           <div
                             key={index}
-                            className="flex items-center text-xs text-gray-700 dark:text-gray-300"
+                            className="flex items-center text-sm text-gray-700 dark:text-gray-300"
                           >
-                            <Lucide
-                              icon="Check"
-                              className="w-3 h-3 text-green-500 mr-2 flex-shrink-0"
-                            />
+                            <div className="w-4 h-4 rounded-full bg-purple-500 flex items-center justify-center mr-3 flex-shrink-0">
+                              <Lucide
+                                icon="Check"
+                                className="w-3 h-3 text-white"
+                              />
+                            </div>
                             {benefit}
                           </div>
                         ))}
@@ -18368,6 +19025,8 @@ function Main() {
           </div>
         </div>
       )}
+      
+   
     </div>
   );
 }
