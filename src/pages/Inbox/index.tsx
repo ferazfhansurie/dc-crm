@@ -1,18 +1,10 @@
-
-
 import React, { useRef, useState, useEffect } from "react";
 import axios from "axios";
 import Button from "@/components/Base/Button";
 
 import { initializeApp } from "firebase/app";
-import {
-  updateDoc,
-  getDoc,
-} from "firebase/firestore";
-import {
-  getFirestore,
-  doc,
-} from "firebase/firestore";
+import { updateDoc, getDoc } from "firebase/firestore";
+import { getFirestore, doc } from "firebase/firestore";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import logoUrl from "@/assets/images/logo.png";
@@ -34,8 +26,6 @@ const firebaseConfig = {
   appId: "1:334607574757:web:2603a69bf85f4a1e87960c",
   measurementId: "G-2C9J1RY67L",
 };
-
-
 
 const app = initializeApp(firebaseConfig);
 const firestore = getFirestore(app);
@@ -98,7 +88,12 @@ interface PDFModalProps {
   documentName?: string;
 }
 
-const PDFModal: React.FC<PDFModalProps> = ({ isOpen, onClose, documentUrl, documentName }) => {
+const PDFModal: React.FC<PDFModalProps> = ({
+  isOpen,
+  onClose,
+  documentUrl,
+  documentName,
+}) => {
   if (!isOpen) return null;
 
   return (
@@ -118,8 +113,18 @@ const PDFModal: React.FC<PDFModalProps> = ({ isOpen, onClose, documentUrl, docum
             className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
             onClick={onClose}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
@@ -127,7 +132,7 @@ const PDFModal: React.FC<PDFModalProps> = ({ isOpen, onClose, documentUrl, docum
           className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg mb-3 flex justify-center items-center"
           style={{ height: "90%" }}
         >
-          {documentUrl.toLowerCase().includes('.pdf') ? (
+          {documentUrl.toLowerCase().includes(".pdf") ? (
             <iframe
               src={documentUrl}
               width="100%"
@@ -137,8 +142,16 @@ const PDFModal: React.FC<PDFModalProps> = ({ isOpen, onClose, documentUrl, docum
             />
           ) : (
             <div className="text-center">
-              <svg className="w-16 h-16 mb-1.5 mx-auto text-gray-600 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+              <svg
+                className="w-16 h-16 mb-1.5 mx-auto text-gray-600 dark:text-gray-400"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
+                  clipRule="evenodd"
+                />
               </svg>
               <p className="text-gray-800 dark:text-gray-200 font-semibold text-sm">
                 {documentName || "Document"}
@@ -152,7 +165,7 @@ const PDFModal: React.FC<PDFModalProps> = ({ isOpen, onClose, documentUrl, docum
         <div className="flex justify-center">
           <button
             className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors text-sm"
-            onClick={() => window.open(documentUrl, '_blank')}
+            onClick={() => window.open(documentUrl, "_blank")}
           >
             Download Document
           </button>
@@ -206,26 +219,33 @@ const MessageList: React.FC<MessageListProps> = ({
             onClick={onCreateNewThread}
             className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs active:scale-95 transition-all duration-200 flex items-center gap-1"
           >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            <svg
+              className="w-3 h-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
             </svg>
             New Chat
           </button>
         </div>
       </div>
 
-            <div className="flex-1 overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 relative">
+      <div className="flex-1 overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 relative">
         {/* Tool Buttons - Positioned at top of chat area */}
-        <div className="flex items-center gap-1.5 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
-        </div>
-        
+        <div className="flex items-center gap-1.5 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700"></div>
 
-        
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center text-gray-500 dark:text-gray-400">
               <div className="px-3 py-2 bg-[#dcf8c6] dark:bg-green-700 text-black dark:text-white rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-sm self-start text-left max-w-[100%] font-mono text-xs">
-              Chat With {assistantName}...
+                Chat With {assistantName}...
               </div>
             </div>
           </div>
@@ -235,147 +255,229 @@ const MessageList: React.FC<MessageListProps> = ({
               .slice()
               .reverse()
               .map((message, index) => (
-            <div key={index}>
-              {message.text.split("||")
-                .filter(splitText => splitText.trim() !== "")
-                .map((splitText, splitIndex) => (
-                <div
-                  key={`${index}-${splitIndex}`}
-                  className={`flex ${message.from_me ? 'justify-end' : 'justify-start'} animate-fadeIn`}
-                >
-                  <div
-                    className={message.from_me ? myMessageClass : otherMessageClass}
-                  >
-                  {message.type === "text" && (
-                    <div className="whitespace-pre-wrap break-words">
-                      {splitText.trim()}
-                    </div>
-                  )}
-                  {message.type === "image" && message.imageUrls && (
-                    <div className="space-y-1.5">
-                      {message.imageUrls.map((imageUrl, imgIndex) => (
-                        <div key={imgIndex} className="relative">
-                          <img
-                            src={imageUrl}
-                            alt={`AI Response Image ${imgIndex + 1}`}
-                            className="max-w-full h-auto rounded-lg cursor-pointer"
-                            style={{ maxHeight: "300px" }}
-                            onClick={() => {
-                              // Open image in new tab or modal if needed
-                              window.open(imageUrl, '_blank');
-                            }}
-                          />
-                          {message.caption && (
-                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                              {message.caption}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {message.type === "document" && message.documentUrls && (
-                    <div className="space-y-1.5">
-                      {message.documentUrls.map((documentUrl, docIndex) => (
-                        <div key={docIndex} className="relative">
-                          {/* Document Header */}
-                          <div className="flex items-center p-2 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 mb-1.5">
-                            <svg className="w-6 h-6 text-gray-500 dark:text-gray-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-                            </svg>
-                            <div className="flex-1">
-                              <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                                {documentUrl.split('/').pop()?.split('?')[0] || `Document ${docIndex + 1}`}
-                              </p>
-                              {message.caption && (
-                                <p className="text-xs text-gray-500 dark:text-gray-400">
-                                  {message.caption}
-                                </p>
-                              )}
+                <div key={index}>
+                  {message.text
+                    .split("||")
+                    .filter((splitText) => splitText.trim() !== "")
+                    .map((splitText, splitIndex) => (
+                      <div
+                        key={`${index}-${splitIndex}`}
+                        className={`flex ${
+                          message.from_me ? "justify-end" : "justify-start"
+                        } animate-fadeIn`}
+                      >
+                        <div
+                          className={
+                            message.from_me ? myMessageClass : otherMessageClass
+                          }
+                        >
+                          {message.type === "text" && (
+                            <div className="whitespace-pre-wrap break-words">
+                              {splitText.trim()}
                             </div>
-                            <button
-                              onClick={() => openPDFModal(documentUrl, documentUrl.split('/').pop()?.split('?')[0] || `Document ${docIndex + 1}`)}
-                              className="px-2 py-0.5 text-xs bg-green-500 dark:bg-green-600 text-white rounded hover:bg-green-600 dark:hover:bg-green-700 transition-colors"
-                            >
-                              View
-                            </button>
-                          </div>
-                          
-                          {/* Document Content Preview */}
-                          <div className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
-                            {documentUrl.toLowerCase().includes('.pdf') ? (
-                              <iframe
-                                src={documentUrl}
-                                width="100%"
-                                height="400"
-                                title={`Document ${docIndex + 1}`}
-                                className="border-0"
-                                style={{ minHeight: '400px' }}
-                              />
-                            ) : documentUrl.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                              <img
-                                src={documentUrl}
-                                alt={`Document ${docIndex + 1}`}
-                                className="w-full h-auto max-h-96 object-contain"
-                              />
-                            ) : (
-                              <div className="p-4 text-center">
-                                <svg className="w-16 h-16 mx-auto text-gray-400 dark:text-gray-500 mb-2" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M4 4a2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-                                </svg>
-                                <p className="text-gray-600 dark:text-gray-400 text-sm">
-                                  Document preview not available
-                                </p>
-                                <p className="text-gray-500 dark:text-gray-500 text-xs mt-1">
-                                  Click Download to view this document
-                                </p>
+                          )}
+                          {message.type === "image" && message.imageUrls && (
+                            <div className="space-y-1.5">
+                              {message.imageUrls.map((imageUrl, imgIndex) => (
+                                <div key={imgIndex} className="relative">
+                                  <img
+                                    src={imageUrl}
+                                    alt={`AI Response Image ${imgIndex + 1}`}
+                                    className="max-w-full h-auto rounded-lg cursor-pointer"
+                                    style={{ maxHeight: "300px" }}
+                                    onClick={() => {
+                                      // Open image in new tab or modal if needed
+                                      window.open(imageUrl, "_blank");
+                                    }}
+                                  />
+                                  {message.caption && (
+                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                      {message.caption}
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {message.type === "document" &&
+                            message.documentUrls && (
+                              <div className="space-y-1.5">
+                                {message.documentUrls.map(
+                                  (documentUrl, docIndex) => (
+                                    <div key={docIndex} className="relative">
+                                      {/* Document Header */}
+                                      <div className="flex items-center p-2 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 mb-1.5">
+                                        <svg
+                                          className="w-6 h-6 text-gray-500 dark:text-gray-400 mr-2"
+                                          fill="currentColor"
+                                          viewBox="0 0 20 20"
+                                        >
+                                          <path
+                                            fillRule="evenodd"
+                                            d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
+                                            clipRule="evenodd"
+                                          />
+                                        </svg>
+                                        <div className="flex-1">
+                                          <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                                            {documentUrl
+                                              .split("/")
+                                              .pop()
+                                              ?.split("?")[0] ||
+                                              `Document ${docIndex + 1}`}
+                                          </p>
+                                          {message.caption && (
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                              {message.caption}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <button
+                                          onClick={() =>
+                                            openPDFModal(
+                                              documentUrl,
+                                              documentUrl
+                                                .split("/")
+                                                .pop()
+                                                ?.split("?")[0] ||
+                                                `Document ${docIndex + 1}`
+                                            )
+                                          }
+                                          className="px-2 py-0.5 text-xs bg-green-500 dark:bg-green-600 text-white rounded hover:bg-green-600 dark:hover:bg-green-700 transition-colors"
+                                        >
+                                          View
+                                        </button>
+                                      </div>
+
+                                      {/* Document Content Preview */}
+                                      <div className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+                                        {documentUrl
+                                          .toLowerCase()
+                                          .includes(".pdf") ? (
+                                          <iframe
+                                            src={documentUrl}
+                                            width="100%"
+                                            height="400"
+                                            title={`Document ${docIndex + 1}`}
+                                            className="border-0"
+                                            style={{ minHeight: "400px" }}
+                                          />
+                                        ) : documentUrl
+                                            .toLowerCase()
+                                            .match(
+                                              /\.(jpg|jpeg|png|gif|webp)$/i
+                                            ) ? (
+                                          <img
+                                            src={documentUrl}
+                                            alt={`Document ${docIndex + 1}`}
+                                            className="w-full h-auto max-h-96 object-contain"
+                                          />
+                                        ) : (
+                                          <div className="p-4 text-center">
+                                            <svg
+                                              className="w-16 h-16 mx-auto text-gray-400 dark:text-gray-500 mb-2"
+                                              fill="currentColor"
+                                              viewBox="0 0 20 20"
+                                            >
+                                              <path
+                                                fillRule="evenodd"
+                                                d="M4 4a2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
+                                                clipRule="evenodd"
+                                              />
+                                            </svg>
+                                            <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                              Document preview not available
+                                            </p>
+                                            <p className="text-gray-500 dark:text-gray-500 text-xs mt-1">
+                                              Click Download to view this
+                                              document
+                                            </p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )
+                                )}
                               </div>
                             )}
-                          </div>
+                          {splitIndex ===
+                            message.text
+                              .split("||")
+                              .filter((splitText) => splitText.trim() !== "")
+                              .length -
+                              1 && (
+                            <div
+                              className={`text-xs text-gray-400 dark:text-gray-500 mt-1 ${
+                                message.from_me ? "text-right" : "text-left"
+                              } flex items-center gap-1 ${
+                                message.from_me
+                                  ? "justify-end"
+                                  : "justify-start"
+                              }`}
+                            >
+                              <span>
+                                {new Date(message.createdAt).toLocaleTimeString(
+                                  [],
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  }
+                                )}
+                              </span>
+                              {message.from_me && (
+                                <svg
+                                  className="w-3 h-3 text-blue-500"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                  {splitIndex === message.text.split("||").filter(splitText => splitText.trim() !== "").length - 1 && (
-                    <div className={`text-xs text-gray-400 dark:text-gray-500 mt-1 ${message.from_me ? 'text-right' : 'text-left'} flex items-center gap-1 ${message.from_me ? 'justify-end' : 'justify-start'}`}>
-                      <span>
-                        {new Date(message.createdAt).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                      {message.from_me && (
-                        <svg className="w-3 h-3 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                    </div>
-                  )}
-                  </div>
+                      </div>
+                    ))}
                 </div>
               ))}
-            </div>
-          ))}
           </>
         )}
-          
+
         {/* AI Thinking Indicator - ChatGPT Style */}
         {isAiThinking && (
           <div className="flex justify-start mb-4 animate-fadeIn">
             <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-bl-md px-4 py-3 max-w-xs shadow-sm border border-gray-200 dark:border-gray-700">
               <div className="flex items-center space-x-2">
                 <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0ms', animationDuration: '1.4s' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s', animationDuration: '1.4s' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s', animationDuration: '1.4s' }}></div>
+                  <div
+                    className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse"
+                    style={{ animationDelay: "0ms", animationDuration: "1.4s" }}
+                  ></div>
+                  <div
+                    className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse"
+                    style={{
+                      animationDelay: "0.2s",
+                      animationDuration: "1.4s",
+                    }}
+                  ></div>
+                  <div
+                    className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse"
+                    style={{
+                      animationDelay: "0.4s",
+                      animationDuration: "1.4s",
+                    }}
+                  ></div>
                 </div>
               </div>
             </div>
           </div>
         )}
-
       </div>
-      
+
       {/* Fullscreen Button - Positioned inside chatbox */}
       <div className="absolute bottom-20 right-4 flex gap-2 z-10">
         {/* Guest Chat Button */}
@@ -402,26 +504,26 @@ const MessageList: React.FC<MessageListProps> = ({
             </svg>
           </button>
         </a>
-        
+
         {/* Fullscreen Button */}
-      <button
-        onClick={enterFullscreenMode}
+        <button
+          onClick={enterFullscreenMode}
           className="p-3 bg-green-500 dark:bg-green-600 text-white rounded-full hover:bg-green-600 dark:hover:bg-green-700 active:scale-95 transition-colors shadow-lg"
-        title="Open in fullscreen"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-5 w-5"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+          title="Open in fullscreen"
         >
-          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-        </svg>
-      </button>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+          </svg>
+        </button>
       </div>
 
       <div className="p-3 border-t border-gray-300 dark:border-gray-700">
@@ -442,7 +544,7 @@ const MessageList: React.FC<MessageListProps> = ({
               className="h-3 w-3"
               viewBox="0 0 20 20"
               fill="currentColor"
-          >
+            >
               <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
             </svg>
             Send
@@ -495,60 +597,71 @@ const Main: React.FC = () => {
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isAiThinking, setIsAiThinking] = useState<boolean>(false);
   const [aiProgress, setAiProgress] = useState<string[]>([]);
-  
+
   // Thread management state
-  const [editingThreadName, setEditingThreadName] = useState<string | null>(null);
-  const [editingThreadNameValue, setEditingThreadNameValue] = useState<string>('');
-  
+  const [editingThreadName, setEditingThreadName] = useState<string | null>(
+    null
+  );
+  const [editingThreadNameValue, setEditingThreadNameValue] =
+    useState<string>("");
+
   // AI Tools Modal state
   const [isAiToolsModalOpen, setIsAiToolsModalOpen] = useState(false);
   const [selectedToolCategory, setSelectedToolCategory] = useState<string>("");
   const [showAiToolsDropdown, setShowAiToolsDropdown] = useState(false);
   const [showAiToolsSection, setShowAiToolsSection] = useState(false);
-  
+
   // Fullscreen mode state
   const location = useLocation();
   const navigate = useNavigate();
-  const isFullscreenMode = location.pathname.includes('/fullscreen-chat/');
-  const fullscreenCompanyId = location.pathname.match(/\/fullscreen-chat\/([^\/]+)/)?.[1];
+  const isFullscreenMode = location.pathname.includes("/fullscreen-chat/");
+  const fullscreenCompanyId = location.pathname.match(
+    /\/fullscreen-chat\/([^\/]+)/
+  )?.[1];
 
   // AI Tools data
   const aiToolsData = {
     calendar: {
       title: "Calendar & Reminder Functions",
-      description: "Tools for managing calendar events, appointments, and scheduling",
+      description:
+        "Tools for managing calendar events, appointments, and scheduling",
       examples: [
         {
           name: "checkAvailableTimeSlots",
           description: "Checks available appointment slots",
-          example: "use 'checkAvailableTimeSlots' function to check available time slots for January 15th between 9 AM and 7 PM"
+          example:
+            "use 'checkAvailableTimeSlots' function to check available time slots for January 15th between 9 AM and 7 PM",
         },
         {
           name: "createCalendarEvent",
           description: "Creates calendar events/appointments",
-          example: "use 'createCalendarEvent' function to create a calendar event for an appointment with John Doe on January 15th from 10 AM to 11 AM for a consultation"
+          example:
+            "use 'createCalendarEvent' function to create a calendar event for an appointment with John Doe on January 15th from 10 AM to 11 AM for a consultation",
         },
         {
           name: "rescheduleCalendarEvent",
           description: "Reschedules existing events",
-          example: "use 'rescheduleCalendarEvent' function to reschedule event_123 to January 16th from 2 PM to 3 PM"
+          example:
+            "use 'rescheduleCalendarEvent' function to reschedule event_123 to January 16th from 2 PM to 3 PM",
         },
         {
           name: "cancelCalendarEvent",
           description: "Cancels events",
-          example: "use 'cancelCalendarEvent' function to cancel event_123"
+          example: "use 'cancelCalendarEvent' function to cancel event_123",
         },
         {
           name: "searchUpcomingAppointments",
           description: "Searches for upcoming appointments",
-          example: "use 'searchUpcomingAppointments' function to search for upcoming appointments between January 15th and January 31st"
+          example:
+            "use 'searchUpcomingAppointments' function to search for upcoming appointments between January 15th and January 31st",
         },
         {
           name: "sendRescheduleRequest",
           description: "Sends reschedule requests",
-          example: "use 'sendRescheduleRequest' function to send a reschedule request for event_123 to January 17th at 3 PM"
-        }
-      ]
+          example:
+            "use 'sendRescheduleRequest' function to send a reschedule request for event_123 to January 17th at 3 PM",
+        },
+      ],
     },
     contact: {
       title: "Contact Management Functions",
@@ -557,54 +670,64 @@ const Main: React.FC = () => {
         {
           name: "tagContact",
           description: "Tags a contact",
-          example: "use 'tagContact' function to tag contact_123 as 'VIP' with the description 'High Priority Client'"
+          example:
+            "use 'tagContact' function to tag contact_123 as 'VIP' with the description 'High Priority Client'",
         },
         {
           name: "manageContactTags",
           description: "Adds/removes tags from contacts",
-          example: "use 'manageContactTags' function to add the 'Prospect' tag to contact_123"
+          example:
+            "use 'manageContactTags' function to add the 'Prospect' tag to contact_123",
         },
         {
           name: "listContactsWithTag",
           description: "Lists contacts with specific tags",
-          example: "use 'listContactsWithTag' function to list all contacts with the 'VIP' tag, showing up to 20 results"
+          example:
+            "use 'listContactsWithTag' function to list all contacts with the 'VIP' tag, showing up to 20 results",
         },
         {
           name: "searchContacts",
           description: "Searches for contacts",
-          example: "use 'searchContacts' function to search for contacts with the name 'John Doe'"
+          example:
+            "use 'searchContacts' function to search for contacts with the name 'John Doe'",
         },
         {
           name: "listContacts",
           description: "Lists contacts with pagination",
-          example: "use 'listContacts' function to list contacts with pagination, showing 20 results starting from the beginning, sorted by creation date in descending order"
+          example:
+            "use 'listContacts' function to list contacts with pagination, showing 20 results starting from the beginning, sorted by creation date in descending order",
         },
         {
           name: "fetchContactData",
           description: "Gets contact data",
-          example: "use 'fetchContactData' function to fetch the complete data for contact_123"
+          example:
+            "use 'fetchContactData' function to fetch the complete data for contact_123",
         },
         {
           name: "fetchMultipleContactsData",
           description: "Gets data for multiple contacts",
-          example: "use 'fetchMultipleContactsData' function to fetch data for multiple contacts including contact_123 and contact_456"
+          example:
+            "use 'fetchMultipleContactsData' function to fetch data for multiple contacts including contact_123 and contact_456",
         },
         {
           name: "listAssignedContacts",
           description: "Lists contacts assigned to specific person",
-          example: "use 'listAssignedContacts' function to list all contacts assigned to john.doe@company.com"
+          example:
+            "use 'listAssignedContacts' function to list all contacts assigned to john.doe@company.com",
         },
         {
           name: "getContactsAddedToday",
           description: "Gets contacts created today",
-          example: "use 'getContactsAddedToday' function to get all contacts that were added today"
+          example:
+            "use 'getContactsAddedToday' function to get all contacts that were added today",
         },
         {
           name: "getTotalContacts",
           description: "Gets total contact count",
-          example: "use 'getTotalContacts' function to get the total count of all contacts"
-        }
-      ]
+          example:
+            "use 'getTotalContacts' function to get the total count of all contacts",
+        },
+      ],
     },
     database: {
       title: "Database & Custom Fields Functions",
@@ -613,134 +736,159 @@ const Main: React.FC = () => {
         {
           name: "updateCustomFields",
           description: "Updates custom fields for contacts",
-          example: "use 'updateCustomFields' function to update the custom fields for contact_123 to set industry as 'Technology' and company_size as '50-100'"
+          example:
+            "use 'updateCustomFields' function to update the custom fields for contact_123 to set industry as 'Technology' and company_size as '50-100'",
         },
         {
           name: "getCustomFields",
           description: "Retrieves custom fields for contacts",
-          example: "use 'getCustomFields' function to retrieve all custom fields for contact_123"
-        }
-      ]
+          example:
+            "use 'getCustomFields' function to retrieve all custom fields for contact_123",
+        },
+      ],
     },
     followUps: {
       title: "Follow-Up Management Functions",
-      description: "Tools for creating, managing, and automating follow-up templates and sequences",
+      description:
+        "Tools for creating, managing, and automating follow-up templates and sequences",
       examples: [
         {
           name: "createFollowUpTemplate",
           description: "Creates new follow-up email templates",
-          example: "use 'createFollowUpTemplate' function to create a follow-up template for lead nurturing with the subject 'Following up on your interest' and personalized content"
+          example:
+            "use 'createFollowUpTemplate' function to create a follow-up template for lead nurturing with the subject 'Following up on your interest' and personalized content",
         },
         {
           name: "editFollowUpTemplate",
           description: "Edits existing follow-up templates",
-          example: "use 'editFollowUpTemplate' function to edit template_456 to update the subject line and add more personalization tokens"
+          example:
+            "use 'editFollowUpTemplate' function to edit template_456 to update the subject line and add more personalization tokens",
         },
         {
           name: "deleteFollowUpTemplate",
           description: "Deletes follow-up templates",
-          example: "use 'deleteFollowUpTemplate' function to delete template_456"
+          example:
+            "use 'deleteFollowUpTemplate' function to delete template_456",
         },
         {
           name: "listFollowUpTemplates",
           description: "Lists all follow-up templates",
-          example: "use 'listFollowUpTemplates' function to list all active follow-up templates with pagination"
+          example:
+            "use 'listFollowUpTemplates' function to list all active follow-up templates with pagination",
         },
         {
           name: "scheduleFollowUp",
           description: "Schedules follow-up messages to contacts",
-          example: "use 'scheduleFollowUp' function to schedule a follow-up email to contact_123 using template_456 for tomorrow at 2 PM"
+          example:
+            "use 'scheduleFollowUp' function to schedule a follow-up email to contact_123 using template_456 for tomorrow at 2 PM",
         },
         {
           name: "createFollowUpSequence",
           description: "Creates automated follow-up sequences",
-          example: "use 'createFollowUpSequence' function to create a 5-step nurturing sequence with emails sent every 3 days"
+          example:
+            "use 'createFollowUpSequence' function to create a 5-step nurturing sequence with emails sent every 3 days",
         },
         {
           name: "assignContactToSequence",
           description: "Assigns contacts to follow-up sequences",
-          example: "use 'assignContactToSequence' function to assign contact_123 to the lead nurturing sequence starting immediately"
+          example:
+            "use 'assignContactToSequence' function to assign contact_123 to the lead nurturing sequence starting immediately",
         },
         {
           name: "pauseFollowUpSequence",
           description: "Pauses follow-up sequences for contacts",
-          example: "use 'pauseFollowUpSequence' function to pause the follow-up sequence for contact_123"
+          example:
+            "use 'pauseFollowUpSequence' function to pause the follow-up sequence for contact_123",
         },
         {
           name: "updateFollowUpStatus",
           description: "Updates follow-up status and tracking",
-          example: "use 'updateFollowUpStatus' function to mark followup_789 as completed and add completion notes"
-        }
-      ]
+          example:
+            "use 'updateFollowUpStatus' function to mark followup_789 as completed and add completion notes",
+        },
+      ],
     },
     utility: {
       title: "Utility Functions",
-      description: "General utility tools for web search, date operations, and system functions",
+      description:
+        "General utility tools for web search, date operations, and system functions",
       examples: [
         {
           name: "sendWhatsAppMessage",
-          description: "Sends WhatsApp messages to any contact using their contact ID or phone number",
-          example: "use 'sendWhatsAppMessage' function with contactId '0128-60123456789' and message 'Hello! Your appointment is confirmed for tomorrow at 2 PM. Please reply to confirm.'"
+          description:
+            "Sends WhatsApp messages to any contact using their contact ID or phone number",
+          example:
+            "use 'sendWhatsAppMessage' function with contactId '0128-60123456789' and message 'Hello! Your appointment is confirmed for tomorrow at 2 PM. Please reply to confirm.'",
         },
         {
           name: "sendWhatsAppMessage",
-          description: "Sends WhatsApp messages to a group using the group contact ID",
-          example: "use 'sendWhatsAppMessage' function with contactId '0210-120363275496222216' and message 'Team meeting scheduled for Friday at 3 PM. Please confirm your attendance.'"
+          description:
+            "Sends WhatsApp messages to a group using the group contact ID",
+          example:
+            "use 'sendWhatsAppMessage' function with contactId '0210-120363275496222216' and message 'Team meeting scheduled for Friday at 3 PM. Please confirm your attendance.'",
         },
         {
           name: "scheduleMessage",
-          description: "Schedule WhatsApp messages to be sent at a specific time with AI-powered intelligent optimization",
-          example: "use 'scheduleMessage' function with contactIds ['0128-60123456789', '0128-60987654321'] and message 'Special promotion ending soon!' and scheduledTime '2024-01-15T09:00:00+08:00'"
+          description:
+            "Schedule WhatsApp messages to be sent at a specific time with AI-powered intelligent optimization",
+          example:
+            "use 'scheduleMessage' function with contactIds ['0128-60123456789', '0128-60987654321'] and message 'Special promotion ending soon!' and scheduledTime '2024-01-15T09:00:00+08:00'",
         },
         {
           name: "searchWeb",
           description: "Performs web searches",
-          example: "use 'searchWeb' function to search the web for 'latest CRM software trends 2024'"
+          example:
+            "use 'searchWeb' function to search the web for 'latest CRM software trends 2024'",
         },
         {
           name: "getTodayDate",
           description: "Gets current date",
-          example: "use 'getTodayDate' function to get today's date"
+          example: "use 'getTodayDate' function to get today's date",
         },
         {
           name: "calculateDateDifference",
           description: "Calculates difference between dates",
-          example: "use 'calculateDateDifference' function to calculate the number of days between January 15th and January 30th"
+          example:
+            "use 'calculateDateDifference' function to calculate the number of days between January 15th and January 30th",
         },
         {
           name: "formatDate",
           description: "Formats dates in different formats",
-          example: "use 'formatDate' function to format '2024-01-15' to 'January 15, 2024'"
+          example:
+            "use 'formatDate' function to format '2024-01-15' to 'January 15, 2024'",
         },
         {
           name: "generateUUID",
           description: "Generates unique identifiers",
-          example: "use 'generateUUID' function to generate a unique ID for a new record"
+          example:
+            "use 'generateUUID' function to generate a unique ID for a new record",
         },
         {
           name: "validateEmail",
           description: "Validates email addresses",
-          example: "use 'validateEmail' function to check if 'user@example.com' is a valid email format"
+          example:
+            "use 'validateEmail' function to check if 'user@example.com' is a valid email format",
         },
         {
           name: "exportData",
           description: "Exports data to various formats",
-          example: "use 'exportData' function to export contact list to CSV format with selected fields"
+          example:
+            "use 'exportData' function to export contact list to CSV format with selected fields",
         },
         {
           name: "importData",
           description: "Imports data from files",
-          example: "use 'importData' function to import contacts from a CSV file with field mapping"
+          example:
+            "use 'importData' function to import contacts from a CSV file with field mapping",
         },
         {
           name: "sendNotification",
           description: "Sends system notifications",
-          example: "use 'sendNotification' function to send a notification to admin@company.com about system maintenance"
+          example:
+            "use 'sendNotification' function to send a notification to admin@company.com about system maintenance",
         },
-      
-      
-      ]
-    }
+      ],
+    },
   };
 
   // Message classes for fullscreen mode
@@ -751,7 +899,7 @@ const Main: React.FC = () => {
 
   // Fullscreen message handling
   const [fullscreenNewMessage, setFullscreenNewMessage] = useState("");
-  
+
   // PDF Modal state
   const [pdfModal, setPdfModal] = useState<{
     isOpen: boolean;
@@ -799,11 +947,13 @@ const Main: React.FC = () => {
   };
 
   const handleManualClick = () => {
-    navigate('/a-i-responses');
+    navigate("/a-i-responses");
     setShowAiToolsDropdown(false);
   };
-  
-  const handleFullscreenSendMessage = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+
+  const handleFullscreenSendMessage = (
+    e: React.KeyboardEvent<HTMLTextAreaElement>
+  ) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (fullscreenNewMessage.trim()) {
@@ -868,14 +1018,17 @@ const Main: React.FC = () => {
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (showAiToolsDropdown && !(event.target as Element).closest('.ai-tools-dropdown')) {
+      if (
+        showAiToolsDropdown &&
+        !(event.target as Element).closest(".ai-tools-dropdown")
+      ) {
         setShowAiToolsDropdown(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showAiToolsDropdown]);
 
@@ -959,7 +1112,7 @@ const Main: React.FC = () => {
         console.log("Assistant configs found:", assistantConfigs);
         console.log("Setting assistants state:", assistantConfigs);
         setAssistants(assistantConfigs);
-        
+
         const response2 = await axios.get(
           `https://juta-dev.ngrok.dev/api/company-config/${companyId}`
         );
@@ -985,14 +1138,19 @@ const Main: React.FC = () => {
   const fetchAssistantInfo = async (assistantId: string, apiKey: string) => {
     // Validate inputs before making API call
     if (!assistantId || !assistantId.trim() || !apiKey || !apiKey.trim()) {
-      console.log("Skipping assistant info fetch - invalid assistantId or apiKey");
+      console.log(
+        "Skipping assistant info fetch - invalid assistantId or apiKey"
+      );
       setLoading(false);
       return;
     }
 
     // Check if assistantId looks like a valid OpenAI assistant ID format
-    if (!assistantId.startsWith('asst_')) {
-      console.log("Skipping assistant info fetch - invalid assistant ID format:", assistantId);
+    if (!assistantId.startsWith("asst_")) {
+      console.log(
+        "Skipping assistant info fetch - invalid assistant ID format:",
+        assistantId
+      );
       setLoading(false);
       return;
     }
@@ -1018,7 +1176,10 @@ const Main: React.FC = () => {
       });
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
-        console.log("Assistant not found in OpenAI (404) - ID may be invalid:", assistantId);
+        console.log(
+          "Assistant not found in OpenAI (404) - ID may be invalid:",
+          assistantId
+        );
         // Don't set error for 404s, just log it
         setError(null);
       } else {
@@ -1045,22 +1206,22 @@ const Main: React.FC = () => {
     setIsSaving(true);
 
     try {
-    // Get all unique vector store IDs from files
-    const vectorStoreIds = [
-      ...new Set(files.map((file) => file.vectorStoreId).filter(Boolean)),
-    ];
+      // Get all unique vector store IDs from files
+      const vectorStoreIds = [
+        ...new Set(files.map((file) => file.vectorStoreId).filter(Boolean)),
+      ];
 
-    const payload = {
-      name: assistantInfo.name || "",
-      description: assistantInfo.description || "",
-      instructions: assistantInfo.instructions,
-      tools: [{ type: "file_search" }],
-      tool_resources: {
-        file_search: {
-          vector_store_ids: vectorStoreIds,
+      const payload = {
+        name: assistantInfo.name || "",
+        description: assistantInfo.description || "",
+        instructions: assistantInfo.instructions,
+        tools: [{ type: "file_search" }],
+        tool_resources: {
+          file_search: {
+            vector_store_ids: vectorStoreIds,
+          },
         },
-      },
-    };
+      };
 
       // Update the assistant in OpenAI
       const response = await axios.post(
@@ -1092,14 +1253,18 @@ const Main: React.FC = () => {
             fetchTemplates(); // Refresh templates list
             toast.success("Assistant updated and template saved successfully");
           } else {
-            toast.success("Assistant updated successfully, but template save failed");
+            toast.success(
+              "Assistant updated successfully, but template save failed"
+            );
           }
         } catch (templateError) {
           console.error("Error saving template:", templateError);
-          toast.success("Assistant updated successfully, but template save failed");
+          toast.success(
+            "Assistant updated successfully, but template save failed"
+          );
         }
       } else {
-      toast.success("Assistant updated successfully");
+        toast.success("Assistant updated successfully");
       }
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -1119,7 +1284,10 @@ const Main: React.FC = () => {
     }
   };
 
-  const checkAIResponses = async (messageText: string, isUserMessage: boolean = true): Promise<ChatMessage[]> => {
+  const checkAIResponses = async (
+    messageText: string,
+    isUserMessage: boolean = true
+  ): Promise<ChatMessage[]> => {
     try {
       const userEmail = localStorage.getItem("userEmail");
       if (!userEmail || !companyId) return [];
@@ -1127,7 +1295,9 @@ const Main: React.FC = () => {
       // Get company API URL
       const baseUrl = "https://juta-dev.ngrok.dev";
       const companyResponse = await fetch(
-        `${baseUrl}/api/user-company-data?email=${encodeURIComponent(userEmail)}`,
+        `${baseUrl}/api/user-company-data?email=${encodeURIComponent(
+          userEmail
+        )}`,
         {
           method: "GET",
           credentials: "include",
@@ -1143,17 +1313,29 @@ const Main: React.FC = () => {
       const apiUrl = companyData.companyData.api_url || baseUrl;
 
       // Fetch all AI responses by type since the API requires a type parameter
-      console.log("Fetching AI responses for company:", companyId, "from:", apiUrl);
-      
-      const responseTypes = ['image', 'tag', 'voice', 'document', 'assign', 'video'];
+      console.log(
+        "Fetching AI responses for company:",
+        companyId,
+        "from:",
+        apiUrl
+      );
+
+      const responseTypes = [
+        "image",
+        "tag",
+        "voice",
+        "document",
+        "assign",
+        "video",
+      ];
       const allResponses = [];
-      
+
       // Fetch responses for each type
       for (const responseType of responseTypes) {
         try {
           const endpoint = `${apiUrl}/api/ai-responses?companyId=${companyId}&type=${responseType}`;
           console.log(`Fetching ${responseType} responses from:`, endpoint);
-          
+
           const response = await fetch(endpoint, {
             method: "GET",
             headers: {
@@ -1161,15 +1343,20 @@ const Main: React.FC = () => {
             },
             credentials: "include",
           });
-          
+
           if (response.ok) {
             const data = await response.json();
-                         if (data.success && data.data) {
-               // Add type to each response for easier processing
-               const typedResponses = data.data.map((item: any) => ({ ...item, type: responseType }));
-               allResponses.push(...typedResponses);
-               console.log(`Found ${typedResponses.length} ${responseType} responses`);
-             }
+            if (data.success && data.data) {
+              // Add type to each response for easier processing
+              const typedResponses = data.data.map((item: any) => ({
+                ...item,
+                type: responseType,
+              }));
+              allResponses.push(...typedResponses);
+              console.log(
+                `Found ${typedResponses.length} ${responseType} responses`
+              );
+            }
           } else {
             console.log(`${responseType} responses failed:`, response.status);
           }
@@ -1177,10 +1364,10 @@ const Main: React.FC = () => {
           console.log(`Error fetching ${responseType} responses:`, error);
         }
       }
-      
-            console.log("Total AI responses found:", allResponses.length);
+
+      console.log("Total AI responses found:", allResponses.length);
       console.log("All responses data:", allResponses);
-      
+
       const triggeredResponses: ChatMessage[] = [];
 
       // Check each AI response for keyword matches
@@ -1188,38 +1375,52 @@ const Main: React.FC = () => {
         console.log("Processing response:", response);
         console.log("Response status:", response.status);
         console.log("Response keywords:", response.keywords);
-        
-        if (response.status !== 'active') {
+
+        if (response.status !== "active") {
           console.log("Skipping inactive response:", response.status);
           continue;
         }
 
-        const keywords = Array.isArray(response.keywords) ? response.keywords : [response.keywords];
+        const keywords = Array.isArray(response.keywords)
+          ? response.keywords
+          : [response.keywords];
         const messageLower = messageText.toLowerCase();
-        console.log("Checking keywords:", keywords, "against message:", messageLower);
+        console.log(
+          "Checking keywords:",
+          keywords,
+          "against message:",
+          messageLower
+        );
 
         // Check if any keyword matches the message
         // For user messages, check if user input triggers AI responses
         // For bot messages, check if bot output triggers AI responses
         let hasMatch = false;
-        
+
         if (isUserMessage) {
           // Check if user message contains keywords (for user-triggered responses)
-          hasMatch = keywords.some((keyword: string) => 
-            keyword && messageLower.includes(keyword.toLowerCase())
+          hasMatch = keywords.some(
+            (keyword: string) =>
+              keyword && messageLower.includes(keyword.toLowerCase())
           );
         } else {
           // Check if bot message contains keywords (for bot-triggered responses)
-          hasMatch = keywords.some((keyword: string) => 
-            keyword && messageLower.includes(keyword.toLowerCase())
+          hasMatch = keywords.some(
+            (keyword: string) =>
+              keyword && messageLower.includes(keyword.toLowerCase())
           );
         }
 
         if (hasMatch) {
-          console.log("Keyword match found:", keywords, "for response:", response);
+          console.log(
+            "Keyword match found:",
+            keywords,
+            "for response:",
+            response
+          );
           // Create appropriate response based on type
           switch (response.type) {
-            case 'image':
+            case "image":
               console.log("Processing image response:", response);
               if (response.image_urls && response.image_urls.length > 0) {
                 console.log("Image URLs found:", response.image_urls);
@@ -1236,13 +1437,13 @@ const Main: React.FC = () => {
                 console.log("No image URLs found in response:", response);
               }
               break;
-            case 'tag':
+            case "tag":
               // Handle tag responses if needed
               break;
-            case 'voice':
+            case "voice":
               // Handle voice responses if needed
               break;
-            case 'document':
+            case "document":
               console.log("Processing document response:", response);
               if (response.document_urls && response.document_urls.length > 0) {
                 console.log("Document URLs found:", response.document_urls);
@@ -1259,10 +1460,10 @@ const Main: React.FC = () => {
                 console.log("No document URLs found in response:", response);
               }
               break;
-            case 'assign':
+            case "assign":
               // Handle assignment responses if needed
               break;
-            case 'video':
+            case "video":
               // Handle video responses if needed
               break;
           }
@@ -1270,7 +1471,7 @@ const Main: React.FC = () => {
           console.log("No keyword match for:", keywords);
         }
       }
-      
+
       console.log("Final triggeredResponses:", triggeredResponses);
 
       return triggeredResponses;
@@ -1281,19 +1482,22 @@ const Main: React.FC = () => {
   };
 
   const sendMessageToAssistant = async (messageText: string) => {
-    console.log('🚀 [SEND MESSAGE] Starting sendMessageToAssistant with message:', messageText);
-    
+    console.log(
+      "🚀 [SEND MESSAGE] Starting sendMessageToAssistant with message:",
+      messageText
+    );
+
     // Initialize progress tracking
-    setAiProgress(['🚀 Preparing to send message...']);
-    
+    setAiProgress(["🚀 Preparing to send message..."]);
+
     // Ensure we have a threadId, create one if needed
     let currentThreadId = threadId;
     if (!currentThreadId) {
       currentThreadId = generateThreadId();
       setThreadId(currentThreadId);
-      console.log('✅ [THREAD] Created new threadId:', currentThreadId);
+      console.log("✅ [THREAD] Created new threadId:", currentThreadId);
     } else {
-      console.log('✅ [THREAD] Using existing threadId:', currentThreadId);
+      console.log("✅ [THREAD] Using existing threadId:", currentThreadId);
     }
 
     const newMessage: ChatMessage = {
@@ -1302,11 +1506,11 @@ const Main: React.FC = () => {
       text: messageText,
       createdAt: new Date().toISOString(),
     };
-    console.log('✅ [MESSAGE] Created user message:', newMessage);
+    console.log("✅ [MESSAGE] Created user message:", newMessage);
 
     // Clear dummy messages if they are present
     setMessages((prevMessages) => {
-      console.log('📝 [STATE] Current messages before update:', prevMessages);
+      console.log("📝 [STATE] Current messages before update:", prevMessages);
       if (
         prevMessages.some(
           (message) =>
@@ -1314,127 +1518,161 @@ const Main: React.FC = () => {
             message.createdAt === "2024-05-29T10:01:00Z"
         )
       ) {
-        console.log('🧹 [CLEANUP] Clearing dummy messages, returning only new message');
+        console.log(
+          "🧹 [CLEANUP] Clearing dummy messages, returning only new message"
+        );
         return [newMessage];
       } else {
-        console.log('📝 [STATE] Adding new message to existing messages');
+        console.log("📝 [STATE] Adding new message to existing messages");
         return [newMessage, ...prevMessages];
       }
     });
 
     // Save user message to current thread
-    console.log('💾 [SAVE] Saving user message to thread:', currentThreadId);
+    console.log("💾 [SAVE] Saving user message to thread:", currentThreadId);
     try {
       saveChatHistory(currentThreadId, [newMessage, ...messages]);
-      console.log('✅ [SAVE] User message saved successfully');
+      console.log("✅ [SAVE] User message saved successfully");
     } catch (saveError) {
-      console.error('❌ [SAVE ERROR] Failed to save user message:', saveError);
+      console.error("❌ [SAVE ERROR] Failed to save user message:", saveError);
     }
 
     // Show AI thinking indicator
     setIsAiThinking(true);
-    setAiProgress(prev => [...prev, '💭 AI is thinking...']);
-    console.log('🤔 [UI] AI thinking indicator activated');
+    setAiProgress((prev) => [...prev, "💭 AI is thinking..."]);
+    console.log("🤔 [UI] AI thinking indicator activated");
 
     try {
       const userEmail = localStorage.getItem("userEmail");
-      console.log('👤 [AUTH] Retrieved user email:', userEmail);
+      console.log("👤 [AUTH] Retrieved user email:", userEmail);
 
       // Get the assistant response first
       // Send the full conversation history so AI remembers the context
-      const conversationHistory = messages.map(msg => ({
-        role: msg.from_me ? 'user' : 'assistant',
-        content: msg.text
+      const conversationHistory = messages.map((msg) => ({
+        role: msg.from_me ? "user" : "assistant",
+        content: msg.text,
       }));
-      
-      console.log('📜 [HISTORY] Sending conversation history to AI:', conversationHistory);
-      console.log('📝 [STATE] Current messages state:', messages);
-      console.log('🆔 [ASSISTANT] Using assistantId:', assistantId);
-      
-      setAiProgress(prev => [...prev, '📡 Connecting to AI assistant...']);
-      
+
+      console.log(
+        "📜 [HISTORY] Sending conversation history to AI:",
+        conversationHistory
+      );
+      console.log("📝 [STATE] Current messages state:", messages);
+      console.log("🆔 [ASSISTANT] Using assistantId:", assistantId);
+
+      setAiProgress((prev) => [...prev, "📡 Connecting to AI assistant..."]);
+
       const apiUrl = `https://juta-dev.ngrok.dev/api/assistant-test/`;
       const requestParams = {
         message: messageText,
         email: userEmail,
         assistantid: assistantId,
-        conversationHistory: JSON.stringify(conversationHistory)
+        conversationHistory: JSON.stringify(conversationHistory),
       };
-      
-      console.log('🔗 [API] Making request to assistant API...');
-      console.log('🌐 [API] URL:', apiUrl);
-      console.log('📋 [API] Request params:', requestParams);
-      console.log('⏰ [API] Request starting at:', new Date().toISOString());
-      
+
+      console.log("🔗 [API] Making request to assistant API...");
+      console.log("🌐 [API] URL:", apiUrl);
+      console.log("📋 [API] Request params:", requestParams);
+      console.log("⏰ [API] Request starting at:", new Date().toISOString());
+
       // Test if the ngrok endpoint is reachable first
       try {
-        console.log('🔍 [NETWORK] Testing ngrok endpoint reachability...');
-        setAiProgress(prev => [...prev, '🔍 Testing network connection...']);
-        
-        const healthCheck = await axios.get('https://juta-dev.ngrok.dev/', { timeout: 5000 });
-        console.log('✅ [NETWORK] Ngrok endpoint is reachable, status:', healthCheck.status);
-        setAiProgress(prev => [...prev, '✅ Connection established']);
+        console.log("🔍 [NETWORK] Testing ngrok endpoint reachability...");
+        setAiProgress((prev) => [...prev, "🔍 Testing network connection..."]);
+
+        const healthCheck = await axios.get("https://juta-dev.ngrok.dev/", {
+          timeout: 5000,
+        });
+        console.log(
+          "✅ [NETWORK] Ngrok endpoint is reachable, status:",
+          healthCheck.status
+        );
+        setAiProgress((prev) => [...prev, "✅ Connection established"]);
       } catch (networkError) {
-        console.error('❌ [NETWORK] Ngrok endpoint unreachable:', networkError);
-        setAiProgress(prev => [...prev, '❌ Network connection failed']);
-        throw new Error('Ngrok endpoint is not accessible');
+        console.error("❌ [NETWORK] Ngrok endpoint unreachable:", networkError);
+        setAiProgress((prev) => [...prev, "❌ Network connection failed"]);
+        throw new Error("Ngrok endpoint is not accessible");
       }
-      
-      setAiProgress(prev => [...prev, '🤖 Sending request to AI assistant...']);
-      
+
+      setAiProgress((prev) => [
+        ...prev,
+        "🤖 Sending request to AI assistant...",
+      ]);
+
       const res = await axios.get(apiUrl, {
         params: requestParams,
         timeout: 30000, // 30 second timeout
         headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
+          "Content-Type": "application/json",
+          Accept: "application/json",
         },
         // Add request interceptor for debugging
         validateStatus: function (status) {
-          console.log('📊 [API] HTTP Status received:', status);
+          console.log("📊 [API] HTTP Status received:", status);
           return status >= 200 && status < 300;
-        }
+        },
       });
-      
-      console.log('⏰ [API] Request completed at:', new Date().toISOString());
-      console.log('✅ [API] Response received, status:', res.status);
-      console.log('📋 [API] Full response data:', res.data);
-      
-      setAiProgress(prev => [...prev, '📥 Processing AI response...']);
-      
+
+      console.log("⏰ [API] Request completed at:", new Date().toISOString());
+      console.log("✅ [API] Response received, status:", res.status);
+      console.log("📋 [API] Full response data:", res.data);
+
+      setAiProgress((prev) => [...prev, "📥 Processing AI response..."]);
+
       const response = res.data;
 
-      if (!response || !response.success || !response.data || !response.data.answer) {
-        console.error('❌ [API ERROR] Invalid response structure:', response);
-        throw new Error('Invalid response from API - missing answer field in data');
+      if (
+        !response ||
+        !response.success ||
+        !response.data ||
+        !response.data.answer
+      ) {
+        console.error("❌ [API ERROR] Invalid response structure:", response);
+        throw new Error(
+          "Invalid response from API - missing answer field in data"
+        );
       }
 
       const botAnswer = response.data.answer;
-      console.log('📝 [RESPONSE] Raw bot answer:', botAnswer);
+      console.log("📝 [RESPONSE] Raw bot answer:", botAnswer);
 
       // Split the bot's response into individual messages using || separator
-      const botMessages = botAnswer.split('||').filter((line: string) => line.trim() !== '');
-      console.log('✂️ [SPLIT] Bot response split into messages:', botMessages);
-      console.log('📊 [SPLIT] Number of bot message parts:', botMessages.length);
-      
+      const botMessages = botAnswer
+        .split("||")
+        .filter((line: string) => line.trim() !== "");
+      console.log("✂️ [SPLIT] Bot response split into messages:", botMessages);
+      console.log(
+        "📊 [SPLIT] Number of bot message parts:",
+        botMessages.length
+      );
+
       // Check for AI responses based on the BOT's message, not the user's
-      console.log('🔍 [AI CHECK] Checking for AI responses...');
-      setAiProgress(prev => [...prev, '🔍 Checking for additional responses...']);
-      
+      console.log("🔍 [AI CHECK] Checking for AI responses...");
+      setAiProgress((prev) => [
+        ...prev,
+        "🔍 Checking for additional responses...",
+      ]);
+
       const aiResponses = await checkAIResponses(botAnswer, false);
-      console.log('🤖 [AI CHECK] AI Responses found for bot message:', aiResponses);
-      console.log('📊 [AI CHECK] Number of AI responses:', aiResponses.length);
-      
+      console.log(
+        "🤖 [AI CHECK] AI Responses found for bot message:",
+        aiResponses
+      );
+      console.log("📊 [AI CHECK] Number of AI responses:", aiResponses.length);
+
       // Create messages array - each || separated part becomes a separate message
       const newMessages: ChatMessage[] = [];
-      console.log('📝 [PROCESS] Starting to process bot message parts...');
-      setAiProgress(prev => [...prev, '📝 Formatting response messages...']);
-      
+      console.log("📝 [PROCESS] Starting to process bot message parts...");
+      setAiProgress((prev) => [...prev, "📝 Formatting response messages..."]);
+
       // Process each bot message part and insert AI responses after the triggering part
       for (let i = 0; i < botMessages.length; i++) {
         const botMessage = botMessages[i];
-        console.log(`🔄 [PROCESS ${i}] Processing bot message part:`, botMessage);
-        
+        console.log(
+          `🔄 [PROCESS ${i}] Processing bot message part:`,
+          botMessage
+        );
+
         // Add the bot message part
         const botMessageObj = {
           from_me: false,
@@ -1444,72 +1682,96 @@ const Main: React.FC = () => {
         };
         newMessages.push(botMessageObj);
         console.log(`✅ [PROCESS ${i}] Added bot message:`, botMessageObj);
-        
+
         // If this message part contains the keyword, add AI responses immediately after
-        const hasKeyword = botMessage.toLowerCase().includes('your cnb carpets virtual admin assistant');
-        console.log(`🔍 [KEYWORD ${i}] Checking for keyword 'your cnb carpets virtual admin assistant':`, hasKeyword);
-        
+        const hasKeyword = botMessage
+          .toLowerCase()
+          .includes("your cnb carpets virtual admin assistant");
+        console.log(
+          `🔍 [KEYWORD ${i}] Checking for keyword 'your cnb carpets virtual admin assistant':`,
+          hasKeyword
+        );
+
         if (aiResponses.length > 0 && hasKeyword) {
-          console.log(`🤖 [AI INSERT ${i}] Adding AI responses after message part:`, botMessage);
+          console.log(
+            `🤖 [AI INSERT ${i}] Adding AI responses after message part:`,
+            botMessage
+          );
           newMessages.push(...aiResponses);
-          console.log(`✅ [AI INSERT ${i}] Added ${aiResponses.length} AI responses`);
+          console.log(
+            `✅ [AI INSERT ${i}] Added ${aiResponses.length} AI responses`
+          );
         }
       }
-      
-      console.log('📋 [FINAL] Final newMessages array:', newMessages);
-      console.log('📊 [FINAL] Total new messages count:', newMessages.length);
-      
+
+      console.log("📋 [FINAL] Final newMessages array:", newMessages);
+      console.log("📊 [FINAL] Total new messages count:", newMessages.length);
+
       // Reverse the messages so newest appears first in the chat display
       const reversedNewMessages = [...newMessages].reverse();
-      console.log('🔄 [REVERSE] Reversed for chat display:', reversedNewMessages);
-      
+      console.log(
+        "🔄 [REVERSE] Reversed for chat display:",
+        reversedNewMessages
+      );
+
       // Add all messages to the chat (newest first)
       // The image should appear after the greeting message that triggered it
-      console.log('📝 [UPDATE] Updating messages state...');
-      setAiProgress(prev => [...prev, '💾 Saving conversation...']);
+      console.log("📝 [UPDATE] Updating messages state...");
+      setAiProgress((prev) => [...prev, "💾 Saving conversation..."]);
       setMessages((prevMessages) => {
-        console.log('📝 [UPDATE] Previous messages:', prevMessages);
+        console.log("📝 [UPDATE] Previous messages:", prevMessages);
         const updatedMessages = [...reversedNewMessages, ...prevMessages];
-        console.log('📝 [UPDATE] Updated messages:', updatedMessages);
-        
+        console.log("📝 [UPDATE] Updated messages:", updatedMessages);
+
         // Save messages to current thread
-        console.log('💾 [SAVE] Saving updated messages to thread:', currentThreadId);
+        console.log(
+          "💾 [SAVE] Saving updated messages to thread:",
+          currentThreadId
+        );
         try {
           saveChatHistory(currentThreadId, updatedMessages);
-          console.log('✅ [SAVE] Updated messages saved successfully');
+          console.log("✅ [SAVE] Updated messages saved successfully");
         } catch (saveError) {
-          console.error('❌ [SAVE ERROR] Failed to save updated messages:', saveError);
+          console.error(
+            "❌ [SAVE ERROR] Failed to save updated messages:",
+            saveError
+          );
         }
-        
+
         return updatedMessages;
       });
-      
-      console.log('✅ [SUCCESS] Message processing completed successfully');
-      setAiProgress(prev => [...prev, '✅ Response complete!']);
-      
+
+      console.log("✅ [SUCCESS] Message processing completed successfully");
+      setAiProgress((prev) => [...prev, "✅ Response complete!"]);
     } catch (error) {
       console.error("❌ [FATAL ERROR] Error in sendMessageToAssistant:", error);
       console.error("❌ [FATAL ERROR] Error details:", {
         message: (error as any).message,
         stack: (error as any).stack,
         response: (error as any).response?.data,
-        status: (error as any).response?.status
+        status: (error as any).response?.status,
       });
       setError("Failed to send message");
-      setAiProgress(prev => [...prev, '❌ Error occurred']);
+      setAiProgress((prev) => [...prev, "❌ Error occurred"]);
     } finally {
       // Hide AI thinking indicator and clear progress after a brief delay
       setIsAiThinking(false);
       setTimeout(() => {
         setAiProgress([]);
       }, 2000); // Clear progress after 2 seconds to let user see final status
-      console.log('🤔 [UI] AI thinking indicator deactivated');
-      console.log('🏁 [END] sendMessageToAssistant function completed');
+      console.log("🤔 [UI] AI thinking indicator deactivated");
+      console.log("🏁 [END] sendMessageToAssistant function completed");
     }
   };
 
   useEffect(() => {
-    if (assistantId && apiKey && assistantId.trim() && apiKey.trim() && assistantId.startsWith('asst_')) {
+    if (
+      assistantId &&
+      apiKey &&
+      assistantId.trim() &&
+      apiKey.trim() &&
+      assistantId.startsWith("asst_")
+    ) {
       fetchAssistantInfo(assistantId, apiKey);
     }
   }, [assistantId, apiKey]);
@@ -1517,10 +1779,10 @@ const Main: React.FC = () => {
   // Always create a new thread when component mounts
   useEffect(() => {
     const initializeNewThread = async () => {
-      console.log('Creating new chat thread...');
+      console.log("Creating new chat thread...");
       await createNewThread();
     };
-    
+
     initializeNewThread();
   }, []); // Only run once on mount
 
@@ -1535,13 +1797,13 @@ const Main: React.FC = () => {
     try {
       // Clear the threadId in state
       setThreadId("");
-      
+
       // Clear the messages state
       setMessages([]);
-      
+
       // Optionally, you can also clear from localStorage if needed
       localStorage.removeItem("threadId");
-      
+
       console.log("Thread deleted successfully");
     } catch (error) {
       console.error("Error deleting thread:", error);
@@ -1560,57 +1822,63 @@ const Main: React.FC = () => {
     return `Chat ${date} ${time}`;
   };
 
-  const saveChatHistory = async (threadId: string, messages: ChatMessage[], customName?: string) => {
+  const saveChatHistory = async (
+    threadId: string,
+    messages: ChatMessage[],
+    customName?: string
+  ) => {
     try {
-      const threadName = customName || 'AI Assistant Chat';
+      const threadName = customName || "AI Assistant Chat";
       const threadData = {
         threadId,
         templateName: threadName,
         messages: messages,
         lastUpdated: new Date().toISOString(),
-        messageCount: messages.length
+        messageCount: messages.length,
       };
 
       // Save to localStorage
-      localStorage.setItem(`chat_thread_${threadId}`, JSON.stringify(threadData));
-      console.log('Chat history saved to local storage successfully');
+      localStorage.setItem(
+        `chat_thread_${threadId}`,
+        JSON.stringify(threadData)
+      );
+      console.log("Chat history saved to local storage successfully");
     } catch (error) {
-      console.error('Error saving chat history to local storage:', error);
+      console.error("Error saving chat history to local storage:", error);
     }
   };
 
   const loadChatHistory = async (threadId: string): Promise<ChatMessage[]> => {
     try {
-      console.log('Loading chat history from local storage for thread:', threadId);
+      console.log(
+        "Loading chat history from local storage for thread:",
+        threadId
+      );
       const threadData = localStorage.getItem(`chat_thread_${threadId}`);
-      
+
       if (threadData) {
         const parsedData = JSON.parse(threadData);
         const messages = parsedData.messages || [];
-        console.log('Messages loaded from local storage:', messages);
+        console.log("Messages loaded from local storage:", messages);
         return messages;
       } else {
-        console.log('No chat history found for thread:', threadId);
+        console.log("No chat history found for thread:", threadId);
         return [];
       }
     } catch (error) {
-      console.error('Error loading chat history from local storage:', error);
+      console.error("Error loading chat history from local storage:", error);
       return [];
     }
   };
-
-
-
 
   const createNewThread = async () => {
     const newThreadId = generateThreadId();
     const defaultName = generateDefaultThreadName();
     setThreadId(newThreadId);
     setMessages([]);
-    
+
     await saveChatHistory(newThreadId, [], defaultName);
   };
-
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -1641,15 +1909,19 @@ const Main: React.FC = () => {
 
   // Debug: Monitor messages state changes
   useEffect(() => {
-    console.log('Messages state changed:', messages.length, 'messages:', messages);
+    console.log(
+      "Messages state changed:",
+      messages.length,
+      "messages:",
+      messages
+    );
   }, [messages]);
-
 
   const fetchFiles = async () => {
     if (!companyId) return;
 
     const baseUrl = "https://juta-dev.ngrok.dev";
-    
+
     try {
       // Get user email for API calls
       const userEmail = localStorage.getItem("userEmail");
@@ -1659,7 +1931,9 @@ const Main: React.FC = () => {
 
       // Get company API URL
       const response = await fetch(
-        `${baseUrl}/api/user-company-data?email=${encodeURIComponent(userEmail)}`,
+        `${baseUrl}/api/user-company-data?email=${encodeURIComponent(
+          userEmail
+        )}`,
         {
           method: "GET",
           credentials: "include",
@@ -1677,20 +1951,23 @@ const Main: React.FC = () => {
       const apiUrl = data.companyData.api_url || baseUrl;
 
       // Fetch files from backend
-      const filesResponse = await fetch(`${apiUrl}/api/assistant-files?companyId=${companyId}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-      });
+      const filesResponse = await fetch(
+        `${apiUrl}/api/assistant-files?companyId=${companyId}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+        }
+      );
 
       if (!filesResponse.ok) {
         throw new Error("Failed to fetch files from backend");
       }
 
       const fileList = await filesResponse.json();
-      
+
       // Ensure fileList is an array, handle different response formats
       if (Array.isArray(fileList)) {
         setFiles(fileList);
@@ -1727,7 +2004,9 @@ const Main: React.FC = () => {
 
       // Get company API URL
       const response = await fetch(
-        `${baseUrl}/api/user-company-data?email=${encodeURIComponent(userEmail)}`,
+        `${baseUrl}/api/user-company-data?email=${encodeURIComponent(
+          userEmail
+        )}`,
         {
           method: "GET",
           credentials: "include",
@@ -1791,12 +2070,12 @@ const Main: React.FC = () => {
             },
           }
         );
-        
+
         // Find existing vector store with matching name
         const existingVectorStore = listVectorStoresResponse.data.data.find(
           (store: any) => store.name === `${companyId}-knowledge-base`
         );
-        
+
         if (existingVectorStore) {
           vectorStoreId = existingVectorStore.id;
         } else {
@@ -1936,7 +2215,9 @@ const Main: React.FC = () => {
 
       // Get company API URL
       const response = await fetch(
-        `${baseUrl}/api/user-company-data?email=${encodeURIComponent(userEmail)}`,
+        `${baseUrl}/api/user-company-data?email=${encodeURIComponent(
+          userEmail
+        )}`,
         {
           method: "GET",
           credentials: "include",
@@ -1954,13 +2235,16 @@ const Main: React.FC = () => {
       const apiUrl = data.companyData.api_url || baseUrl;
 
       // Delete file from backend
-      const deleteResponse = await fetch(`${apiUrl}/api/assistant-files/${fileId}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-      });
+      const deleteResponse = await fetch(
+        `${apiUrl}/api/assistant-files/${fileId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+        }
+      );
 
       if (!deleteResponse.ok) {
         throw new Error("Failed to delete file from backend");
@@ -2034,9 +2318,15 @@ const Main: React.FC = () => {
     setSelectedAssistant(assistantId);
     setAssistantId(assistantId);
     setMessages([]); // Clear messages when switching assistants
-    
+
     // Only fetch assistant info if we have valid data
-    if (assistantId && apiKey && assistantId.trim() && apiKey.trim() && assistantId.startsWith('asst_')) {
+    if (
+      assistantId &&
+      apiKey &&
+      assistantId.trim() &&
+      apiKey.trim() &&
+      assistantId.startsWith("asst_")
+    ) {
       fetchAssistantInfo(assistantId, apiKey);
     }
   };
@@ -2174,7 +2464,9 @@ const Main: React.FC = () => {
 
     try {
       const response = await axios.get(
-        `https://juta-dev.ngrok.dev/api/ai-settings?companyId=${encodeURIComponent(companyId)}`
+        `https://juta-dev.ngrok.dev/api/ai-settings?companyId=${encodeURIComponent(
+          companyId
+        )}`
       );
       if (response.status === 200 && response.data.settings) {
         setAiAutoResponse(response.data.settings.autoResponse ?? false);
@@ -2220,7 +2512,7 @@ const Main: React.FC = () => {
   };
 
   const exitFullscreenMode = () => {
-    navigate('/inbox');
+    navigate("/inbox");
   };
 
   // If in fullscreen mode, show only the chat interface
@@ -2229,14 +2521,14 @@ const Main: React.FC = () => {
       <div className="flex flex-col w-full h-screen bg-white dark:bg-gray-900">
         {/* Fullscreen Header */}
         <div className="flex items-center justify-between p-3 border-b border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
-                  <div className="flex items-center">
-          <div className="px-4 py-2 bg-gray-600 dark:bg-gray-500 text-white rounded-full shadow-lg font-semibold text-base capitalize">
-            {assistantInfo.name}
+          <div className="flex items-center">
+            <div className="px-4 py-2 bg-gray-600 dark:bg-gray-500 text-white rounded-full shadow-lg font-semibold text-base capitalize">
+              {assistantInfo.name}
+            </div>
+            <div className="ml-3 text-xs text-gray-600 dark:text-gray-400">
+              Fullscreen Chat
+            </div>
           </div>
-          <div className="ml-3 text-xs text-gray-600 dark:text-gray-400">
-            Fullscreen Chat
-          </div>
-        </div>
           <div className="flex items-center gap-2">
             <button
               onClick={exitFullscreenMode}
@@ -2252,9 +2544,9 @@ const Main: React.FC = () => {
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center text-gray-500 dark:text-gray-400">
-                                <div className="px-3 py-2 bg-[#dcf8c6] dark:bg-green-700 text-black dark:text-white rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-sm self-start text-left max-w-[70%] font-semibold text-sm">
+                <div className="px-3 py-2 bg-[#dcf8c6] dark:bg-green-700 text-black dark:text-white rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-sm self-start text-left max-w-[70%] font-semibold text-sm">
                   Start a conversation
-              </div>
+                </div>
               </div>
             </div>
           ) : (
@@ -2263,122 +2555,183 @@ const Main: React.FC = () => {
               .reverse()
               .map((message, index) => (
                 <div key={index}>
-                  {message.text.split("||")
-                    .filter(splitText => splitText.trim() !== "")
+                  {message.text
+                    .split("||")
+                    .filter((splitText) => splitText.trim() !== "")
                     .map((splitText, splitIndex) => (
-                    <div
-                      key={`${index}-${splitIndex}`}
-                      className={`flex ${message.from_me ? 'justify-end' : 'justify-start'} animate-fadeIn mb-4`}
-                    >
                       <div
-                        className={message.from_me ? myMessageClass : otherMessageClass}
+                        key={`${index}-${splitIndex}`}
+                        className={`flex ${
+                          message.from_me ? "justify-end" : "justify-start"
+                        } animate-fadeIn mb-4`}
                       >
-                      {message.type === "text" && (
-                        <div className="whitespace-pre-wrap break-words">
-                          {splitText.trim()}
-                        </div>
-                      )}
-                      {message.type === "image" && message.imageUrls && (
-                        <div className="space-y-2">
-                          {message.imageUrls.map((imageUrl, imgIndex) => (
-                            <div key={imgIndex} className="relative">
-                              <img
-                                src={imageUrl}
-                                alt={`AI Response Image ${imgIndex + 1}`}
-                                className="max-w-full h-auto rounded-lg cursor-pointer"
-                                style={{ maxHeight: "300px" }}
-                                onClick={() => {
-                                  // Open image in new tab or modal if needed
-                                  window.open(imageUrl, '_blank');
-                                }}
-                              />
-                              {message.caption && (
-                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                  {message.caption}
-                                </p>
-                              )}
+                        <div
+                          className={
+                            message.from_me ? myMessageClass : otherMessageClass
+                          }
+                        >
+                          {message.type === "text" && (
+                            <div className="whitespace-pre-wrap break-words">
+                              {splitText.trim()}
                             </div>
-                          ))}
-                        </div>
-                      )}
-                      {message.type === "document" && message.documentUrls && (
-                        <div className="space-y-2">
-                          {message.documentUrls.map((documentUrl, docIndex) => (
-                            <div key={docIndex} className="relative">
-                              <div className="flex items-center p-3 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600">
-                                <svg className="w-8 h-8 text-gray-500 dark:text-gray-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-                                </svg>
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                    {documentUrl.split('/').pop()?.split('?')[0] || `Document ${docIndex + 1}`}
-                                  </p>
+                          )}
+                          {message.type === "image" && message.imageUrls && (
+                            <div className="space-y-2">
+                              {message.imageUrls.map((imageUrl, imgIndex) => (
+                                <div key={imgIndex} className="relative">
+                                  <img
+                                    src={imageUrl}
+                                    alt={`AI Response Image ${imgIndex + 1}`}
+                                    className="max-w-full h-auto rounded-lg cursor-pointer"
+                                    style={{ maxHeight: "300px" }}
+                                    onClick={() => {
+                                      // Open image in new tab or modal if needed
+                                      window.open(imageUrl, "_blank");
+                                    }}
+                                  />
                                   {message.caption && (
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                                       {message.caption}
                                     </p>
                                   )}
                                 </div>
-                                <button
-                                  onClick={() => openPDFModal(documentUrl, documentUrl.split('/').pop()?.split('?')[0] || `Document ${docIndex + 1}`)}
-                                  className="px-3 py-1 text-xs bg-green-500 dark:bg-green-600 text-white rounded hover:bg-green-600 dark:hover:bg-green-700 transition-colors"
-                                >
-                                  View
-                                </button>
-                              </div>
-                              
-                              {/* Document Content Preview */}
-                              <div className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
-                                {documentUrl.toLowerCase().includes('.pdf') ? (
-                                  <iframe
-                                    src={documentUrl}
-                                    width="100%"
-                                    height="400"
-                                    title={`Document ${docIndex + 1}`}
-                                    className="border-0"
-                                    style={{ minHeight: '400px' }}
-                                  />
-                                ) : documentUrl.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                                  <img
-                                    src={documentUrl}
-                                    alt={`Document ${docIndex + 1}`}
-                                    className="w-full h-auto max-h-96 object-contain"
-                                  />
-                                ) : (
-                                  <div className="p-4 text-center">
-                                    <svg className="w-16 h-16 mx-auto text-gray-400 dark:text-gray-500 mb-2" fill="currentColor" viewBox="0 0 20 20">
-                                      <path fillRule="evenodd" d="M4 4a2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-                                    </svg>
-                                    <p className="text-gray-600 dark:text-gray-400 text-sm">
-                                      Document preview not available
-                                    </p>
-                                    <p className="text-gray-500 dark:text-gray-500 text-xs mt-1">
-                                      Click Download to view this document
-                                    </p>
-                                  </div>
+                              ))}
+                            </div>
+                          )}
+                          {message.type === "document" &&
+                            message.documentUrls && (
+                              <div className="space-y-2">
+                                {message.documentUrls.map(
+                                  (documentUrl, docIndex) => (
+                                    <div key={docIndex} className="relative">
+                                      <div className="flex items-center p-3 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600">
+                                        <svg
+                                          className="w-8 h-8 text-gray-500 dark:text-gray-400 mr-3"
+                                          fill="currentColor"
+                                          viewBox="0 0 20 20"
+                                        >
+                                          <path
+                                            fillRule="evenodd"
+                                            d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
+                                            clipRule="evenodd"
+                                          />
+                                        </svg>
+                                        <div className="flex-1">
+                                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            {documentUrl
+                                              .split("/")
+                                              .pop()
+                                              ?.split("?")[0] ||
+                                              `Document ${docIndex + 1}`}
+                                          </p>
+                                          {message.caption && (
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                              {message.caption}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <button
+                                          onClick={() =>
+                                            openPDFModal(
+                                              documentUrl,
+                                              documentUrl
+                                                .split("/")
+                                                .pop()
+                                                ?.split("?")[0] ||
+                                                `Document ${docIndex + 1}`
+                                            )
+                                          }
+                                          className="px-3 py-1 text-xs bg-green-500 dark:bg-green-600 text-white rounded hover:bg-green-600 dark:hover:bg-green-700 transition-colors"
+                                        >
+                                          View
+                                        </button>
+                                      </div>
+
+                                      {/* Document Content Preview */}
+                                      <div className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+                                        {documentUrl
+                                          .toLowerCase()
+                                          .includes(".pdf") ? (
+                                          <iframe
+                                            src={documentUrl}
+                                            width="100%"
+                                            height="400"
+                                            title={`Document ${docIndex + 1}`}
+                                            className="border-0"
+                                            style={{ minHeight: "400px" }}
+                                          />
+                                        ) : documentUrl
+                                            .toLowerCase()
+                                            .match(
+                                              /\.(jpg|jpeg|png|gif|webp)$/i
+                                            ) ? (
+                                          <img
+                                            src={documentUrl}
+                                            alt={`Document ${docIndex + 1}`}
+                                            className="w-full h-auto max-h-96 object-contain"
+                                          />
+                                        ) : (
+                                          <div className="p-4 text-center">
+                                            <svg
+                                              className="w-16 h-16 mx-auto text-gray-400 dark:text-gray-500 mb-2"
+                                              fill="currentColor"
+                                              viewBox="0 0 20 20"
+                                            >
+                                              <path
+                                                fillRule="evenodd"
+                                                d="M4 4a2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
+                                                clipRule="evenodd"
+                                              />
+                                            </svg>
+                                            <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                              Document preview not available
+                                            </p>
+                                            <p className="text-gray-500 dark:text-gray-500 text-xs mt-1">
+                                              Click Download to view this
+                                              document
+                                            </p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )
                                 )}
                               </div>
-                            </div>
-                          ))}
+                            )}
                         </div>
-                      )}
-
                       </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               ))
           )}
-          
+
           {/* AI Thinking Indicator for Fullscreen - ChatGPT Style */}
           {isAiThinking && (
             <div className="flex justify-start mb-6 animate-fadeIn">
               <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-bl-md px-5 py-4 max-w-md shadow-sm border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center space-x-3">
                   <div className="flex space-x-1.5">
-                    <div className="w-2.5 h-2.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0ms', animationDuration: '1.4s' }}></div>
-                    <div className="w-2.5 h-2.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s', animationDuration: '1.4s' }}></div>
-                    <div className="w-2.5 h-2.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s', animationDuration: '1.4s' }}></div>
+                    <div
+                      className="w-2.5 h-2.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse"
+                      style={{
+                        animationDelay: "0ms",
+                        animationDuration: "1.4s",
+                      }}
+                    ></div>
+                    <div
+                      className="w-2.5 h-2.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse"
+                      style={{
+                        animationDelay: "0.2s",
+                        animationDuration: "1.4s",
+                      }}
+                    ></div>
+                    <div
+                      className="w-2.5 h-2.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse"
+                      style={{
+                        animationDelay: "0.4s",
+                        animationDuration: "1.4s",
+                      }}
+                    ></div>
                   </div>
                 </div>
               </div>
@@ -2391,7 +2744,10 @@ const Main: React.FC = () => {
               <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl rounded-bl-md px-5 py-4 max-w-lg shadow-sm border border-blue-200 dark:border-blue-700">
                 <div className="text-sm text-blue-700 dark:text-blue-300 space-y-2 max-h-40 overflow-y-auto">
                   {aiProgress.map((step: string, index: number) => (
-                    <div key={index} className="flex items-start space-x-3 animate-fadeIn">
+                    <div
+                      key={index}
+                      className="flex items-start space-x-3 animate-fadeIn"
+                    >
                       <div className="w-2 h-2 bg-blue-400 rounded-full mt-1.5 flex-shrink-0"></div>
                       <span className="text-sm">{step}</span>
                     </div>
@@ -2429,7 +2785,7 @@ const Main: React.FC = () => {
         )}
 
         <ToastContainer />
-        
+
         {/* PDF Modal */}
         <PDFModal
           isOpen={pdfModal.isOpen}
@@ -2474,32 +2830,32 @@ const Main: React.FC = () => {
                       </select>
                     ) : null}
                   </div>
-                                      <div className="mb-3">
-                      <label
-                        className="mb-1.5 text-sm font-medium capitalize dark:text-gray-200"
-                        htmlFor="name"
-                      >
-                        Name
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="name"
-                          name="name"
-                          type="text"
-                          className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 pr-8 font-mono"
-                          placeholder="Name your assistant"
-                          value={assistantInfo.name}
-                          onChange={handleInputChange}
-                          onFocus={handleFocus}
-                          disabled={userRole === "3"}
-                        />
+                  <div className="mb-3">
+                    <label
+                      className="mb-1.5 text-sm font-medium capitalize dark:text-gray-200"
+                      htmlFor="name"
+                    >
+                      Name
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="name"
+                        name="name"
+                        type="text"
+                        className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 pr-8 font-mono"
+                        placeholder="Name your assistant"
+                        value={assistantInfo.name}
+                        onChange={handleInputChange}
+                        onFocus={handleFocus}
+                        disabled={userRole === "3"}
+                      />
                     </div>
                   </div>
 
                   {/* AI Tools Section */}
                   <div className="mb-3">
                     <div className="flex flex-wrap gap-1.5">
-                      <button 
+                      <button
                         onClick={handleAutomatedClick}
                         className="px-2 py-1.5 bg-blue-500 dark:bg-blue-600 text-white border-2 border-blue-600 dark:border-blue-500 rounded-lg hover:bg-blue-600 dark:hover:bg-blue-700 hover:border-blue-700 dark:hover:border-blue-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 whitespace-nowrap text-xs"
                       >
@@ -2521,7 +2877,12 @@ const Main: React.FC = () => {
                         onClick={handleManualClick}
                         className="px-2 py-1.5 bg-indigo-500 dark:bg-indigo-600 text-white border-2 border-indigo-600 dark:border-indigo-500 rounded-lg hover:bg-indigo-600 dark:hover:bg-indigo-700 hover:border-indigo-700 dark:hover:border-indigo-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 whitespace-nowrap text-xs"
                       >
-                        <svg className="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <svg
+                          className="h-3 w-3"
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
                           <path d="M2 10a8 8 0 1116 0 8 8 0 01-16 0zm7-3h2v6H9V7zm0 8h2v2H9v-2z" />
                         </svg>
                         Keyword Tools
@@ -2541,17 +2902,35 @@ const Main: React.FC = () => {
                       </Link>
                       <Link to="/users-layout-2/builder2">
                         <button className="px-2 py-1.5 bg-purple-500 dark:bg-purple-600 text-white border-2 border-purple-600 dark:border-purple-500 rounded-lg hover:bg-purple-600 dark:hover:bg-purple-700 hover:border-purple-700 dark:hover:border-purple-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 whitespace-nowrap text-xs">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-3 w-3"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
                             <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
-                            <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" />
+                            <path
+                              fillRule="evenodd"
+                              d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                              clipRule="evenodd"
+                            />
                           </svg>
                           Prompt Builder
                         </button>
                       </Link>
                       <Link to="/split-test">
                         <button className="px-2 py-1.5 bg-orange-500 dark:bg-orange-600 text-white border-2 border-orange-600 dark:border-orange-500 rounded-lg hover:bg-orange-600 dark:hover:bg-orange-700 hover:border-orange-700 dark:hover:border-orange-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 whitespace-nowrap text-xs">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 11-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 012 0v1.586l2.293-2.293a1 1 0 111.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm13-1a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 010-2h1.586l-2.293-2.293a1 1 0 111.414-1.414L15 13.586V12a1 1 0 011-1z" clipRule="evenodd" />
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-3 w-3"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 11-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 012 0v1.586l2.293-2.293a1 1 0 111.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm13-1a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 010-2h1.586l-2.293-2.293a1 1 0 111.414-1.414L15 13.586V12a1 1 0 011-1z"
+                              clipRule="evenodd"
+                            />
                           </svg>
                           Split Test
                         </button>
@@ -2564,8 +2943,16 @@ const Main: React.FC = () => {
                     <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-100 dark:border-blue-800 shadow-sm">
                       <div className="flex justify-between items-center mb-3">
                         <label className="text-lg font-medium dark:text-gray-200 flex items-center gap-2">
-                          <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                          <svg
+                            className="w-5 h-5 text-blue-600 dark:text-blue-400"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
+                              clipRule="evenodd"
+                            />
                           </svg>
                           AI Tools
                         </label>
@@ -2590,50 +2977,66 @@ const Main: React.FC = () => {
                         </button>
                       </div>
                       <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                        Click on any tool category to see examples and copy them directly to your chat
+                        Click on any tool category to see examples and copy them
+                        directly to your chat
                       </p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <button
-                          onClick={() => openAiToolsModal('calendar')}
+                          onClick={() => openAiToolsModal("calendar")}
                           className="p-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors duration-200 text-left"
                         >
-                          <div className="font-medium">Calendar & Reminders</div>
-                          <div className="text-xs opacity-90">Event management & scheduling</div>
+                          <div className="font-medium">
+                            Calendar & Reminders
+                          </div>
+                          <div className="text-xs opacity-90">
+                            Event management & scheduling
+                          </div>
                         </button>
                         <button
-                          onClick={() => openAiToolsModal('contact')}
+                          onClick={() => openAiToolsModal("contact")}
                           className="p-3 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors duration-200 text-left"
                         >
                           <div className="font-medium">Contact Management</div>
-                          <div className="text-xs opacity-90">Contact & tag operations</div>
+                          <div className="text-xs opacity-90">
+                            Contact & tag operations
+                          </div>
                         </button>
                         <button
-                          onClick={() => openAiToolsModal('database')}
+                          onClick={() => openAiToolsModal("database")}
                           className="p-3 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors duration-200 text-left"
                         >
-                          <div className="font-medium">Database & Custom Fields</div>
-                          <div className="text-xs opacity-90">Data management tools</div>
+                          <div className="font-medium">
+                            Database & Custom Fields
+                          </div>
+                          <div className="text-xs opacity-90">
+                            Data management tools
+                          </div>
                         </button>
                         <button
-                          onClick={() => openAiToolsModal('followUps')}
+                          onClick={() => openAiToolsModal("followUps")}
                           className="p-3 bg-pink-500 hover:bg-pink-600 text-white rounded-lg transition-colors duration-200 text-left"
                         >
-                          <div className="font-medium">Follow-Up Management</div>
-                          <div className="text-xs opacity-90">Templates & sequences</div>
+                          <div className="font-medium">
+                            Follow-Up Management
+                          </div>
+                          <div className="text-xs opacity-90">
+                            Templates & sequences
+                          </div>
                         </button>
                         <button
-                          onClick={() => openAiToolsModal('utility')}
+                          onClick={() => openAiToolsModal("utility")}
                           className="p-3 bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors duration-200 text-left md:col-span-2"
                         >
                           <div className="font-medium">Utility Functions</div>
-                          <div className="text-xs opacity-90">Web search, dates & system tools</div>
+                          <div className="text-xs opacity-90">
+                            Web search, dates & system tools
+                          </div>
                         </button>
                       </div>
                     </div>
                   )}
 
                   <div className="mb-4">
- 
                     <div className="relative">
                       <textarea
                         id="instructions"
@@ -2667,7 +3070,7 @@ const Main: React.FC = () => {
                           <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
                         </svg>
                       </button>
-                      
+
                       {/* Template Buttons - Positioned at bottom left inside textarea */}
                       <div className="absolute bottom-2 left-2 flex gap-2">
                         <button
@@ -2688,12 +3091,16 @@ const Main: React.FC = () => {
                           Version History
                         </button>
                       </div>
-                      
+
                       {/* Update Assistant Button - Positioned at bottom inside textarea */}
                       <button
                         ref={updateButtonRef}
                         onClick={updateAssistantInfo}
-                        className={`absolute bottom-2 right-2 px-4 py-2 ${isSaving ? 'bg-green-600 dark:bg-green-700' : 'bg-green-500 dark:bg-green-600'} text-white border-2 border-green-600 dark:border-green-500 rounded-lg hover:bg-green-600 dark:hover:bg-green-700 hover:border-green-700 dark:hover:border-green-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-2 ${
+                        className={`absolute bottom-2 right-2 px-4 py-2 ${
+                          isSaving
+                            ? "bg-green-600 dark:bg-green-700"
+                            : "bg-green-500 dark:bg-green-600"
+                        } text-white border-2 border-green-600 dark:border-green-500 rounded-lg hover:bg-green-600 dark:hover:bg-green-700 hover:border-green-700 dark:hover:border-green-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-2 ${
                           userRole === "3"
                             ? "opacity-50 cursor-not-allowed"
                             : ""
@@ -2701,82 +3108,89 @@ const Main: React.FC = () => {
                         onFocus={handleFocus}
                         disabled={userRole === "3"}
                       >
-                          {isSaving ? (
-                            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                          ) : (
+                        {isSaving ? (
+                          <svg
+                            className="animate-spin h-4 w-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            ></path>
+                          </svg>
+                        ) : (
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
-                              className="h-4 w-4"
+                            className="h-4 w-4"
                             viewBox="0 0 20 20"
                             fill="currentColor"
                           >
                             <path
                               fillRule="evenodd"
-                                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
                               clipRule="evenodd"
                             />
                           </svg>
-                          )}
-                        {isSaving ? 'Saving...' : 'Save'}
+                        )}
+                        {isSaving ? "Saving..." : "Save"}
                       </button>
                     </div>
                   </div>
 
-
-
-
-
-
-
-                                      <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-100 dark:border-green-800 shadow-sm">
+                  <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-100 dark:border-green-800 shadow-sm">
                     <div className="space-y-3">
-                          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                              Response Delay (seconds)
-                          </h3>
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Response Delay (seconds)
+                      </h3>
 
-                          <div>
-                            <input
-                              type="number"
-                              min="0"
-                              max="300"
-                              value={aiDelay}
-                              onChange={(e) =>
-                                setAiDelay(Number(e.target.value))
-                              }
-                              className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-xs bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
-                              disabled={userRole === "3"}
+                      <div>
+                        <input
+                          type="number"
+                          min="0"
+                          max="300"
+                          value={aiDelay}
+                          onChange={(e) => setAiDelay(Number(e.target.value))}
+                          className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-xs bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+                          disabled={userRole === "3"}
+                        />
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Set how long the AI should wait before responding
+                          (0-300 seconds)
+                        </p>
+                      </div>
+
+                      <div>
+                        <button
+                          onClick={handleSaveAiSettings}
+                          className="px-3 py-1.5 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-1.5 text-xs"
+                          disabled={userRole === "3"}
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-3 w-3"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                              clipRule="evenodd"
                             />
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                              Set how long the AI should wait before responding
-                              (0-300 seconds)
-                            </p>
-                          </div>
-
-                          <div>
-                            <button
-                              onClick={handleSaveAiSettings}
-                              className="px-3 py-1.5 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-1.5 text-xs"
-                              disabled={userRole === "3"}
-                            >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="h-3 w-3"
-                                viewBox="0 0 20 20"
-                                fill="currentColor"
-                              >
-                                <path
-                                  fillRule="evenodd"
-                                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                                  clipRule="evenodd"
-                                />
-                              </svg>
-                              Save Response Delay
-                            </button>
-                          </div>
-                        </div>
+                          </svg>
+                          Save Response Delay
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -2784,8 +3198,16 @@ const Main: React.FC = () => {
                       className="mb-2 text-sm font-medium dark:text-gray-200 flex items-center gap-1.5"
                       htmlFor="file-upload"
                     >
-                      <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414L7.293 9.293z" clipRule="evenodd" />
+                      <svg
+                        className="w-4 h-4 text-gray-600 dark:text-gray-400"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414L7.293 9.293z"
+                          clipRule="evenodd"
+                        />
                       </svg>
                       Knowledge Base
                     </label>
@@ -2800,11 +3222,28 @@ const Main: React.FC = () => {
                       {uploading && (
                         <div className="absolute inset-0 bg-white/80 dark:bg-gray-700/80 rounded-lg flex items-center justify-center">
                           <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
-                            <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            <svg
+                              className="animate-spin h-3 w-3"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              ></circle>
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                              ></path>
                             </svg>
-                            <span className="text-xs font-medium">Uploading...</span>
+                            <span className="text-xs font-medium">
+                              Uploading...
+                            </span>
                           </div>
                         </div>
                       )}
@@ -2818,8 +3257,16 @@ const Main: React.FC = () => {
                           className="flex items-center justify-between p-2 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 transition-colors"
                         >
                           <div className="flex items-center gap-2">
-                            <svg className="w-4 h-4 text-gray-500 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                            <svg
+                              className="w-4 h-4 text-gray-500 dark:text-gray-400"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
+                                clipRule="evenodd"
+                              />
                             </svg>
                             <a
                               href={file.url}
@@ -2840,24 +3287,31 @@ const Main: React.FC = () => {
                       ))}
                       {files.length === 0 && (
                         <div className="text-center py-4 text-gray-500 dark:text-gray-400">
-                          <svg className="w-10 h-10 mx-auto mb-1.5 text-gray-300 dark:text-gray-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                          <svg
+                            className="w-10 h-10 mx-auto mb-1.5 text-gray-300 dark:text-gray-600"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
+                              clipRule="evenodd"
+                            />
                           </svg>
                           <p className="text-xs">No files uploaded yet</p>
-                          <p className="text-xs mt-1">Upload files to enhance your assistant's knowledge</p>
+                          <p className="text-xs mt-1">
+                            Upload files to enhance your assistant's knowledge
+                          </p>
                         </div>
                       )}
                     </div>
                   </div>
-
-
 
                   {error && <div className="mt-4 text-red-500">{error}</div>}
                 </>
               )}
             </div>
             <div className="w-3/5 pr-2">
-
               <MessageList
                 messages={messages}
                 onSendMessage={sendMessageToAssistant}
@@ -2904,11 +3358,7 @@ const Main: React.FC = () => {
                 {loading ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="flex flex-col items-center w-3/4 max-w-lg text-center p-3">
-                      <img
-                        alt="Logo"
-                        className="w-20 h-20 p-3"
-                        src={logoUrl}
-                      />
+                      <img alt="Logo" className="w-20 h-20 p-3" src={logoUrl} />
                       <div className="mt-1.5 text-xs p-3 dark:text-gray-200">
                         Fetching Assistant...
                       </div>
@@ -2927,17 +3377,17 @@ const Main: React.FC = () => {
                       >
                         Name
                       </label>
-                                              <input
-                          id="name"
-                          name="name"
-                          type="text"
-                          className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 pr-8 font-mono"
-                          placeholder="Name your assistant"
-                          value={assistantInfo.name}
-                          onChange={handleInputChange}
-                          onFocus={handleFocus}
-                          disabled={userRole === "3"}
-                        />
+                      <input
+                        id="name"
+                        name="name"
+                        type="text"
+                        className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 pr-8 font-mono"
+                        placeholder="Name your assistant"
+                        value={assistantInfo.name}
+                        onChange={handleInputChange}
+                        onFocus={handleFocus}
+                        disabled={userRole === "3"}
+                      />
                     </div>
                     <div className="mb-3">
                       <label
@@ -2949,7 +3399,7 @@ const Main: React.FC = () => {
                       <textarea
                         id="description"
                         name="description"
-                                                    className="w-full p-2 border border-gray-300 rounded-lg h-20 text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+                        className="w-full p-2 border border-gray-300 rounded-lg h-20 text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
                         placeholder="Add a short description of what this assistant does"
                         value={assistantInfo.description}
                         onChange={handleInputChange}
@@ -2997,7 +3447,7 @@ const Main: React.FC = () => {
                             <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
                           </svg>
                         </button>
-                        
+
                         {/* Template Buttons - Positioned at bottom left inside textarea */}
                         <div className="absolute bottom-1.5 left-1.5 flex gap-1.5">
                           <button
@@ -3018,12 +3468,16 @@ const Main: React.FC = () => {
                             Version History
                           </button>
                         </div>
-                        
+
                         {/* Update Assistant Button - Positioned at bottom inside textarea */}
                         <button
                           ref={updateButtonRef}
                           onClick={updateAssistantInfo}
-                          className={`absolute bottom-2 right-2 px-4 py-2 ${isSaving ? 'bg-green-600 dark:bg-green-700' : 'bg-green-500 dark:bg-green-600'} text-white border-2 border-green-600 dark:border-green-500 rounded-lg hover:bg-green-600 dark:hover:bg-green-700 hover:border-green-700 dark:hover:border-green-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-2 ${
+                          className={`absolute bottom-2 right-2 px-4 py-2 ${
+                            isSaving
+                              ? "bg-green-600 dark:bg-green-700"
+                              : "bg-green-500 dark:bg-green-600"
+                          } text-white border-2 border-green-600 dark:border-green-500 rounded-lg hover:bg-green-600 dark:hover:bg-green-700 hover:border-green-700 dark:hover:border-green-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-2 ${
                             userRole === "3"
                               ? "opacity-50 cursor-not-allowed"
                               : ""
@@ -3031,26 +3485,41 @@ const Main: React.FC = () => {
                           onFocus={handleFocus}
                           disabled={userRole === "3"}
                         >
-                                                        {isSaving ? (
-                              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                              </svg>
-                            ) : (
+                          {isSaving ? (
+                            <svg
+                              className="animate-spin h-4 w-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              ></circle>
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                              ></path>
+                            </svg>
+                          ) : (
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
-                                className="h-4 w-4"
+                              className="h-4 w-4"
                               viewBox="0 0 20 20"
                               fill="currentColor"
                             >
                               <path
                                 fillRule="evenodd"
-                                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
                                 clipRule="evenodd"
                               />
                             </svg>
-                            )}
-                          {isSaving ? 'Saving...' : 'Save Instructions'}
+                          )}
+                          {isSaving ? "Saving..." : "Save Instructions"}
                         </button>
                       </div>
                     </div>
@@ -3098,8 +3567,6 @@ const Main: React.FC = () => {
                         ))}
                       </ul>
                     </div>
-
-
 
                     {/* Response Delay Setting for mobile */}
                     <div className="mb-5 p-4 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-100 dark:border-green-800 shadow-sm">
@@ -3156,7 +3623,6 @@ const Main: React.FC = () => {
                 )}
               </Tab.Panel>
               <Tab.Panel className="h-full flex flex-col">
-
                 <MessageList
                   messages={messages}
                   onSendMessage={sendMessageToAssistant}
@@ -3175,7 +3641,7 @@ const Main: React.FC = () => {
           </Tab.Group>
         )}
         <ToastContainer />
-        
+
         {/* PDF Modal */}
         <PDFModal
           isOpen={pdfModal.isOpen}
@@ -3215,7 +3681,7 @@ const Main: React.FC = () => {
                 leaveFrom="opacity-100 scale-100"
                 leaveTo="opacity-0 scale-95"
               >
-                                  <Dialog.Panel className="w-screen h-screen transform overflow-hidden bg-white dark:bg-gray-800 p-4 text-left align-middle shadow-xl transition-all">
+                <Dialog.Panel className="w-screen h-screen transform overflow-hidden bg-white dark:bg-gray-800 p-4 text-left align-middle shadow-xl transition-all">
                   <div className="flex justify-between items-center mb-3">
                     <Dialog.Title
                       as="h3"
@@ -3252,7 +3718,7 @@ const Main: React.FC = () => {
                       placeholder="Tell your assistant what to do"
                       disabled={userRole === "3"}
                     />
-                    
+
                     {/* Template Buttons - Positioned at bottom left inside textarea */}
                     <div className="absolute bottom-1.5 left-1.5 flex gap-1.5">
                       <button
@@ -3273,21 +3739,38 @@ const Main: React.FC = () => {
                         Version History
                       </button>
                     </div>
-                    
+
                     {/* Save Instructions Button - Positioned at bottom right inside textarea */}
                     <button
                       onClick={updateAssistantInfo}
-                      className={`absolute bottom-1.5 right-1.5 px-3 py-1.5 ${isSaving ? 'bg-green-600 dark:bg-green-700' : 'bg-green-500 dark:bg-green-600'} text-white border-2 border-green-600 dark:border-green-500 rounded-lg hover:bg-green-600 dark:hover:bg-green-700 hover:border-green-700 dark:hover:border-green-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 text-xs ${
-                        userRole === "3"
-                          ? "opacity-50 cursor-not-allowed"
-                          : ""
+                      className={`absolute bottom-1.5 right-1.5 px-3 py-1.5 ${
+                        isSaving
+                          ? "bg-green-600 dark:bg-green-700"
+                          : "bg-green-500 dark:bg-green-600"
+                      } text-white border-2 border-green-600 dark:border-green-500 rounded-lg hover:bg-green-600 dark:hover:bg-green-700 hover:border-green-700 dark:hover:border-green-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 text-xs ${
+                        userRole === "3" ? "opacity-50 cursor-not-allowed" : ""
                       }`}
                       disabled={userRole === "3"}
                     >
                       {isSaving ? (
-                        <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        <svg
+                          className="animate-spin h-3 w-3"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
                         </svg>
                       ) : (
                         <svg
@@ -3303,7 +3786,7 @@ const Main: React.FC = () => {
                           />
                         </svg>
                       )}
-                      {isSaving ? 'Saving...' : 'Save Instructions'}
+                      {isSaving ? "Saving..." : "Save Instructions"}
                     </button>
                   </div>
                 </Dialog.Panel>
@@ -3463,7 +3946,11 @@ const Main: React.FC = () => {
                       as="h3"
                       className="text-lg font-bold leading-6 text-gray-900 dark:text-gray-100"
                     >
-                      {aiToolsData[selectedToolCategory as keyof typeof aiToolsData]?.title}
+                      {
+                        aiToolsData[
+                          selectedToolCategory as keyof typeof aiToolsData
+                        ]?.title
+                      }
                     </Dialog.Title>
                     <button
                       onClick={() => setIsAiToolsModalOpen(false)}
@@ -3485,15 +3972,21 @@ const Main: React.FC = () => {
                       </svg>
                     </button>
                   </div>
-                  
+
                   <div className="mb-4">
                     <p className="text-gray-600 dark:text-gray-400 text-sm">
-                      {aiToolsData[selectedToolCategory as keyof typeof aiToolsData]?.description}
+                      {
+                        aiToolsData[
+                          selectedToolCategory as keyof typeof aiToolsData
+                        ]?.description
+                      }
                     </p>
                   </div>
 
                   <div className="max-h-[60vh] overflow-y-auto space-y-3">
-                    {aiToolsData[selectedToolCategory as keyof typeof aiToolsData]?.examples.map((tool, index) => (
+                    {aiToolsData[
+                      selectedToolCategory as keyof typeof aiToolsData
+                    ]?.examples.map((tool, index) => (
                       <div
                         key={index}
                         className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
@@ -3518,13 +4011,13 @@ const Main: React.FC = () => {
                             Copy
                           </button>
                         </div>
-                        
+
                         <div className="mb-2">
                           <div className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg p-2 font-mono text-xs text-gray-800 dark:text-gray-200 break-all">
                             {tool.example}
                           </div>
                         </div>
-                        
+
                         <p className="text-gray-600 dark:text-gray-400 text-xs">
                           {tool.description}
                         </p>
@@ -3533,12 +4026,19 @@ const Main: React.FC = () => {
                   </div>
 
                   <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
-                    <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-1.5 text-sm">How to Use These Tools</h4>
+                    <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-1.5 text-sm">
+                      How to Use These Tools
+                    </h4>
                     <div className="space-y-2 text-xs text-blue-800 dark:text-blue-200">
                       <p>
-                        <strong>Copy & Paste Instructions:</strong> Copy any example above and paste it directly into your chat with the AI. The AI will understand what you want and use the appropriate function.
+                        <strong>Copy & Paste Instructions:</strong> Copy any
+                        example above and paste it directly into your chat with
+                        the AI. The AI will understand what you want and use the
+                        appropriate function.
                       </p>
-                      <strong>Pro Tip:</strong> You can modify the examples by changing dates, names, or other details to match your specific needs before copying them.
+                      <strong>Pro Tip:</strong> You can modify the examples by
+                      changing dates, names, or other details to match your
+                      specific needs before copying them.
                     </div>
                   </div>
 

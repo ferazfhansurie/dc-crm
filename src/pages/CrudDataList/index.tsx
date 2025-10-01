@@ -309,7 +309,9 @@ function Main() {
   const [blastMessageModal, setBlastMessageModal] = useState(false);
   const [blastMessage, setBlastMessage] = useState("");
   const [progress, setProgress] = useState<number>(0);
-  const [hoveredContactTags, setHoveredContactTags] = useState<string | null>(null);
+  const [hoveredContactTags, setHoveredContactTags] = useState<string | null>(
+    null
+  );
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
   const contactsPerPage = 200;
@@ -413,41 +415,52 @@ function Main() {
   const [activeFilterTab, setActiveFilterTab] = useState("tags");
 
   // Helper function to get user filter state: 'none' | 'include' | 'exclude'
-  const getUserFilterState = (userName: string): 'none' | 'include' | 'exclude' => {
-    if (selectedUserFilters.includes(userName)) return 'include';
-    if (excludedUserFilters.includes(userName)) return 'exclude';
-    return 'none';
+  const getUserFilterState = (
+    userName: string
+  ): "none" | "include" | "exclude" => {
+    if (selectedUserFilters.includes(userName)) return "include";
+    if (excludedUserFilters.includes(userName)) return "exclude";
+    return "none";
   };
 
   // Helper function to set user filter state
-  const setUserFilterState = (userName: string, state: 'none' | 'include' | 'exclude') => {
+  const setUserFilterState = (
+    userName: string,
+    state: "none" | "include" | "exclude"
+  ) => {
     // Remove from both arrays first
-    setSelectedUserFilters(prev => prev.filter(u => u !== userName));
-    setExcludedUserFilters(prev => prev.filter(u => u !== userName));
-    
+    setSelectedUserFilters((prev) => prev.filter((u) => u !== userName));
+    setExcludedUserFilters((prev) => prev.filter((u) => u !== userName));
+
     // Add to appropriate array based on state
-    if (state === 'include') {
-      setSelectedUserFilters(prev => [...prev, userName]);
-    } else if (state === 'exclude') {
-      setExcludedUserFilters(prev => [...prev, userName]);
+    if (state === "include") {
+      setSelectedUserFilters((prev) => [...prev, userName]);
+    } else if (state === "exclude") {
+      setExcludedUserFilters((prev) => [...prev, userName]);
     }
   };
 
   // Three-state filter component for users
-  const ThreeStateUserFilter = ({ userName, className }: { userName: string; className?: string }) => {
+  const ThreeStateUserFilter = ({
+    userName,
+    className,
+  }: {
+    userName: string;
+    className?: string;
+  }) => {
     const currentState = getUserFilterState(userName);
-    
+
     const handleClick = () => {
-      let nextState: 'none' | 'include' | 'exclude';
+      let nextState: "none" | "include" | "exclude";
       switch (currentState) {
-        case 'none':
-          nextState = 'include';
+        case "none":
+          nextState = "include";
           break;
-        case 'include':
-          nextState = 'exclude';
+        case "include":
+          nextState = "exclude";
           break;
-        case 'exclude':
-          nextState = 'none';
+        case "exclude":
+          nextState = "none";
           break;
       }
       setUserFilterState(userName, nextState);
@@ -456,58 +469,79 @@ function Main() {
     return (
       <button
         onClick={handleClick}
-        className={`w-5 h-5 rounded-lg border-2 transition-all duration-200 flex items-center justify-center ${className || ''}`}
+        className={`w-5 h-5 rounded-lg border-2 transition-all duration-200 flex items-center justify-center ${
+          className || ""
+        }`}
         style={{
-          borderColor: currentState === 'none' ? 'rgba(255, 255, 255, 0.3)' : 
-                      currentState === 'include' ? '#14b8a6' : '#ef4444',
-          backgroundColor: currentState === 'none' ? 'rgba(255, 255, 255, 0.05)' :
-                          currentState === 'include' ? '#14b8a6' : '#ef4444',
+          borderColor:
+            currentState === "none"
+              ? "rgba(255, 255, 255, 0.3)"
+              : currentState === "include"
+              ? "#14b8a6"
+              : "#ef4444",
+          backgroundColor:
+            currentState === "none"
+              ? "rgba(255, 255, 255, 0.05)"
+              : currentState === "include"
+              ? "#14b8a6"
+              : "#ef4444",
         }}
       >
-        {currentState === 'include' && (
+        {currentState === "include" && (
           <Lucide icon="Check" className="w-3 h-3 text-white" />
         )}
-        {currentState === 'exclude' && (
+        {currentState === "exclude" && (
           <Lucide icon="X" className="w-3 h-3 text-white" />
         )}
       </button>
     );
   };
-  const getTagFilterState = (tagName: string): 'none' | 'include' | 'exclude' => {
-    if (selectedTagFilters.includes(tagName)) return 'include';
-    if (excludedTagFilters.includes(tagName)) return 'exclude';
-    return 'none';
+  const getTagFilterState = (
+    tagName: string
+  ): "none" | "include" | "exclude" => {
+    if (selectedTagFilters.includes(tagName)) return "include";
+    if (excludedTagFilters.includes(tagName)) return "exclude";
+    return "none";
   };
 
   // Helper function to set tag filter state
-  const setTagFilterState = (tagName: string, state: 'none' | 'include' | 'exclude') => {
+  const setTagFilterState = (
+    tagName: string,
+    state: "none" | "include" | "exclude"
+  ) => {
     // Remove from both arrays first
-    setSelectedTagFilters(prev => prev.filter(t => t !== tagName));
-    setExcludedTagFilters(prev => prev.filter(t => t !== tagName));
-    
+    setSelectedTagFilters((prev) => prev.filter((t) => t !== tagName));
+    setExcludedTagFilters((prev) => prev.filter((t) => t !== tagName));
+
     // Add to appropriate array based on state
-    if (state === 'include') {
-      setSelectedTagFilters(prev => [...prev, tagName]);
-    } else if (state === 'exclude') {
-      setExcludedTagFilters(prev => [...prev, tagName]);
+    if (state === "include") {
+      setSelectedTagFilters((prev) => [...prev, tagName]);
+    } else if (state === "exclude") {
+      setExcludedTagFilters((prev) => [...prev, tagName]);
     }
   };
 
   // Three-state filter component
-  const ThreeStateTagFilter = ({ tagName, className }: { tagName: string; className?: string }) => {
+  const ThreeStateTagFilter = ({
+    tagName,
+    className,
+  }: {
+    tagName: string;
+    className?: string;
+  }) => {
     const currentState = getTagFilterState(tagName);
-    
+
     const handleClick = () => {
-      let nextState: 'none' | 'include' | 'exclude';
+      let nextState: "none" | "include" | "exclude";
       switch (currentState) {
-        case 'none':
-          nextState = 'include';
+        case "none":
+          nextState = "include";
           break;
-        case 'include':
-          nextState = 'exclude';
+        case "include":
+          nextState = "exclude";
           break;
-        case 'exclude':
-          nextState = 'none';
+        case "exclude":
+          nextState = "none";
           break;
       }
       setTagFilterState(tagName, nextState);
@@ -516,18 +550,28 @@ function Main() {
     return (
       <button
         onClick={handleClick}
-        className={`w-5 h-5 rounded-lg border-2 transition-all duration-200 flex items-center justify-center ${className || ''}`}
+        className={`w-5 h-5 rounded-lg border-2 transition-all duration-200 flex items-center justify-center ${
+          className || ""
+        }`}
         style={{
-          borderColor: currentState === 'none' ? 'rgba(255, 255, 255, 0.3)' : 
-                      currentState === 'include' ? '#10b981' : '#ef4444',
-          backgroundColor: currentState === 'none' ? 'rgba(255, 255, 255, 0.05)' :
-                          currentState === 'include' ? '#10b981' : '#ef4444',
+          borderColor:
+            currentState === "none"
+              ? "rgba(255, 255, 255, 0.3)"
+              : currentState === "include"
+              ? "#10b981"
+              : "#ef4444",
+          backgroundColor:
+            currentState === "none"
+              ? "rgba(255, 255, 255, 0.05)"
+              : currentState === "include"
+              ? "#10b981"
+              : "#ef4444",
         }}
       >
-        {currentState === 'include' && (
+        {currentState === "include" && (
           <Lucide icon="Check" className="w-3 h-3 text-white" />
         )}
-        {currentState === 'exclude' && (
+        {currentState === "exclude" && (
           <Lucide icon="X" className="w-3 h-3 text-white" />
         )}
       </button>
@@ -543,7 +587,7 @@ function Main() {
   const [phoneOptions, setPhoneOptions] = useState<number[]>([]);
   const [phoneNames, setPhoneNames] = useState<{ [key: number]: string }>({});
   const [employeeSearch, setEmployeeSearch] = useState("");
-  const [tagSearchQuery, setTagSearchQuery] = useState('');
+  const [tagSearchQuery, setTagSearchQuery] = useState("");
 
   const [sortField, setSortField] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -595,7 +639,9 @@ function Main() {
     "phone",
     "tags",
     // These will be conditionally added based on companyId
-    ...(companyId === "079" ? ["ic", "expiryDate", "vehicleNumber", "branch"] : []),
+    ...(companyId === "079"
+      ? ["ic", "expiryDate", "vehicleNumber", "branch"]
+      : []),
     "notes",
     "createdAt",
     "actions",
@@ -615,7 +661,7 @@ function Main() {
         phone: true,
         actions: true,
         // These will be updated based on companyId in useEffect
-        vehicleNumber: false, 
+        vehicleNumber: false,
         branch: false,
         ic: false,
         expiryDate: false,
@@ -689,11 +735,11 @@ function Main() {
     };
 
     if (hoveredContactTags) {
-      document.addEventListener('click', handleClickOutside);
+      document.addEventListener("click", handleClickOutside);
     }
 
     return () => {
-      document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener("click", handleClickOutside);
     };
   }, [hoveredContactTags]);
 
@@ -1032,7 +1078,7 @@ function Main() {
         return [];
     }
   };
-  
+
   const handleRemoveTagsFromContact = async (
     contact: Contact,
     tagsToRemove: string[]
@@ -1104,14 +1150,16 @@ function Main() {
         (c) => c.id === contactId || c.contact_id === contactId
       );
       const currentTags = currentContact?.tags || [];
-      const updatedTags = currentTags.filter((tag) => !tagsToRemove.includes(tag));
+      const updatedTags = currentTags.filter(
+        (tag) => !tagsToRemove.includes(tag)
+      );
 
       // Update both contacts and filteredContacts states immediately
       const updateContactsList = (prevContacts: Contact[]) =>
         prevContacts.map((contact) =>
           contact.id === contactId || contact.contact_id === contactId
-        ? { ...contact, tags: updatedTags }
-        : contact
+            ? { ...contact, tags: updatedTags }
+            : contact
         );
 
       setContacts(updateContactsList);
@@ -1571,33 +1619,70 @@ function Main() {
 
   const formatPhoneNumber = (phone: string): string => {
     if (!phone || phone.trim() === "") return "";
-    
+
     let cleanPhone = phone.replace(/[^\d+]/g, "");
-    
+
     if (cleanPhone.startsWith("+")) {
       return cleanPhone;
     }
-    
+
     cleanPhone = cleanPhone.replace(/\+/g, "");
-    
+
     if (cleanPhone.startsWith("0")) {
       return `+60${cleanPhone.slice(1)}`;
     }
-    
+
     const commonCountryCodes = [
-      "60", "65", "66", "84", "86", "82", "81", "91", "61", "1", "44", "49", "33", "39", "34", "31", "46", "47", "45", "41", "43", "32", "30", "351", "353", "358", "372", "371", "370", "386", "385", "381", "385", "380", "375", "373"
+      "60",
+      "65",
+      "66",
+      "84",
+      "86",
+      "82",
+      "81",
+      "91",
+      "61",
+      "1",
+      "44",
+      "49",
+      "33",
+      "39",
+      "34",
+      "31",
+      "46",
+      "47",
+      "45",
+      "41",
+      "43",
+      "32",
+      "30",
+      "351",
+      "353",
+      "358",
+      "372",
+      "371",
+      "370",
+      "386",
+      "385",
+      "381",
+      "385",
+      "380",
+      "375",
+      "373",
     ];
-    
-    for (const countryCode of commonCountryCodes.sort((a, b) => b.length - a.length)) {
+
+    for (const countryCode of commonCountryCodes.sort(
+      (a, b) => b.length - a.length
+    )) {
       if (cleanPhone.startsWith(countryCode)) {
         return `+${cleanPhone}`;
       }
     }
-    
+
     if (cleanPhone.length >= 8) {
       return `+60${cleanPhone}`;
     }
-    
+
     return `+${cleanPhone}`;
   };
 
@@ -1976,7 +2061,6 @@ function Main() {
         setLoading(false);
         return;
       }
-      console.log(tagsResponse);
       const tags: Tag[] = await tagsResponse.json();
 
       // Filter out tags that match employee names (case-insensitive)
@@ -2240,7 +2324,9 @@ function Main() {
       console.log("🔍 State employee list length:", employeeList.length);
 
       if (stableEmployeeList.length === 0) {
-        console.warn("🔍 Stable employee list is empty, may need to fetch employees");
+        console.warn(
+          "🔍 Stable employee list is empty, may need to fetch employees"
+        );
         toast.warning(
           "Employee list not loaded yet. Please try again in a moment."
         );
@@ -2280,7 +2366,9 @@ function Main() {
         console.log("🏷️ [EMPLOYEE ASSIGNMENT] Updated tags:", updatedTags);
         console.log("🏷️ [EMPLOYEE ASSIGNMENT] Previous tags:", currentTags);
 
-        const updateContactsList: (prevContacts: Contact[]) => Contact[] = (prevContacts) =>
+        const updateContactsList: (prevContacts: Contact[]) => Contact[] = (
+          prevContacts
+        ) =>
           prevContacts.map((c) =>
             c.id === contact.id || c.contact_id === contact.contact_id
               ? { ...c, tags: updatedTags, assignedTo: tagName }
@@ -3160,7 +3248,9 @@ function Main() {
 
     // Optimistic UI update - remove contact immediately for better UX
     setContacts((prevContacts) =>
-      prevContacts.filter((contact) => contact.contact_id !== currentContact.contact_id)
+      prevContacts.filter(
+        (contact) => contact.contact_id !== currentContact.contact_id
+      )
     );
 
     try {
@@ -3174,7 +3264,9 @@ function Main() {
 
       // Get user and company data from NeonDB backend
       const userCompanyResponse = await fetch(
-        `${baseUrl}/api/user-company-data?email=${encodeURIComponent(userEmail)}`,
+        `${baseUrl}/api/user-company-data?email=${encodeURIComponent(
+          userEmail
+        )}`,
         {
           method: "GET",
           headers: {
@@ -3262,7 +3354,9 @@ function Main() {
 
                 // Update local state
                 setContacts((prevContacts) =>
-                  prevContacts.filter((contact) => contact.contact_id !== contact_id)
+                  prevContacts.filter(
+                    (contact) => contact.contact_id !== contact_id
+                  )
                 );
                 setScheduledMessages((prev) =>
                   prev.filter((msg) => !msg.chatIds.includes(contact_id))
@@ -3276,7 +3370,9 @@ function Main() {
               } else {
                 const forceErrorData = await forceDeleteResponse.json();
                 toast.error(
-                  `Force delete failed: ${forceErrorData.message || "Unknown error"}`
+                  `Force delete failed: ${
+                    forceErrorData.message || "Unknown error"
+                  }`
                 );
               }
             } catch (forceError) {
@@ -3298,7 +3394,9 @@ function Main() {
       }
     } catch (error) {
       console.error("Error deleting contact:", error);
-      toast.error("An error occurred while deleting the contact and associated data.");
+      toast.error(
+        "An error occurred while deleting the contact and associated data."
+      );
       // Refresh to get accurate data
       fetchContacts();
     } finally {
@@ -3342,7 +3440,9 @@ function Main() {
 
       // Get user and company data from NeonDB backend
       const userCompanyResponse = await fetch(
-        `${baseUrl}/api/user-company-data?email=${encodeURIComponent(userEmail)}`,
+        `${baseUrl}/api/user-company-data?email=${encodeURIComponent(
+          userEmail
+        )}`,
         {
           method: "GET",
           headers: {
@@ -3362,7 +3462,9 @@ function Main() {
       const companyId = userData.companyId;
 
       // Prepare contact IDs for mass deletion
-      const contactIds = selectedContacts.map(contact => contact.contact_id).filter(Boolean);
+      const contactIds = selectedContacts
+        .map((contact) => contact.contact_id)
+        .filter(Boolean);
 
       if (contactIds.length === 0) {
         toast.error("No valid contact IDs found for deletion.");
@@ -5601,7 +5703,8 @@ function Main() {
               phoneIndex: phone.phoneIndex,
               status: phone.status,
               qrCode: phone.qrCode,
-              phoneInfo: typeof phone.phoneInfo === 'string' ? phone.phoneInfo : null,
+              phoneInfo:
+                typeof phone.phoneInfo === "string" ? phone.phoneInfo : null,
             }));
             setQrCodes(qrCodesData);
           } else if (
@@ -5614,7 +5717,8 @@ function Main() {
                 phoneIndex: 0,
                 status: data.status,
                 qrCode: data.qrCode,
-                phoneInfo: typeof data.phoneInfo === 'string' ? data.phoneInfo : null,
+                phoneInfo:
+                  typeof data.phoneInfo === "string" ? data.phoneInfo : null,
               },
             ];
             setQrCodes(qrCodesData);
@@ -6187,7 +6291,11 @@ function Main() {
             </div>
 
             {/* Enhanced Active Filters */}
-            {(selectedTagFilters.length > 0 || excludedTagFilters.length > 0 || selectedUserFilters.length > 0 || excludedUserFilters.length > 0 || selectedContacts.length > 0) && (
+            {(selectedTagFilters.length > 0 ||
+              excludedTagFilters.length > 0 ||
+              selectedUserFilters.length > 0 ||
+              excludedUserFilters.length > 0 ||
+              selectedContacts.length > 0) && (
               <div className="relative flex flex-wrap items-center gap-4 mt-8 pt-6 border-t border-white/30 dark:border-slate-600/40">
                 {/* Included Tag Filters */}
                 {selectedTagFilters.map((tag, index) => (
@@ -6206,7 +6314,7 @@ function Main() {
                     </div>
                     <button
                       className="ml-3 p-1 rounded-full hover:bg-red-500/20 dark:hover:bg-red-400/20 transition-all duration-200 group-hover:scale-110"
-                      onClick={() => setTagFilterState(tag, 'none')}
+                      onClick={() => setTagFilterState(tag, "none")}
                     >
                       <Lucide
                         icon="X"
@@ -6233,7 +6341,7 @@ function Main() {
                     </div>
                     <button
                       className="ml-3 p-1 rounded-full hover:bg-red-500/20 dark:hover:bg-red-400/20 transition-all duration-200 group-hover:scale-110"
-                      onClick={() => setTagFilterState(tag, 'none')}
+                      onClick={() => setTagFilterState(tag, "none")}
                     >
                       <Lucide
                         icon="X"
@@ -6260,7 +6368,7 @@ function Main() {
                     </div>
                     <button
                       className="ml-3 p-1 rounded-full hover:bg-red-500/20 dark:hover:bg-red-400/20 transition-all duration-200 group-hover:scale-110"
-                      onClick={() => setUserFilterState(user, 'none')}
+                      onClick={() => setUserFilterState(user, "none")}
                     >
                       <Lucide
                         icon="X"
@@ -6287,7 +6395,7 @@ function Main() {
                     </div>
                     <button
                       className="ml-3 p-1 rounded-full hover:bg-red-500/20 dark:hover:bg-red-400/20 transition-all duration-200 group-hover:scale-110"
-                      onClick={() => setUserFilterState(user, 'none')}
+                      onClick={() => setUserFilterState(user, "none")}
                     >
                       <Lucide
                         icon="X"
@@ -6773,37 +6881,47 @@ function Main() {
                                   )}
                                   {contact.tags && contact.tags.length > 2 && (
                                     <div className="relative">
-                                      <span 
+                                      <span
                                         className="inline-flex items-center px-4 py-2 rounded-2xl text-xs font-bold bg-gradient-to-r from-slate-400/20 via-slate-500/15 to-slate-600/20 dark:from-slate-400/25 dark:via-slate-500/20 dark:to-slate-600/25 text-slate-600 dark:text-slate-400 backdrop-blur-xl border-2 border-slate-300/60 dark:border-slate-600/60 shadow-lg shadow-slate-500/20 dark:shadow-slate-500/30 hover:scale-110 transition-transform duration-300 cursor-pointer hover:border-blue-400/70 dark:hover:border-blue-500/70 hover:text-blue-600 dark:hover:text-blue-400"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          setHoveredContactTags(hoveredContactTags === contact.contact_id ? null : contact.contact_id);
+                                          setHoveredContactTags(
+                                            hoveredContactTags ===
+                                              contact.contact_id
+                                              ? null
+                                              : contact.contact_id
+                                          );
                                         }}
                                       >
                                         +{contact.tags.length - 2} more
                                       </span>
                                       {/* Custom Tooltip */}
-                                      {hoveredContactTags === contact.contact_id && (
+                                      {hoveredContactTags ===
+                                        contact.contact_id && (
                                         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-50">
                                           <div className="p-3 space-y-2 max-w-xs bg-slate-800 dark:bg-slate-900 rounded-lg shadow-xl border border-slate-600 dark:border-slate-700">
-                                            <div className="text-xs font-semibold text-white mb-2">All Tags:</div>
+                                            <div className="text-xs font-semibold text-white mb-2">
+                                              All Tags:
+                                            </div>
                                             <div className="flex flex-wrap gap-1.5">
-                                              {contact.tags.slice(2).map((tag, tagIndex) => (
-                                                <span
-                                                  key={tagIndex + 2}
-                                                  className={`inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium backdrop-blur-sm border ${
-                                                    employeeNames.some(
-                                                      (name) =>
-                                                        name.toLowerCase() ===
-                                                        tag.toLowerCase()
-                                                    )
-                                                      ? "bg-emerald-500/20 text-emerald-200 border-emerald-400/30"
-                                                      : "bg-blue-500/20 text-blue-200 border-blue-400/30"
-                                                  }`}
-                                                >
-                                                  {tag}
-                                                </span>
-                                              ))}
+                                              {contact.tags
+                                                .slice(2)
+                                                .map((tag, tagIndex) => (
+                                                  <span
+                                                    key={tagIndex + 2}
+                                                    className={`inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium backdrop-blur-sm border ${
+                                                      employeeNames.some(
+                                                        (name) =>
+                                                          name.toLowerCase() ===
+                                                          tag.toLowerCase()
+                                                      )
+                                                        ? "bg-emerald-500/20 text-emerald-200 border-emerald-400/30"
+                                                        : "bg-blue-500/20 text-blue-200 border-blue-400/30"
+                                                    }`}
+                                                  >
+                                                    {tag}
+                                                  </span>
+                                                ))}
                                             </div>
                                           </div>
                                           {/* Tooltip Arrow */}
@@ -7335,8 +7453,12 @@ function Main() {
                         {(() => {
                           // Use the ref instead of the state
                           const stableEmployeeList = employeeListRef.current;
-                          console.log('Using stable employee list:', stableEmployeeList.length, 'employees');
-                          
+                          console.log(
+                            "Using stable employee list:",
+                            stableEmployeeList.length,
+                            "employees"
+                          );
+
                           if (stableEmployeeList.length === 0) {
                             return (
                               <div className="p-6 text-center">
@@ -7350,7 +7472,8 @@ function Main() {
                                   No employees found
                                 </p>
                                 <p className="text-xs text-slate-500 dark:text-slate-500 mt-2">
-                                  Stable list length: {stableEmployeeList.length}
+                                  Stable list length:{" "}
+                                  {stableEmployeeList.length}
                                 </p>
                                 <p className="text-xs text-slate-500 dark:text-slate-500">
                                   Current state length: {employeeList.length}
@@ -7361,21 +7484,23 @@ function Main() {
                               </div>
                             );
                           }
-                          
-                          const filteredEmployees = stableEmployeeList.filter((employee) => {
-                            if (userRole === "4" || userRole === "2") {
-                              return (
-                                employee.role === "2" &&
-                                employee.name
-                                  .toLowerCase()
-                                  .includes(employeeSearch.toLowerCase())
-                              );
+
+                          const filteredEmployees = stableEmployeeList.filter(
+                            (employee) => {
+                              if (userRole === "4" || userRole === "2") {
+                                return (
+                                  employee.role === "2" &&
+                                  employee.name
+                                    .toLowerCase()
+                                    .includes(employeeSearch.toLowerCase())
+                                );
+                              }
+                              return employee.name
+                                .toLowerCase()
+                                .includes(employeeSearch.toLowerCase());
                             }
-                            return employee.name
-                              .toLowerCase()
-                              .includes(employeeSearch.toLowerCase());
-                          });
-                          
+                          );
+
                           return filteredEmployees.map((employee) => (
                             <button
                               key={employee.id}
@@ -7389,9 +7514,17 @@ function Main() {
                                     );
                                   });
                                   setShowAssignUserMenu(false);
-                                  toast.success(`Assigned ${employee.name} to ${selectedContacts.length} contact${selectedContacts.length !== 1 ? 's' : ''}`);
+                                  toast.success(
+                                    `Assigned ${employee.name} to ${
+                                      selectedContacts.length
+                                    } contact${
+                                      selectedContacts.length !== 1 ? "s" : ""
+                                    }`
+                                  );
                                 } else {
-                                  toast.error("You don't have permission to assign users to contacts.");
+                                  toast.error(
+                                    "You don't have permission to assign users to contacts."
+                                  );
                                 }
                               }}
                             >
@@ -7460,33 +7593,54 @@ function Main() {
                             Create New Tag
                           </span>
                         </button>
-                        {tagList.map((tag) => (
-                          <button
-                            key={tag.id}
-                            className="flex items-center justify-between w-full hover:bg-gradient-to-r hover:from-blue-50/60 hover:to-violet-50/40 dark:hover:from-blue-900/20 dark:hover:to-violet-900/20 p-3 rounded-xl text-left text-sm font-medium transition-all duration-200 backdrop-blur-sm border border-transparent hover:border-blue-200/40 dark:hover:border-blue-700/40 hover:shadow-lg group"
-                            onClick={() => {
-                              selectedContacts.forEach((contact) => {
-                                handleAddTagToSelectedContacts(
-                                  tag.name,
-                                  contact
-                                );
-                              });
-                              setShowAddTagMenu(false);
-                            }}
-                          >
-                            <div className="flex items-center space-x-3">
-                              <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-500/20 to-violet-500/20 dark:from-blue-400/20 dark:to-violet-400/20 backdrop-blur-sm border border-blue-200/40 dark:border-blue-700/40 group-hover:scale-110 transition-transform duration-300">
-                                <Lucide
-                                  icon="Tag"
-                                  className="w-3 h-3 text-blue-600 dark:text-blue-400"
-                                />
+                        {(() => {
+                          const defaultTags = [
+                            {
+                              id: "built-in-cancelled-appointment",
+                              name: "Cancelled Appointment",
+                            },
+                            {
+                              id: "built-in-booked-appointment",
+                              name: "Booked Appointment",
+                            },
+                            {
+                              id: "built-in-rescheduled-appointment",
+                              name: "Rescheduled Appointment",
+                            },
+                            { id: "built-in-stop-bot", name: "stop bot" },
+                            { id: "built-in-feedback", name: "feedback" },
+                            { id: "built-in-inquiry", name: "inquiry" },
+                            { id: "built-in-ordered", name: "ordered" },
+                          ];
+                          const allTags = [...defaultTags, ...tagList];
+                          return allTags.map((tag) => (
+                            <button
+                              key={tag.id}
+                              className="flex items-center justify-between w-full hover:bg-gradient-to-r hover:from-blue-50/60 hover:to-violet-50/40 dark:hover:from-blue-900/20 dark:hover:to-violet-900/20 p-3 rounded-xl text-left text-sm font-medium transition-all duration-200 backdrop-blur-sm border border-transparent hover:border-blue-200/40 dark:hover:border-blue-700/40 hover:shadow-lg group"
+                              onClick={() => {
+                                selectedContacts.forEach((contact) => {
+                                  handleAddTagToSelectedContacts(
+                                    tag.name,
+                                    contact
+                                  );
+                                });
+                                setShowAddTagMenu(false);
+                              }}
+                            >
+                              <div className="flex items-center space-x-3">
+                                <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-500/20 to-violet-500/20 dark:from-blue-400/20 dark:to-violet-400/20 backdrop-blur-sm border border-blue-200/40 dark:border-blue-700/40 group-hover:scale-110 transition-transform duration-300">
+                                  <Lucide
+                                    icon="Tag"
+                                    className="w-3 h-3 text-blue-600 dark:text-blue-400"
+                                  />
+                                </div>
+                                <span className="text-slate-700 dark:text-slate-300">
+                                  {tag.name}
+                                </span>
                               </div>
-                              <span className="text-slate-700 dark:text-slate-300">
-                                {tag.name}
-                              </span>
-                            </div>
-                          </button>
-                        ))}
+                            </button>
+                          ));
+                        })()}
                       </div>
                     )}
                   </div>
@@ -7545,32 +7699,53 @@ function Main() {
                           </div>
                           <span className="text-sm">Remove All Tags</span>
                         </button>
-                        {tagList.map((tag) => (
-                          <button
-                            key={tag.id}
-                            className="flex items-center justify-between w-full hover:bg-gradient-to-r hover:from-slate-50/60 hover:to-gray-50/40 dark:hover:from-slate-900/20 dark:hover:to-gray-900/20 p-3 rounded-xl text-left text-sm font-medium transition-all duration-200 backdrop-blur-sm border border-transparent hover:border-slate-200/40 dark:hover:border-slate-700/40 hover:shadow-lg group"
-                            onClick={() => {
-                              selectedContacts.forEach((contact) => {
-                                handleRemoveTagsFromContact(contact, [
-                                  tag.name,
-                                ]);
-                              });
-                              setShowRemoveTagMenu(false);
-                            }}
-                          >
-                            <div className="flex items-center space-x-3">
-                              <div className="p-1.5 rounded-lg bg-gradient-to-br from-slate-500/20 to-gray-500/20 dark:from-slate-400/20 dark:to-gray-400/20 backdrop-blur-sm border border-slate-200/40 dark:border-slate-700/40 group-hover:scale-110 transition-transform duration-300">
-                                <Lucide
-                                  icon="Tag"
-                                  className="w-3 h-3 text-slate-600 dark:text-slate-400"
-                                />
+                        {(() => {
+                          const defaultTags = [
+                            {
+                              id: "built-in-cancelled-appointment",
+                              name: "Cancelled Appointment",
+                            },
+                            {
+                              id: "built-in-booked-appointment",
+                              name: "Booked Appointment",
+                            },
+                            {
+                              id: "built-in-rescheduled-appointment",
+                              name: "Rescheduled Appointment",
+                            },
+                            { id: "built-in-stop-bot", name: "stop bot" },
+                            { id: "built-in-feedback", name: "feedback" },
+                            { id: "built-in-inquiry", name: "inquiry" },
+                            { id: "built-in-ordered", name: "ordered" },
+                          ];
+                          const allTags = [...defaultTags, ...tagList];
+                          return allTags.map((tag) => (
+                            <button
+                              key={tag.id}
+                              className="flex items-center justify-between w-full hover:bg-gradient-to-r hover:from-slate-50/60 hover:to-gray-50/40 dark:hover:from-slate-900/20 dark:hover:to-gray-900/20 p-3 rounded-xl text-left text-sm font-medium transition-all duration-200 backdrop-blur-sm border border-transparent hover:border-slate-200/40 dark:hover:border-slate-700/40 hover:shadow-lg group"
+                              onClick={() => {
+                                selectedContacts.forEach((contact) => {
+                                  handleRemoveTagsFromContact(contact, [
+                                    tag.name,
+                                  ]);
+                                });
+                                setShowRemoveTagMenu(false);
+                              }}
+                            >
+                              <div className="flex items-center space-x-3">
+                                <div className="p-1.5 rounded-lg bg-gradient-to-br from-slate-500/20 to-gray-500/20 dark:from-slate-400/20 dark:to-gray-400/20 backdrop-blur-sm border border-slate-200/40 dark:border-slate-700/40 group-hover:scale-110 transition-transform duration-300">
+                                  <Lucide
+                                    icon="Tag"
+                                    className="w-3 h-3 text-slate-600 dark:text-slate-400"
+                                  />
+                                </div>
+                                <span className="text-slate-700 dark:text-slate-300">
+                                  {tag.name}
+                                </span>
                               </div>
-                              <span className="text-slate-700 dark:text-slate-300">
-                                {tag.name}
-                              </span>
-                            </div>
-                          </button>
-                        ))}
+                            </button>
+                          ));
+                        })()}
                       </div>
                     )}
                   </div>
@@ -8261,7 +8436,10 @@ function Main() {
                             type="text"
                             value={newContact.ic}
                             onChange={(e) =>
-                              setNewContact({ ...newContact, ic: e.target.value })
+                              setNewContact({
+                                ...newContact,
+                                ic: e.target.value,
+                              })
                             }
                             placeholder="Enter IC number"
                             className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:border-purple-400/50 focus:ring-2 focus:ring-purple-400/20 transition-all duration-200 backdrop-blur-sm"
@@ -8553,36 +8731,39 @@ function Main() {
                     </div>
 
                     {/* Custom Fields Section */}
-                    {currentContact.customFields && Object.keys(currentContact.customFields).length > 0 && (
-                      <div className="p-6 rounded-2xl bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 shadow-inner">
-                        <div className="flex items-center space-x-3 mb-4">
-                          <Lucide
-                            icon="Settings"
-                            className="w-5 h-5 text-indigo-400"
-                          />
-                          <label className="text-lg font-bold text-white/90 dark:text-slate-200">
-                            Custom Fields
-                          </label>
+                    {currentContact.customFields &&
+                      Object.keys(currentContact.customFields).length > 0 && (
+                        <div className="p-6 rounded-2xl bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 shadow-inner">
+                          <div className="flex items-center space-x-3 mb-4">
+                            <Lucide
+                              icon="Settings"
+                              className="w-5 h-5 text-indigo-400"
+                            />
+                            <label className="text-lg font-bold text-white/90 dark:text-slate-200">
+                              Custom Fields
+                            </label>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {Object.entries(currentContact.customFields).map(
+                              ([key, value]) => (
+                                <div
+                                  key={key}
+                                  className="p-4 rounded-xl bg-white/5 dark:bg-slate-600/10 backdrop-blur-sm border border-white/10 dark:border-slate-500/20 hover:bg-white/10 dark:hover:bg-slate-600/20 transition-all duration-200"
+                                >
+                                  <div className="space-y-2">
+                                    <label className="text-xs font-bold text-indigo-300/80 dark:text-indigo-400/80 uppercase tracking-wider">
+                                      {key.replace(/_/g, " ")}
+                                    </label>
+                                    <p className="text-sm font-medium text-white/90 dark:text-slate-200 break-words">
+                                      {value || "Not specified"}
+                                    </p>
+                                  </div>
+                                </div>
+                              )
+                            )}
+                          </div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {Object.entries(currentContact.customFields).map(([key, value]) => (
-                            <div
-                              key={key}
-                              className="p-4 rounded-xl bg-white/5 dark:bg-slate-600/10 backdrop-blur-sm border border-white/10 dark:border-slate-500/20 hover:bg-white/10 dark:hover:bg-slate-600/20 transition-all duration-200"
-                            >
-                              <div className="space-y-2">
-                                <label className="text-xs font-bold text-indigo-300/80 dark:text-indigo-400/80 uppercase tracking-wider">
-                                  {key.replace(/_/g, ' ')}
-                                </label>
-                                <p className="text-sm font-medium text-white/90 dark:text-slate-200 break-words">
-                                  {value || "Not specified"}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                      )}
 
                     {/* Notes Section */}
                     {currentContact.notes && (
@@ -8909,51 +9090,81 @@ function Main() {
                       />
                     </div>
                     <div className="space-y-3 max-h-60 overflow-y-auto bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl rounded-2xl p-6 border border-white/20 dark:border-slate-600/20 shadow-inner">
-                      {tagList
-                      .filter((tag) =>
-                        tag.name.toLowerCase().includes(tagSearchQuery.toLowerCase())
-                      )
-                      .map((tag) => (
-                        <label
-                          key={tag.id}
-                          className="group flex items-center p-3 rounded-xl hover:bg-white/10 dark:hover:bg-slate-600/20 transition-all duration-200 cursor-pointer border border-transparent hover:border-white/10"
-                        >
-                          <div className="relative">
-                            <ThreeStateTagFilter 
-                              tagName={tag.name}
-                              className="transition-all duration-200"
-                            />
-                            <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-emerald-400/20 to-teal-400/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
-                          </div>
-                          <span className="ml-4 text-sm font-medium text-white/80 dark:text-slate-300 group-hover:text-white transition-colors duration-200">
-                            {tag.name}
-                          </span>
-                          <div className="ml-auto flex items-center space-x-2 text-xs text-white/50">
-                            {getTagFilterState(tag.name) === 'include' && (
-                              <span className="text-emerald-400">Include</span>
-                            )}
-                            {getTagFilterState(tag.name) === 'exclude' && (
-                              <span className="text-red-400">Exclude</span>
-                            )}
-                            {getTagFilterState(tag.name) === 'none' && (
-                              <span className="text-gray-400">Click to filter</span>
-                            )}
-                          </div>
-                        </label>
-                      ))}
+                      {(() => {
+                        const defaultTags = [
+                          {
+                            id: "built-in-cancelled-appointment",
+                            name: "Cancelled Appointment",
+                          },
+                          {
+                            id: "built-in-booked-appointment",
+                            name: "Booked Appointment",
+                          },
+                          {
+                            id: "built-in-rescheduled-appointment",
+                            name: "Rescheduled Appointment",
+                          },
+                          { id: "built-in-stop-bot", name: "stop bot" },
+                          { id: "built-in-feedback", name: "feedback" },
+                          { id: "built-in-inquiry", name: "inquiry" },
+                          { id: "built-in-ordered", name: "ordered" },
+                        ];
+                        const allTags = [...defaultTags, ...tagList];
+                        return allTags
+                          .filter((tag) =>
+                            tag.name
+                              .toLowerCase()
+                              .includes(tagSearchQuery.toLowerCase())
+                          )
+                          .map((tag) => (
+                            <label
+                              key={tag.id}
+                              className="group flex items-center p-3 rounded-xl hover:bg-white/10 dark:hover:bg-slate-600/20 transition-all duration-200 cursor-pointer border border-transparent hover:border-white/10"
+                            >
+                              <div className="relative">
+                                <ThreeStateTagFilter
+                                  tagName={tag.name}
+                                  className="transition-all duration-200"
+                                />
+                                <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-emerald-400/20 to-teal-400/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                              </div>
+                              <span className="ml-4 text-sm font-medium text-white/80 dark:text-slate-300 group-hover:text-white transition-colors duration-200">
+                                {tag.name}
+                              </span>
+                              <div className="ml-auto flex items-center space-x-2 text-xs text-white/50">
+                                {getTagFilterState(tag.name) === "include" && (
+                                  <span className="text-emerald-400">
+                                    Include
+                                  </span>
+                                )}
+                                {getTagFilterState(tag.name) === "exclude" && (
+                                  <span className="text-red-400">Exclude</span>
+                                )}
+                                {getTagFilterState(tag.name) === "none" && (
+                                  <span className="text-gray-400">
+                                    Click to filter
+                                  </span>
+                                )}
+                              </div>
+                            </label>
+                          ));
+                      })()}
                       {tagList.filter((tag) =>
-                        tag.name.toLowerCase().includes(tagSearchQuery.toLowerCase())
-                      ).length === 0 && tagSearchQuery && (
-                        <div className="text-center py-8">
-                          <Lucide
-                            icon="Search"
-                            className="w-12 h-12 mx-auto mb-4 text-white/30"
-                          />
-                          <p className="text-sm text-white/60">
-                            No tags found matching "{tagSearchQuery}"
-                          </p>
-                        </div>
-                      )}
+                        tag.name
+                          .toLowerCase()
+                          .includes(tagSearchQuery.toLowerCase())
+                      ).length === 0 &&
+                        tagSearchQuery && (
+                          <div className="text-center py-8">
+                            <Lucide
+                              icon="Search"
+                              className="w-12 h-12 mx-auto mb-4 text-white/30"
+                            />
+                            <p className="text-sm text-white/60">
+                              No tags found matching "{tagSearchQuery}"
+                            </p>
+                          </div>
+                        )}
                     </div>
                   </div>
 
@@ -8961,7 +9172,10 @@ function Main() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <Lucide icon="Users" className="w-5 h-5 text-teal-400" />
+                        <Lucide
+                          icon="Users"
+                          className="w-5 h-5 text-teal-400"
+                        />
                         <h4 className="text-lg font-semibold text-white/90 dark:text-slate-200">
                           Filter by Assigned User
                         </h4>
@@ -8971,26 +9185,37 @@ function Main() {
                       {(() => {
                         // Use the ref instead of the state
                         const stableEmployeeList = employeeListRef.current;
-                        console.log('Filter modal - Using stable employee list:', stableEmployeeList.length, 'employees');
-                        
+                        console.log(
+                          "Filter modal - Using stable employee list:",
+                          stableEmployeeList.length,
+                          "employees"
+                        );
+
                         if (stableEmployeeList.length === 0) {
                           return (
                             <div className="text-center py-4 text-gray-500 dark:text-gray-400">
-                              <Lucide icon="Users" className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                              <Lucide
+                                icon="Users"
+                                className="w-8 h-8 mx-auto mb-2 opacity-50"
+                              />
                               <p>No employees found</p>
-                              <p className="text-xs">Stable list length: {stableEmployeeList.length}</p>
-                              <p className="text-xs">Current state length: {employeeList.length}</p>
+                              <p className="text-xs">
+                                Stable list length: {stableEmployeeList.length}
+                              </p>
+                              <p className="text-xs">
+                                Current state length: {employeeList.length}
+                              </p>
                             </div>
                           );
                         }
-                        
+
                         return stableEmployeeList.map((employee) => (
                           <label
                             key={employee.id}
                             className="group flex items-center p-3 rounded-xl hover:bg-white/10 dark:hover:bg-slate-600/20 transition-all duration-200 cursor-pointer border border-transparent hover:border-white/10"
                           >
                             <div className="relative">
-                              <ThreeStateUserFilter 
+                              <ThreeStateUserFilter
                                 userName={employee.name}
                                 className="transition-all duration-200"
                               />
@@ -9000,14 +9225,18 @@ function Main() {
                               {employee.name}
                             </span>
                             <div className="ml-auto flex items-center space-x-2 text-xs text-white/50">
-                              {getUserFilterState(employee.name) === 'include' && (
+                              {getUserFilterState(employee.name) ===
+                                "include" && (
                                 <span className="text-teal-400">Include</span>
                               )}
-                              {getUserFilterState(employee.name) === 'exclude' && (
+                              {getUserFilterState(employee.name) ===
+                                "exclude" && (
                                 <span className="text-red-400">Exclude</span>
                               )}
-                              {getUserFilterState(employee.name) === 'none' && (
-                                <span className="text-gray-400">Click to filter</span>
+                              {getUserFilterState(employee.name) === "none" && (
+                                <span className="text-gray-400">
+                                  Click to filter
+                                </span>
                               )}
                             </div>
                           </label>
@@ -9020,7 +9249,9 @@ function Main() {
                 {/* Filter Legend */}
                 <div className="mt-6 p-4 bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-slate-600/20">
                   <div className="text-xs text-white/70 dark:text-slate-400 space-y-2">
-                    <div className="font-semibold text-white/90 dark:text-slate-200 mb-2">Filter Guide:</div>
+                    <div className="font-semibold text-white/90 dark:text-slate-200 mb-2">
+                      Filter Guide:
+                    </div>
                     <div className="flex items-center space-x-2">
                       <div className="w-3 h-3 rounded border-2 border-white/30 bg-white/5 flex items-center justify-center">
                         <span className="text-[8px] text-gray-400">○</span>
@@ -9031,7 +9262,9 @@ function Main() {
                       <div className="w-3 h-3 rounded border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center">
                         <Lucide icon="Check" className="w-2 h-2 text-white" />
                       </div>
-                      <span>Include - Shows only contacts with this tag/user</span>
+                      <span>
+                        Include - Shows only contacts with this tag/user
+                      </span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <div className="w-3 h-3 rounded border-2 border-red-500 bg-red-500 flex items-center justify-center">
@@ -9215,77 +9448,85 @@ function Main() {
                   {Object.entries(visibleColumns)
                     .filter(([column]) => {
                       // Filter out company-specific fields if not companyId 079
-                      if (companyId !== "079" && ["branch", "vehicleNumber", "ic", "expiryDate"].includes(column)) {
+                      if (
+                        companyId !== "079" &&
+                        [
+                          "branch",
+                          "vehicleNumber",
+                          "ic",
+                          "expiryDate",
+                        ].includes(column)
+                      ) {
                         return false;
                       }
                       return true;
                     })
                     .map(([column, isVisible]) => {
-                    // Check if this is a custom field
-                    const isCustomField = column.startsWith("customField_");
-                    const displayName = isCustomField
-                      ? column.replace("customField_", "")
-                      : column;
+                      // Check if this is a custom field
+                      const isCustomField = column.startsWith("customField_");
+                      const displayName = isCustomField
+                        ? column.replace("customField_", "")
+                        : column;
 
-                    // Don't allow deletion of essential columns
-                    const isEssentialColumn = [
-                      "checkbox",
-                      "contact",
-                      "phone",
-                      "actions",
-                    ].includes(column);
+                      // Don't allow deletion of essential columns
+                      const isEssentialColumn = [
+                        "checkbox",
+                        "contact",
+                        "phone",
+                        "actions",
+                      ].includes(column);
 
-                    return (
-                      <div
-                        key={column}
-                        className="group flex items-center px-4 py-4 hover:bg-white/10 dark:hover:bg-slate-600/20 rounded-2xl transition-all duration-200 border border-white/10 dark:border-slate-600/20 bg-white/5 dark:bg-slate-700/10 backdrop-blur-sm"
-                      >
-                        <label className="flex items-center text-left w-full cursor-pointer">
-                          <div className="relative">
-                            <input
-                              type="checkbox"
-                              checked={isVisible}
-                              onChange={() => {
-                                setVisibleColumns((prev) => ({
-                                  ...prev,
-                                  [column]: !isVisible,
-                                }));
-                              }}
-                              className="w-5 h-5 rounded-lg border-2 border-white/30 text-cyan-500 focus:ring-cyan-500/20 focus:ring-2 bg-white/5 backdrop-blur-sm transition-all duration-200"
-                            />
-                            <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-cyan-400/20 to-teal-400/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
-                          </div>
-                          <span className="ml-4 text-sm font-medium capitalize text-white/80 dark:text-slate-300 group-hover:text-white transition-colors duration-200">
-                            {isCustomField
-                              ? `${displayName} (Custom)`
-                              : displayName}
-                          </span>
-                        </label>
-                        <div className="flex items-center ml-auto">
-                          {!isEssentialColumn && (
-                            <button
-                              onClick={() => {
-                                setVisibleColumns((prev) => {
-                                  const newColumns = { ...prev };
-                                  delete newColumns[column];
-                                  return newColumns;
-                                });
-                              }}
-                              className="ml-3 p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 focus:outline-none transition-all duration-200 rounded-xl backdrop-blur-sm border border-red-400/20 hover:border-red-400/40"
-                              title="Delete column"
-                            >
-                              <Lucide icon="Trash2" className="w-4 h-4" />
-                            </button>
-                          )}
-                          {isEssentialColumn && (
-                            <span className="text-xs text-cyan-400 font-medium bg-cyan-500/10 px-3 py-1 rounded-full border border-cyan-400/20">
-                              Required
+                      return (
+                        <div
+                          key={column}
+                          className="group flex items-center px-4 py-4 hover:bg-white/10 dark:hover:bg-slate-600/20 rounded-2xl transition-all duration-200 border border-white/10 dark:border-slate-600/20 bg-white/5 dark:bg-slate-700/10 backdrop-blur-sm"
+                        >
+                          <label className="flex items-center text-left w-full cursor-pointer">
+                            <div className="relative">
+                              <input
+                                type="checkbox"
+                                checked={isVisible}
+                                onChange={() => {
+                                  setVisibleColumns((prev) => ({
+                                    ...prev,
+                                    [column]: !isVisible,
+                                  }));
+                                }}
+                                className="w-5 h-5 rounded-lg border-2 border-white/30 text-cyan-500 focus:ring-cyan-500/20 focus:ring-2 bg-white/5 backdrop-blur-sm transition-all duration-200"
+                              />
+                              <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-cyan-400/20 to-teal-400/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                            </div>
+                            <span className="ml-4 text-sm font-medium capitalize text-white/80 dark:text-slate-300 group-hover:text-white transition-colors duration-200">
+                              {isCustomField
+                                ? `${displayName} (Custom)`
+                                : displayName}
                             </span>
-                          )}
+                          </label>
+                          <div className="flex items-center ml-auto">
+                            {!isEssentialColumn && (
+                              <button
+                                onClick={() => {
+                                  setVisibleColumns((prev) => {
+                                    const newColumns = { ...prev };
+                                    delete newColumns[column];
+                                    return newColumns;
+                                  });
+                                }}
+                                className="ml-3 p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 focus:outline-none transition-all duration-200 rounded-xl backdrop-blur-sm border border-red-400/20 hover:border-red-400/40"
+                                title="Delete column"
+                              >
+                                <Lucide icon="Trash2" className="w-4 h-4" />
+                              </button>
+                            )}
+                            {isEssentialColumn && (
+                              <span className="text-xs text-cyan-400 font-medium bg-cyan-500/10 px-3 py-1 rounded-full border border-cyan-400/20">
+                                Required
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                 </div>
 
                 <div className="mt-10 flex justify-end space-x-3 pt-6 border-t border-white/10 dark:border-slate-700/20">
@@ -9674,23 +9915,23 @@ function Main() {
                       <span>Cancel</span>
                     </div>
                   </button>
-                      <button
-                      className="px-8 py-3 bg-gradient-to-r from-yellow-500 via-amber-500 to-orange-500 hover:from-yellow-600 hover:via-amber-600 hover:to-orange-600 border-0 text-white rounded-2xl transition-all duration-200 font-semibold shadow-lg shadow-yellow-500/25 hover:shadow-yellow-500/40 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                      onClick={handleConfirmSync}
-                      disabled={isSyncing}
-                      >
-                      {isSyncing ? (
-                        <div className="flex items-center space-x-2">
+                  <button
+                    className="px-8 py-3 bg-gradient-to-r from-yellow-500 via-amber-500 to-orange-500 hover:from-yellow-600 hover:via-amber-600 hover:to-orange-600 border-0 text-white rounded-2xl transition-all duration-200 font-semibold shadow-lg shadow-yellow-500/25 hover:shadow-yellow-500/40 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    onClick={handleConfirmSync}
+                    disabled={isSyncing}
+                  >
+                    {isSyncing ? (
+                      <div className="flex items-center space-x-2">
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         <span>Syncing...</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center space-x-2">
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-2">
                         <Lucide icon="RefreshCw" className="w-4 h-4" />
                         <span>Confirm Sync</span>
-                        </div>
-                      )}
-                      </button>
+                      </div>
+                    )}
+                  </button>
                 </div>
               </div>
             </Dialog.Panel>
@@ -9787,68 +10028,70 @@ function Main() {
                 </div>
 
                 <div className="mt-8 space-y-8">
-                    {/* Recipients Selection */}
-                    <div className="space-y-4">
+                  {/* Recipients Selection */}
+                  <div className="space-y-4">
                     <div className="flex items-center space-x-3">
                       <Lucide icon="Users" className="w-5 h-5 text-blue-400" />
                       <label className="text-lg font-semibold text-white/90 dark:text-slate-200">
-                      Recipients ({selectedContacts.length} selected)
+                        Recipients ({selectedContacts.length} selected)
                       </label>
                     </div>
                     <div className="bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl rounded-2xl p-6 max-h-48 overflow-y-auto border border-white/20 dark:border-slate-600/20 shadow-inner">
                       {selectedContacts.length > 0 ? (
-                      <div className="space-y-3">
-                        {selectedContacts
-                        .slice(0, 10)
-                        .map((contact, index) => (
-                          <div
-                          key={index}
-                          className="flex items-center justify-between p-3 bg-white/10 dark:bg-slate-600/20 rounded-xl backdrop-blur-sm border border-white/10"
-                          >
-                          <div className="flex items-center">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-sm font-medium mr-3 shadow-lg">
-                            {contact.contactName
-                              ?.charAt(0)
-                              ?.toUpperCase() || "U"}
+                        <div className="space-y-3">
+                          {selectedContacts
+                            .slice(0, 10)
+                            .map((contact, index) => (
+                              <div
+                                key={index}
+                                className="flex items-center justify-between p-3 bg-white/10 dark:bg-slate-600/20 rounded-xl backdrop-blur-sm border border-white/10"
+                              >
+                                <div className="flex items-center">
+                                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-sm font-medium mr-3 shadow-lg">
+                                    {contact.contactName
+                                      ?.charAt(0)
+                                      ?.toUpperCase() || "U"}
+                                  </div>
+                                  <span className="text-white/90 dark:text-slate-200 font-medium">
+                                    {contact.contactName || contact.phone}
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() =>
+                                    handleContactCheckboxChange(contact)
+                                  }
+                                  className="w-8 h-8 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 transition-all duration-200 flex items-center justify-center backdrop-blur-sm border border-red-400/20 hover:border-red-400/40"
+                                  title="Remove contact"
+                                >
+                                  <Lucide icon="X" className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                          {selectedContacts.length > 10 && (
+                            <div className="text-sm text-white/70 dark:text-slate-400 bg-white/5 dark:bg-slate-600/10 rounded-xl p-3 text-center backdrop-blur-sm border border-white/10">
+                              ... and {selectedContacts.length - 10} more
+                              contacts
                             </div>
-                            <span className="text-white/90 dark:text-slate-200 font-medium">
-                            {contact.contactName || contact.phone}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => handleContactCheckboxChange(contact)}
-                            className="w-8 h-8 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 transition-all duration-200 flex items-center justify-center backdrop-blur-sm border border-red-400/20 hover:border-red-400/40"
-                            title="Remove contact"
-                          >
-                            <Lucide icon="X" className="w-4 h-4" />
-                          </button>
-                          </div>
-                        ))}
-                        {selectedContacts.length > 10 && (
-                        <div className="text-sm text-white/70 dark:text-slate-400 bg-white/5 dark:bg-slate-600/10 rounded-xl p-3 text-center backdrop-blur-sm border border-white/10">
-                          ... and {selectedContacts.length - 10} more
-                          contacts
+                          )}
                         </div>
-                        )}
-                      </div>
                       ) : (
-                      <div className="text-center text-white/60 dark:text-slate-400 py-8">
-                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-white/10 to-slate-500/20 dark:from-slate-700/50 dark:to-slate-600/50 flex items-center justify-center mx-auto mb-4 backdrop-blur-sm border border-white/10">
-                        <Lucide
-                          icon="Users"
-                          className="w-8 h-8 opacity-50"
-                        />
+                        <div className="text-center text-white/60 dark:text-slate-400 py-8">
+                          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-white/10 to-slate-500/20 dark:from-slate-700/50 dark:to-slate-600/50 flex items-center justify-center mx-auto mb-4 backdrop-blur-sm border border-white/10">
+                            <Lucide
+                              icon="Users"
+                              className="w-8 h-8 opacity-50"
+                            />
+                          </div>
+                          <p className="font-medium text-white/80">
+                            No contacts selected
+                          </p>
+                          <p className="text-xs mt-1 text-white/60">
+                            Please select contacts first to send messages
+                          </p>
                         </div>
-                        <p className="font-medium text-white/80">
-                        No contacts selected
-                        </p>
-                        <p className="text-xs mt-1 text-white/60">
-                        Please select contacts first to send messages
-                        </p>
-                      </div>
                       )}
                     </div>
-                    </div>
+                  </div>
 
                   {/* Phone Selection */}
                   <div className="space-y-4">
@@ -9882,7 +10125,9 @@ function Main() {
                           Object.keys(phoneNames).map((index) => {
                             const phoneIndexOption = parseInt(index);
                             const qrCode = qrCodes[phoneIndexOption];
-                            const phoneInfo = qrCode?.phoneInfo || `Phone ${phoneIndexOption + 1}`;
+                            const phoneInfo =
+                              qrCode?.phoneInfo ||
+                              `Phone ${phoneIndexOption + 1}`;
                             const statusInfo = qrCode
                               ? getStatusInfo(qrCode.status)
                               : isLoadingStatus
@@ -9904,7 +10149,9 @@ function Main() {
                                 value={phoneIndexOption}
                                 className="bg-slate-800 text-white"
                               >
-                                {`${getPhoneName(phoneIndexOption)} - (${phoneInfo}) ${
+                                {`${getPhoneName(
+                                  phoneIndexOption
+                                )} - (${phoneInfo}) ${
                                   qrCode ? "✅" : isLoadingStatus ? "⏳" : "❌"
                                 } ${statusInfo.text}`}
                               </option>
@@ -10019,10 +10266,12 @@ function Main() {
                           <Lucide icon="Code" className="w-4 h-4" />
                           Available Placeholders:
                         </p>
-                        
+
                         {/* Standard Placeholders */}
                         <div className="mb-6">
-                          <h4 className="text-xs font-semibold text-blue-200 mb-3 uppercase tracking-wider">Standard Fields</h4>
+                          <h4 className="text-xs font-semibold text-blue-200 mb-3 uppercase tracking-wider">
+                            Standard Fields
+                          </h4>
                           <div className="grid grid-cols-2 gap-3 text-xs">
                             {[
                               "contactName",
@@ -10052,14 +10301,22 @@ function Main() {
                         {(() => {
                           // Get all unique custom field keys from selected contacts
                           const allCustomFields = new Set<string>();
-                          const customFieldAvailability = new Map<string, number>();
+                          const customFieldAvailability = new Map<
+                            string,
+                            number
+                          >();
 
-                          selectedContacts.forEach(contact => {
+                          selectedContacts.forEach((contact) => {
                             if (contact.customFields) {
-                              Object.keys(contact.customFields).forEach(key => {
-                                allCustomFields.add(key);
-                                customFieldAvailability.set(key, (customFieldAvailability.get(key) || 0) + 1);
-                              });
+                              Object.keys(contact.customFields).forEach(
+                                (key) => {
+                                  allCustomFields.add(key);
+                                  customFieldAvailability.set(
+                                    key,
+                                    (customFieldAvailability.get(key) || 0) + 1
+                                  );
+                                }
+                              );
                             }
                           });
 
@@ -10069,48 +10326,72 @@ function Main() {
                           if (customFieldsArray.length > 0) {
                             return (
                               <div>
-                                <h4 className="text-xs font-semibold text-blue-200 mb-3 uppercase tracking-wider">Custom Fields</h4>
+                                <h4 className="text-xs font-semibold text-blue-200 mb-3 uppercase tracking-wider">
+                                  Custom Fields
+                                </h4>
                                 <div className="grid grid-cols-2 gap-3 text-xs">
                                   {customFieldsArray.map((fieldKey) => {
-                                    const availableCount = customFieldAvailability.get(fieldKey) || 0;
-                                    const isAvailableForAll = availableCount === totalSelectedContacts;
-                                    const availabilityPercentage = Math.round((availableCount / totalSelectedContacts) * 100);
-                                    
+                                    const availableCount =
+                                      customFieldAvailability.get(fieldKey) ||
+                                      0;
+                                    const isAvailableForAll =
+                                      availableCount === totalSelectedContacts;
+                                    const availabilityPercentage = Math.round(
+                                      (availableCount / totalSelectedContacts) *
+                                        100
+                                    );
+
                                     return (
-                                      <div key={fieldKey} className="relative group">
+                                      <div
+                                        key={fieldKey}
+                                        className="relative group"
+                                      >
                                         <button
-                                          onClick={() => isAvailableForAll ? insertPlaceholder(fieldKey) : null}
+                                          onClick={() =>
+                                            isAvailableForAll
+                                              ? insertPlaceholder(fieldKey)
+                                              : null
+                                          }
                                           disabled={!isAvailableForAll}
                                           className={`text-left p-3 rounded-xl transition-all duration-200 border backdrop-blur-sm font-mono w-full ${
                                             isAvailableForAll
-                                              ? 'bg-white/10 dark:bg-blue-800/30 text-blue-200 dark:text-blue-200 hover:bg-white/20 dark:hover:bg-blue-700/50 border-blue-400/20 cursor-pointer'
-                                              : 'bg-gray-500/10 dark:bg-gray-800/20 text-gray-400 dark:text-gray-500 border-gray-500/20 cursor-not-allowed opacity-60'
+                                              ? "bg-white/10 dark:bg-blue-800/30 text-blue-200 dark:text-blue-200 hover:bg-white/20 dark:hover:bg-blue-700/50 border-blue-400/20 cursor-pointer"
+                                              : "bg-gray-500/10 dark:bg-gray-800/20 text-gray-400 dark:text-gray-500 border-gray-500/20 cursor-not-allowed opacity-60"
                                           }`}
                                         >
-                                          @{"{"}{fieldKey.toLowerCase().replace(/\s+/g, '_')}
+                                          @{"{"}
+                                          {fieldKey
+                                            .toLowerCase()
+                                            .replace(/\s+/g, "_")}
                                           {"}"}
                                           {!isAvailableForAll && (
                                             <div className="flex items-center mt-1">
-                                              <Lucide icon="AlertTriangle" className="w-3 h-3 mr-1" />
-                                              <span className="text-xs">{availabilityPercentage}%</span>
+                                              <Lucide
+                                                icon="AlertTriangle"
+                                                className="w-3 h-3 mr-1"
+                                              />
+                                              <span className="text-xs">
+                                                {availabilityPercentage}%
+                                              </span>
                                             </div>
                                           )}
                                         </button>
-                                        
+
                                         {/* Tooltip */}
                                         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 pointer-events-none">
                                           <div className="bg-slate-800 text-white text-xs rounded-lg px-3 py-2 shadow-lg border border-slate-600 max-w-48">
-                                            <div className="font-medium">{fieldKey}</div>
+                                            <div className="font-medium">
+                                              {fieldKey}
+                                            </div>
                                             <div className="mt-1 text-slate-300">
-                                              {isAvailableForAll ? (
-                                                "Available in all selected contacts"
-                                              ) : (
-                                                `Available in ${availableCount} of ${totalSelectedContacts} contacts (${availabilityPercentage}%)`
-                                              )}
+                                              {isAvailableForAll
+                                                ? "Available in all selected contacts"
+                                                : `Available in ${availableCount} of ${totalSelectedContacts} contacts (${availabilityPercentage}%)`}
                                             </div>
                                             {!isAvailableForAll && (
                                               <div className="mt-1 text-amber-300 text-xs">
-                                                ⚠️ Not available for all contacts
+                                                ⚠️ Not available for all
+                                                contacts
                                               </div>
                                             )}
                                             <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-800"></div>
@@ -10120,17 +10401,21 @@ function Main() {
                                     );
                                   })}
                                 </div>
-                                
+
                                 {/* Legend */}
                                 <div className="mt-4 p-3 bg-blue-900/20 rounded-lg border border-blue-400/20">
                                   <div className="flex items-center justify-between text-xs">
                                     <div className="flex items-center gap-2">
                                       <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
-                                      <span className="text-blue-200">Available for all</span>
+                                      <span className="text-blue-200">
+                                        Available for all
+                                      </span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                       <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
-                                      <span className="text-gray-400">Partially available</span>
+                                      <span className="text-gray-400">
+                                        Partially available
+                                      </span>
                                     </div>
                                   </div>
                                 </div>
@@ -11660,56 +11945,59 @@ function Main() {
                                 type="button"
                                 onClick={() => {
                                   const allIds = applyAdvancedFilters(
-                                  combineScheduledMessages(
-                                    getFilteredScheduledMessages()
-                                  )
+                                    combineScheduledMessages(
+                                      getFilteredScheduledMessages()
+                                    )
                                   ).map((msg) => msg.id!);
                                   setSelectedScheduledMessages(allIds);
                                 }}
                                 className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 hover:from-blue-500/30 hover:to-indigo-500/30 border border-blue-400/30 hover:border-blue-400/50 text-blue-300 hover:text-blue-200 rounded-2xl transition-all duration-200 backdrop-blur-sm text-sm font-medium shadow-lg shadow-blue-500/10"
-                                >
-                                <Lucide icon="CheckSquare" className="w-4 h-4" />
+                              >
+                                <Lucide
+                                  icon="CheckSquare"
+                                  className="w-4 h-4"
+                                />
                                 <span>Select All</span>
                               </button>
                               <button
-                              type="button"
-                              onClick={() => {
-                                handleSendSelectedNow();
-                              }}
-                              className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 border border-emerald-400/30 hover:border-emerald-400/50 text-emerald-300 hover:text-emerald-200 rounded-2xl transition-all duration-200 backdrop-blur-sm text-sm font-medium shadow-lg shadow-emerald-500/10"
+                                type="button"
+                                onClick={() => {
+                                  handleSendSelectedNow();
+                                }}
+                                className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 border border-emerald-400/30 hover:border-emerald-400/50 text-emerald-300 hover:text-emerald-200 rounded-2xl transition-all duration-200 backdrop-blur-sm text-sm font-medium shadow-lg shadow-emerald-500/10"
                               >
-                              <Lucide icon="Send" className="w-4 h-4" />
-                              <span>Send Selected</span>
+                                <Lucide icon="Send" className="w-4 h-4" />
+                                <span>Send Selected</span>
                               </button>
                               <button
-                              type="button"
-                              onClick={() => {
-                                if (
-                                window.confirm(
-                                  `Are you sure you want to delete ${
-                                  selectedScheduledMessages.length
-                                  } selected message${
-                                  selectedScheduledMessages.length > 1
-                                    ? "s"
-                                    : ""
-                                  }?`
-                                )
-                                ) {
-                                handleDeleteSelected();
-                                }
-                              }}
-                              className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-red-500/20 to-pink-500/20 hover:from-red-500/30 hover:to-pink-500/30 border border-red-400/30 hover:border-red-400/50 text-red-300 hover:text-red-200 rounded-2xl transition-all duration-200 backdrop-blur-sm text-sm font-medium shadow-lg shadow-red-500/10"
+                                type="button"
+                                onClick={() => {
+                                  if (
+                                    window.confirm(
+                                      `Are you sure you want to delete ${
+                                        selectedScheduledMessages.length
+                                      } selected message${
+                                        selectedScheduledMessages.length > 1
+                                          ? "s"
+                                          : ""
+                                      }?`
+                                    )
+                                  ) {
+                                    handleDeleteSelected();
+                                  }
+                                }}
+                                className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-red-500/20 to-pink-500/20 hover:from-red-500/30 hover:to-pink-500/30 border border-red-400/30 hover:border-red-400/50 text-red-300 hover:text-red-200 rounded-2xl transition-all duration-200 backdrop-blur-sm text-sm font-medium shadow-lg shadow-red-500/10"
                               >
-                              <Lucide icon="Trash2" className="w-4 h-4" />
-                              <span>Delete Selected</span>
+                                <Lucide icon="Trash2" className="w-4 h-4" />
+                                <span>Delete Selected</span>
                               </button>
                               <button
-                              type="button"
-                              onClick={() => setSelectedScheduledMessages([])}
-                              className="flex items-center space-x-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white/80 hover:text-white rounded-2xl transition-all duration-200 backdrop-blur-sm text-sm font-medium"
+                                type="button"
+                                onClick={() => setSelectedScheduledMessages([])}
+                                className="flex items-center space-x-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white/80 hover:text-white rounded-2xl transition-all duration-200 backdrop-blur-sm text-sm font-medium"
                               >
-                              <Lucide icon="X" className="w-4 h-4" />
-                              <span>Cancel</span>
+                                <Lucide icon="X" className="w-4 h-4" />
+                                <span>Cancel</span>
                               </button>
                             </div>
                           </div>

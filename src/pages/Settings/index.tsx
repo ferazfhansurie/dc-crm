@@ -7,6 +7,7 @@ import LoadingIcon from '@/components/Base/LoadingIcon';
 import { Link } from 'react-router-dom';
 import Button from "@/components/Base/Button";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
+import { BACKEND_URL } from "@/config/backend";
 
 function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
@@ -23,6 +24,8 @@ function SettingsPage() {
   const [role, setRole] = useState<string>('');
   const [aiDelay, setAiDelay] = useState<number>(0);
   const [aiAutoResponse, setAiAutoResponse] = useState(false);
+  const [apiUrl, setApiUrl] = useState("");
+  const [userEmail, setUserEmail] = useState<string>("");
 
   const firestore = getFirestore();
 
@@ -30,81 +33,126 @@ function SettingsPage() {
     fetchSettings();
   }, []);
 
-// Assuming axios is imported: import axios from 'axios';
-// Also ensure you have proper state management (e.g., useState for setCompanyId, setRole, etc.)
+  const fetchSettings = async () => {
+    try {
+      const userEmail = localStorage.getItem("userEmail");
+      setUserEmail(userEmail || "");
 
-const fetchSettings = async () => {
-  try {
-    const userEmail = localStorage.getItem('userEmail');
+      if (!userEmail) {
+        throw new Error("No user email found in localStorage");
+      }
 
+      setIsLoading(true);
 
-    setIsLoading(true); // Assuming setIsLoading is a state setter
+      // 1. Get user data (companyId and role) from user-data API
+      const userResponse = await axios.get(
+        `${BACKEND_URL.apiUrl}/user-data/${userEmail}`
+      );
+      const userData = userResponse.data;
 
-    // 1. Get user data (companyId and role)
-    const userResponse = await axios.get(`https://juta-dev.ngrok.dev/api/user-data/${userEmail}`);
-    const userData = userResponse.data;
+      if (!userData) {
+        throw new Error("User data not found");
+      }
+      console.log("userData in settings:", userData);
 
-    if (!userData) {
-      throw new Error('User data not found');
-    }
-    
-    const userCompanyId = userData.company_id; // Note: SQL column is company_id
-    setCompanyId(userCompanyId); // Assuming setCompanyId is a state setter
-    setShowAddUserButton(userData.role === "1" || userData.role === 'admin'); // Assuming setShowAddUserButton is a state setter
-    setRole(userData.role); // Assuming setRole is a state setter
+      const userCompanyId = userData.company_id;
+      setCompanyId(userCompanyId);
+      setShowAddUserButton(userData.role === "1" || userData.role === "admin");
+      setRole(userData.role);
 
-    // 2. Get company settings (using the already existing company-config API)
-    const companyConfigResponse = await axios.get(`https://juta-dev.ngrok.dev/api/company-config/${userCompanyId}`);
-    const { companyData } = companyConfigResponse.data;
+      // 2. Get comprehensive company data from company-config API
+      const companyConfigResponse = await axios.get(
+        `${BACKEND_URL.apiUrl}/company-config/${userCompanyId}`
+      );
+      const configData = companyConfigResponse.data;
 
-    setBaseUrl(companyData.apiUrl || 'https://mighty-dane-newly.ngrok-free.app'); // Assuming setBaseUrl is a state setter
-    setPhoneCount(companyData.phoneCount || 0); // Assuming setPhoneCount is a state setter
-    setAiDelay(companyData.aiDelay || 0); // Assuming setAiDelay is a state setter
-    setAiAutoResponse(companyData.aiAutoResponse || false); // Assuming setAiAutoResponse is a state setter
+      if (!configData || !configData.companyData) {
+        throw new Error("Company configuration not found");
+      }
 
-    // 3. Get reporting settings from dailyReport JSONB
-    if (companyData.dailyReport) {
-      const dailyReportData = companyData.dailyReport;
-      setEnabled(dailyReportData.enabled || false); // Assuming setEnabled is a state setter
-      setTime(dailyReportData.time || '09:00'); // Assuming setTime is a state setter
-      setGroupId(dailyReportData.groupId || ''); // Assuming setGroupId is a state setter
-      setLastRun(dailyReportData.lastRun ? new Date(dailyReportData.lastRun).toLocaleString() : null); // Assuming setLastRun is a state setter
-    } else {
-        // If dailyReport is null or empty, set defaults
+      const { companyData } = configData;
+      console.log("companyData:", companyData);
+
+      // 3. Get API URL from user-company-data endpoint (for api_url field)
+      const userCompanyResponse = await axios.get(
+        `${BACKEND_URL.apiUrl}/user-company-data?email=${encodeURIComponent(
+          userEmail
+        )}`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+        }
+      );
+      const userCompanyData = userCompanyResponse.data;
+      console.log("userCompanyData:", userCompanyData);
+
+      // Set API URL - use the one from company data or fall back to default
+      const dynamicApiUrl =
+        userCompanyData?.companyData?.api_url || companyData.apiUrl;
+      setApiUrl(dynamicApiUrl || BACKEND_URL.baseUrl);
+
+      // Set phone and AI settings from company config
+      setPhoneCount(companyData.phoneCount || 0);
+      setAiDelay(companyData.aiDelay || 0);
+      setAiAutoResponse(companyData.aiAutoResponse || false);
+
+      // 4. Handle daily report settings from dailyReport JSONB
+      if (
+        companyData.dailyReport &&
+        typeof companyData.dailyReport === "object"
+      ) {
+        const dailyReportData = companyData.dailyReport;
+        setEnabled(dailyReportData.enabled || false);
+        setTime(dailyReportData.time || "09:00");
+        setGroupId(dailyReportData.groupId || "");
+        setLastRun(
+          dailyReportData.lastRun
+            ? new Date(dailyReportData.lastRun).toLocaleString()
+            : null
+        );
+      } else {
+        // If dailyReport is null or not an object, set defaults
         setEnabled(false);
-        setTime('09:00');
-        setGroupId('');
+        setTime("09:00");
+        setGroupId("");
         setLastRun(null);
-    }
+      }
 
-    setIsLoading(false);
-  } catch (error) {
-    console.error('Error fetching settings:', error);
-    // Ensure setError is defined in your component's scope
-    setError('Failed to load settings'); 
-    setIsLoading(false);
-  }
-};
+      setIsLoading(false);
+      setError(null); // Clear any previous errors
+    } catch (error) {
+      console.error("Error fetching settings:", error);
+      setError(
+        error instanceof Error ? error.message : "Failed to load settings"
+      );
+      setIsLoading(false);
+    }
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
     setError(null);
 
     try {
-      const response = await axios.post(`${baseUrl}/api/daily-report/${companyId}`, {
-        enabled,
-        time,
-        groupId
-      });
+      const response = await axios.post(
+        `${apiUrl}/api/daily-report/${companyId}`,
+        {
+          enabled,
+          time,
+          groupId,
+        }
+      );
 
       if (response.data.success) {
-        alert('Settings saved successfully!');
+        alert("Settings saved successfully!");
       } else {
         throw new Error(response.data.error);
       }
     } catch (error) {
-      console.error('Error saving settings:', error);
-      setError('Failed to save settings');
+      console.error("Error saving settings:", error);
+      setError("Failed to save settings");
     } finally {
       setIsSaving(false);
     }
@@ -112,15 +160,19 @@ const fetchSettings = async () => {
 
   const handleTriggerReport = async () => {
     try {
-      const response = await axios.post(`${baseUrl}/api/daily-report/${companyId}/trigger`);
+      const response = await axios.post(
+        `${apiUrl}/api/daily-report/${companyId}/trigger`
+      );
       if (response.data.success) {
-        alert(`Report triggered successfully! Found ${response.data.count} leads today.`);
+        alert(
+          `Report triggered successfully! Found ${response.data.count} leads today.`
+        );
       } else {
         throw new Error(response.data.error);
       }
     } catch (error) {
-      console.error('Error triggering report:', error);
-      alert('Failed to trigger report');
+      console.error("Error triggering report:", error);
+      alert("Failed to trigger report");
     }
   };
 
