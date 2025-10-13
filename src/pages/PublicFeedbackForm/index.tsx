@@ -44,7 +44,7 @@ function PublicFeedbackForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [responses, setResponses] = useState<{ [fieldId: string]: string | number }>({});
   const [phoneNumber, setPhoneNumber] = useState(phone || '');
-  const [baseUrl] = useState<string>('https://juta-dev.ngrok.dev');
+  const [baseUrl] = useState<string>('https://bisnesgpt.serveo.net');
 
   useEffect(() => {
     if (formTitle) {
