@@ -7611,6 +7611,8 @@ function Main() {
                             { id: "built-in-feedback", name: "feedback" },
                             { id: "built-in-inquiry", name: "inquiry" },
                             { id: "built-in-ordered", name: "ordered" },
+                            { id: "built-in-CN", name: "CN" },
+                            { id: "built-in-EN", name: "EN" },
                           ];
                           const allTags = [...defaultTags, ...tagList];
                           return allTags.map((tag) => (
@@ -7717,6 +7719,8 @@ function Main() {
                             { id: "built-in-feedback", name: "feedback" },
                             { id: "built-in-inquiry", name: "inquiry" },
                             { id: "built-in-ordered", name: "ordered" },
+                            { id: "built-in-CN", name: "CN" },
+                            { id: "built-in-EN", name: "EN" },
                           ];
                           const allTags = [...defaultTags, ...tagList];
                           return allTags.map((tag) => (
@@ -9108,6 +9112,8 @@ function Main() {
                           { id: "built-in-feedback", name: "feedback" },
                           { id: "built-in-inquiry", name: "inquiry" },
                           { id: "built-in-ordered", name: "ordered" },
+                          { id: "built-in-CN", name: "CN" },
+                          { id: "built-in-EN", name: "EN" },
                         ];
                         const allTags = [...defaultTags, ...tagList];
                         return allTags
