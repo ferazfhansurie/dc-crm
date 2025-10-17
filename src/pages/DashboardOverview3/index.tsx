@@ -18,7 +18,7 @@ const FEEDBACK_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRF9tq
 const AI_HORIZON_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQs940ohQfGSntt_R3wkLw8sVDt7gRnvwB4W9WwmmWjrV49MstVq0Rz097egHvvDcBj9YXu97EO64Ep/pub?output=csv";
 
 // Neon database base URL
-const baseUrl = "https://bisnesgpt.serveo.net";
+const baseUrl = "https://bisnesgpt.jutateknologi.com";
 
 // Custom PieChart component that accepts data, labels, and colors
 interface CustomPieChartProps {

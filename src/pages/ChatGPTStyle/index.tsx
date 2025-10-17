@@ -9,7 +9,7 @@ import { useAppSelector } from "@/stores/hooks";
 import { selectDarkMode } from "@/stores/darkModeSlice";
 import Button from "@/components/Base/Button";
 
-const baseUrl = "https://bisnesgpt.serveo.net";
+const baseUrl = "https://bisnesgpt.jutateknologi.com";
 
 interface ChatMessage {
   from_me: boolean;

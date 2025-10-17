@@ -88,7 +88,7 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
 
         // Fetch user data from Neon database
         const userResponse = await fetch(
-          `https://bisnesgpt.serveo.net/api/user/config?email=${encodeURIComponent(user.email!)}`,
+          `https://bisnesgpt.jutateknologi.com/api/user/config?email=${encodeURIComponent(user.email!)}`,
           {
             method: "GET",
             headers: {
@@ -127,7 +127,7 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
 
         // Fetch company data from Neon database
         const companyResponse = await fetch(
-          `https://bisnesgpt.serveo.net/api/company-details?companyId=${companyId}`,
+          `https://bisnesgpt.jutateknologi.com/api/company-details?companyId=${companyId}`,
           {
             method: "GET",
             headers: {

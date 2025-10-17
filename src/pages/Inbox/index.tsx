@@ -1017,7 +1017,7 @@ const Main: React.FC = () => {
     try {
       // Get user config to get companyId
       const userResponse = await fetch(
-        `https://bisnesgpt.serveo.net/api/user/config?email=${encodeURIComponent(
+        `https://bisnesgpt.jutateknologi.com/api/user/config?email=${encodeURIComponent(
           userEmail
         )}`,
         {
@@ -1057,7 +1057,7 @@ const Main: React.FC = () => {
       }
 
       const response = await axios.get(
-        `https://bisnesgpt.serveo.net/api/user-company-data?email=${encodeURIComponent(
+        `https://bisnesgpt.jutateknologi.com/api/user-company-data?email=${encodeURIComponent(
           userEmail
         )}`
       );
@@ -1089,7 +1089,7 @@ const Main: React.FC = () => {
         setAssistants(assistantConfigs);
 
         const response2 = await axios.get(
-          `https://bisnesgpt.serveo.net/api/company-config/${companyId}`
+          `https://bisnesgpt.jutateknologi.com/api/company-config/${companyId}`
         );
 
         const { openaiApiKey } = response2.data;
@@ -1216,7 +1216,7 @@ const Main: React.FC = () => {
         try {
           const timestamp = new Date().toLocaleString();
           const templateResponse = await axios.post(
-            "https://bisnesgpt.serveo.net/api/instruction-templates",
+            "https://bisnesgpt.jutateknologi.com/api/instruction-templates",
             {
               companyId,
               name: timestamp,
@@ -1268,7 +1268,7 @@ const Main: React.FC = () => {
       if (!userEmail || !companyId) return [];
 
       // Get company API URL
-      const baseUrl = "https://bisnesgpt.serveo.net";
+      const baseUrl = "https://bisnesgpt.jutateknologi.com";
       const companyResponse = await fetch(
         `${baseUrl}/api/user-company-data?email=${encodeURIComponent(
           userEmail
@@ -1537,7 +1537,7 @@ const Main: React.FC = () => {
 
       setAiProgress((prev) => [...prev, "📡 Connecting to AI assistant..."]);
 
-      const apiUrl = `https://bisnesgpt.serveo.net/api/assistant-test/`;
+      const apiUrl = `https://bisnesgpt.jutateknologi.com/api/assistant-test/`;
       const requestParams = {
         message: messageText,
         email: userEmail,
@@ -1555,7 +1555,7 @@ const Main: React.FC = () => {
         console.log("🔍 [NETWORK] Testing ngrok endpoint reachability...");
         setAiProgress((prev) => [...prev, "🔍 Testing network connection..."]);
 
-        const healthCheck = await axios.get("https://bisnesgpt.serveo.net/", {
+        const healthCheck = await axios.get("https://bisnesgpt.jutateknologi.com/", {
           timeout: 5000,
         });
         console.log(
@@ -1895,7 +1895,7 @@ const Main: React.FC = () => {
   const fetchFiles = async () => {
     if (!companyId) return;
 
-    const baseUrl = "https://bisnesgpt.serveo.net";
+    const baseUrl = "https://bisnesgpt.jutateknologi.com";
 
     try {
       // Get user email for API calls
@@ -1968,7 +1968,7 @@ const Main: React.FC = () => {
     if (!file || !companyId) return;
 
     setUploading(true);
-    const baseUrl = "https://bisnesgpt.serveo.net";
+    const baseUrl = "https://bisnesgpt.jutateknologi.com";
 
     try {
       // Get user email for API calls
@@ -2179,7 +2179,7 @@ const Main: React.FC = () => {
   const deleteFile = async (fileId: string) => {
     if (!companyId) return;
 
-    const baseUrl = "https://bisnesgpt.serveo.net";
+    const baseUrl = "https://bisnesgpt.jutateknologi.com";
 
     try {
       // Get user email for API calls
@@ -2333,7 +2333,7 @@ const Main: React.FC = () => {
     try {
       // Fetch templates from your SQL backend
       const response = await axios.get(
-        `https://bisnesgpt.serveo.net/api/instruction-templates?companyId=${encodeURIComponent(
+        `https://bisnesgpt.jutateknologi.com/api/instruction-templates?companyId=${encodeURIComponent(
           companyId
         )}`
       );
@@ -2359,7 +2359,7 @@ const Main: React.FC = () => {
 
       // Send to your SQL backend
       const response = await axios.post(
-        "https://bisnesgpt.serveo.net/api/instruction-templates",
+        "https://bisnesgpt.jutateknologi.com/api/instruction-templates",
         {
           companyId,
           name: timestamp,
@@ -2393,7 +2393,7 @@ const Main: React.FC = () => {
     try {
       // Delete template from backend
       const response = await axios.delete(
-        `https://bisnesgpt.serveo.net/api/instruction-templates/${templateId}`
+        `https://bisnesgpt.jutateknologi.com/api/instruction-templates/${templateId}`
       );
 
       if (response.data.success) {
@@ -2439,7 +2439,7 @@ const Main: React.FC = () => {
 
     try {
       const response = await axios.get(
-        `https://bisnesgpt.serveo.net/api/ai-settings?companyId=${encodeURIComponent(
+        `https://bisnesgpt.jutateknologi.com/api/ai-settings?companyId=${encodeURIComponent(
           companyId
         )}`
       );
@@ -2460,7 +2460,7 @@ const Main: React.FC = () => {
 
     try {
       const response = await axios.put(
-        "https://bisnesgpt.serveo.net/api/ai-settings",
+        "https://bisnesgpt.jutateknologi.com/api/ai-settings",
         {
           companyId,
           settings: {

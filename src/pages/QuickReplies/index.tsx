@@ -88,7 +88,7 @@ const QuickRepliesPage: React.FC = () => {
   const [editingVideos, setEditingVideos] = useState<File[]>([]);
   // Fetch company data from API using user email
   const [companyData, setCompanyData] = useState<any>(null);
-  const baseUrl = 'https://bisnesgpt.serveo.net';
+  const baseUrl = 'https://bisnesgpt.jutateknologi.com';
 
   const getCurrentUserEmail = () => {
     try {

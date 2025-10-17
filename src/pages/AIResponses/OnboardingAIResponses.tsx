@@ -38,7 +38,7 @@ const OnboardingAIResponses: React.FC = () => {
   const [isCreating, setIsCreating] = useState(false);
 
   const navigate = useNavigate();
-  const baseUrl = 'https://bisnesgpt.serveo.net';
+  const baseUrl = 'https://bisnesgpt.jutateknologi.com';
 
   const steps = [
     { id: 1, title: "Welcome", icon: "🤖" },

@@ -14,7 +14,7 @@ import ThemeSwitcher from "@/components/ThemeSwitcher";
 import { Dialog } from "@headlessui/react";
 
 // Configuration
-const baseUrl = "https://bisnesgpt.serveo.net"; // Your PostgreSQL server URL
+const baseUrl = "https://bisnesgpt.jutateknologi.com"; // Your PostgreSQL server URL
 
 // Types
 interface Employee {

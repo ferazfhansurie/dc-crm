@@ -240,7 +240,7 @@ const FollowUpsPage: React.FC = () => {
 
       // Fetch user/company info from your backend
       const userResponse = await fetch(
-        `https://bisnesgpt.serveo.net/api/user-company-data?email=${encodeURIComponent(
+        `https://bisnesgpt.jutateknologi.com/api/user-company-data?email=${encodeURIComponent(
           userEmail
         )}`,
         {
@@ -256,7 +256,7 @@ const FollowUpsPage: React.FC = () => {
 
       // Fetch tags from your SQL backend
       const tagsResponse = await fetch(
-        `https://bisnesgpt.serveo.net/api/companies/${companyId}/tags`,
+        `https://bisnesgpt.jutateknologi.com/api/companies/${companyId}/tags`,
         {
           method: "GET",
           headers: { "Content-Type": "application/json" },
@@ -351,7 +351,7 @@ const FollowUpsPage: React.FC = () => {
 
     try {
       const response = await axios.post(
-        "https://bisnesgpt.serveo.net/api/upload-media",
+        "https://bisnesgpt.jutateknologi.com/api/upload-media",
         formData,
         {
           headers: {
@@ -372,7 +372,7 @@ const FollowUpsPage: React.FC = () => {
 
     try {
       const response = await axios.post(
-        "https://bisnesgpt.serveo.net/api/upload-media",
+        "https://bisnesgpt.jutateknologi.com/api/upload-media",
         formData,
         {
           headers: {
@@ -393,7 +393,7 @@ const FollowUpsPage: React.FC = () => {
 
     try {
       const response = await axios.post(
-        "https://bisnesgpt.serveo.net/api/upload-media",
+        "https://bisnesgpt.jutateknologi.com/api/upload-media",
         formData,
         {
           headers: {
@@ -419,7 +419,7 @@ const FollowUpsPage: React.FC = () => {
 
       // Get companyId from backend
       const userResponse = await axios.get(
-        `https://bisnesgpt.serveo.net/api/user-company-data?email=${encodeURIComponent(
+        `https://bisnesgpt.jutateknologi.com/api/user-company-data?email=${encodeURIComponent(
           userEmail
         )}`
       );
@@ -454,7 +454,7 @@ const FollowUpsPage: React.FC = () => {
       };
 
       const response = await axios.post(
-        "https://bisnesgpt.serveo.net/api/followup-templates",
+        "https://bisnesgpt.jutateknologi.com/api/followup-templates",
         templateData
       );
 
@@ -563,7 +563,7 @@ const FollowUpsPage: React.FC = () => {
       console.log("Message ID:", messageId);
       
       const response = await axios.put(
-        `https://bisnesgpt.serveo.net/api/followup-templates/${template.templateId}/messages/${messageId}`,
+        `https://bisnesgpt.jutateknologi.com/api/followup-templates/${template.templateId}/messages/${messageId}`,
         updateData
       );
 
@@ -602,7 +602,7 @@ const FollowUpsPage: React.FC = () => {
       }
 
       const response = await axios.delete(
-        `https://bisnesgpt.serveo.net/api/followup-templates/${template.templateId}/messages/${messageId}`
+        `https://bisnesgpt.jutateknologi.com/api/followup-templates/${template.templateId}/messages/${messageId}`
       );
 
       if (response.data.success) {
@@ -627,7 +627,7 @@ const FollowUpsPage: React.FC = () => {
       }
 
       const response = await axios.delete(
-        `https://bisnesgpt.serveo.net/api/followup-templates/${template.templateId}`
+        `https://bisnesgpt.jutateknologi.com/api/followup-templates/${template.templateId}`
       );
 
       if (response.data.success) {
@@ -661,7 +661,7 @@ const FollowUpsPage: React.FC = () => {
 
       console.log("Fetching user company data for:", userEmail);
       const userResponse = await axios.get(
-        `https://bisnesgpt.serveo.net/api/user-company-data?email=${encodeURIComponent(
+        `https://bisnesgpt.jutateknologi.com/api/user-company-data?email=${encodeURIComponent(
           userEmail
         )}`
       );
@@ -676,7 +676,7 @@ const FollowUpsPage: React.FC = () => {
       console.log("Fetching templates for companyId:", companyId);
 
       const response = await axios.get(
-        `https://bisnesgpt.serveo.net/api/followup-templates?companyId=${encodeURIComponent(
+        `https://bisnesgpt.jutateknologi.com/api/followup-templates?companyId=${encodeURIComponent(
           companyId
         )}`
       );
@@ -726,7 +726,7 @@ const FollowUpsPage: React.FC = () => {
       }
 
       const response = await axios.get(
-        `https://bisnesgpt.serveo.net/api/followup-templates/${template.templateId}/messages`
+        `https://bisnesgpt.jutateknologi.com/api/followup-templates/${template.templateId}/messages`
       );
               console.log("Messages response:", response.data);
         if (response.data.success && Array.isArray(response.data.messages)) {
@@ -863,7 +863,7 @@ const FollowUpsPage: React.FC = () => {
 
       // Send to backend
       const response = await axios.post(
-        `https://bisnesgpt.serveo.net/api/followup-templates/${template.templateId}/messages`,
+        `https://bisnesgpt.jutateknologi.com/api/followup-templates/${template.templateId}/messages`,
         messageData
       );
 
@@ -933,7 +933,7 @@ const FollowUpsPage: React.FC = () => {
       };
 
       const response = await axios.put(
-        `https://bisnesgpt.serveo.net/api/followup-templates/${editingTemplate.templateId}`,
+        `https://bisnesgpt.jutateknologi.com/api/followup-templates/${editingTemplate.templateId}`,
         updateData
       );
 
