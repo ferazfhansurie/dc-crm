@@ -4176,6 +4176,12 @@ function Main() {
         sleepAfterMessages: activateSleep ? sleepAfterMessages : null,
         sleepDuration: activateSleep ? sleepDuration : null,
         multiple: multiple,
+        ...(activeTimeStart && activeTimeEnd && {
+          activeHours: {
+            start: activeTimeStart,
+            end: activeTimeEnd,
+          },
+        }),
       };
 
       // Make API call to bisnesgpt.jutateknologi.com
@@ -10632,6 +10638,52 @@ function Main() {
                             Days
                           </option>
                         </FormSelect>
+                      </div>
+                    </div>
+
+                    {/* Active Time Range */}
+                    <div className="mt-6 p-6 bg-gradient-to-br from-violet-500/10 to-purple-500/10 backdrop-blur-xl rounded-2xl border border-violet-400/20">
+                      <div className="flex items-center space-x-3 mb-4">
+                        <Lucide
+                          icon="Clock"
+                          className="w-5 h-5 text-violet-400"
+                        />
+                        <h5 className="text-lg font-bold text-white/90 dark:text-slate-200">
+                          Active Time Range
+                        </h5>
+                      </div>
+                      <p className="text-sm text-white/70 dark:text-slate-400 mb-4">
+                        Messages will only be sent during this time window each day
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-3">
+                          <label className="block text-sm font-semibold text-white/80 dark:text-slate-400">
+                            Start Time
+                          </label>
+                          <FormInput
+                            type="time"
+                            value={activeTimeStart}
+                            onChange={(e) => setActiveTimeStart(e.target.value)}
+                            className="w-full px-4 py-3 bg-white/5 dark:bg-slate-700/20 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 rounded-2xl shadow-inner focus:border-violet-400/50 focus:ring-2 focus:ring-violet-400/20 transition-all duration-200 text-white"
+                          />
+                        </div>
+                        <div className="space-y-3">
+                          <label className="block text-sm font-semibold text-white/80 dark:text-slate-400">
+                            End Time
+                          </label>
+                          <FormInput
+                            type="time"
+                            value={activeTimeEnd}
+                            onChange={(e) => setActiveTimeEnd(e.target.value)}
+                            className="w-full px-4 py-3 bg-white/5 dark:bg-slate-700/20 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 rounded-2xl shadow-inner focus:border-violet-400/50 focus:ring-2 focus:ring-violet-400/20 transition-all duration-200 text-white"
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-3 flex items-center space-x-2 text-xs text-violet-300 bg-violet-500/10 backdrop-blur-sm px-3 py-2 rounded-xl border border-violet-400/20">
+                        <Lucide icon="Info" className="w-4 h-4" />
+                        <span>
+                          Current range: {activeTimeStart} - {activeTimeEnd}
+                        </span>
                       </div>
                     </div>
                   </div>
