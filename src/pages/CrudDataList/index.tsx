@@ -1868,50 +1868,49 @@ function Main() {
     if (!tagToProcess) return;
 
     try {
-      const user = auth.currentUser;
-      if (!user) {
-        console.error("No authenticated user");
-        toast.error("No authenticated user. Please log in.");
+      // Get user email from localStorage
+      const userEmail = localStorage.getItem("userEmail");
+      if (!userEmail) {
+        toast.error("User not authenticated");
         return;
       }
 
-      const docUserRef = doc(firestore, "user", user.email!);
-      const docUserSnapshot = await getDoc(docUserRef);
-      if (!docUserSnapshot.exists()) {
-        console.error("No such document for user!");
-        toast.error("User document not found.");
-        return;
-      }
-      const userData = docUserSnapshot.data();
-      const companyId = userData.companyId;
-
-      // Delete the tag from the tags collection
-      const tagRef = doc(
-        firestore,
-        `companies/${companyId}/tags`,
-        tagToProcess.id
-      );
-      await deleteDoc(tagRef);
-
-      // Remove the tag from all contacts
-      const contactsRef = collection(
-        firestore,
-        `companies/${companyId}/contacts`
-      );
-      const contactsSnapshot = await getDocs(contactsRef);
-      const batch = writeBatch(firestore);
-
-      contactsSnapshot.forEach((doc) => {
-        const contactData = doc.data();
-        if (contactData.tags && contactData.tags.includes(tagToProcess.name)) {
-          const updatedTags = contactData.tags.filter(
-            (t: string) => t !== tagToProcess.name
-          );
-          batch.update(doc.ref, { tags: updatedTags });
+      // Fetch user/company info from your backend
+      const userResponse = await fetch(
+        `${baseUrl}/api/user-company-data?email=${encodeURIComponent(
+          userEmail
+        )}`,
+        {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
         }
-      });
+      );
+      if (!userResponse.ok) {
+        toast.error("Failed to fetch user/company info");
+        return;
+      }
+      const userJson = await userResponse.json();
+      const companyId = userJson.userData.companyId;
+      if (!companyId) {
+        toast.error("Company ID not found");
+        return;
+      }
 
-      await batch.commit();
+      // Delete the tag via SQL backend
+      const response = await fetch(
+        `${baseUrl}/api/companies/${companyId}/tags/${tagToProcess.id}`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+        }
+      );
+
+      if (!response.ok) {
+        toast.error("Failed to delete tag");
+        return;
+      }
 
       // Update local state
       setTagList(tagList.filter((t) => t.id !== tagToProcess.id));
