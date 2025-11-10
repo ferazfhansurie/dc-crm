@@ -1863,13 +1863,15 @@ function Main() {
     }
   };
 
-  const handleConfirmDeleteTag = async () => {
-    if (!tagToDelete) return;
+  const handleConfirmDeleteTag = async (tag?: { id: string; name: string }) => {
+    const tagToProcess = tag || tagToDelete;
+    if (!tagToProcess) return;
 
     try {
       const user = auth.currentUser;
       if (!user) {
         console.error("No authenticated user");
+        toast.error("No authenticated user. Please log in.");
         return;
       }
 
@@ -1877,6 +1879,7 @@ function Main() {
       const docUserSnapshot = await getDoc(docUserRef);
       if (!docUserSnapshot.exists()) {
         console.error("No such document for user!");
+        toast.error("User document not found.");
         return;
       }
       const userData = docUserSnapshot.data();
@@ -1886,7 +1889,7 @@ function Main() {
       const tagRef = doc(
         firestore,
         `companies/${companyId}/tags`,
-        tagToDelete.id
+        tagToProcess.id
       );
       await deleteDoc(tagRef);
 
@@ -1900,9 +1903,9 @@ function Main() {
 
       contactsSnapshot.forEach((doc) => {
         const contactData = doc.data();
-        if (contactData.tags && contactData.tags.includes(tagToDelete.name)) {
+        if (contactData.tags && contactData.tags.includes(tagToProcess.name)) {
           const updatedTags = contactData.tags.filter(
-            (tag: string) => tag !== tagToDelete.name
+            (t: string) => t !== tagToProcess.name
           );
           batch.update(doc.ref, { tags: updatedTags });
         }
@@ -1911,12 +1914,12 @@ function Main() {
       await batch.commit();
 
       // Update local state
-      setTagList(tagList.filter((tag) => tag.id !== tagToDelete.id));
+      setTagList(tagList.filter((t) => t.id !== tagToProcess.id));
       setContacts(
         contacts.map((contact) => ({
           ...contact,
           tags: contact.tags
-            ? contact.tags.filter((tag) => tag !== tagToDelete.name)
+            ? contact.tags.filter((t) => t !== tagToProcess.name)
             : [],
         }))
       );
@@ -9681,8 +9684,7 @@ function Main() {
                                         `Are you sure you want to delete the tag "${tag.name}"? This will remove it from all contacts and cannot be undone.`
                                       )
                                     ) {
-                                      setTagToDelete(tag);
-                                      handleConfirmDeleteTag();
+                                      handleConfirmDeleteTag(tag);
                                     }
                                   }}
                                   className="px-4 py-2 bg-gradient-to-r from-red-500/80 to-pink-600/80 hover:from-red-600/90 hover:to-pink-700/90 text-white rounded-xl transition-all duration-200 font-semibold shadow-lg shadow-red-500/25 hover:shadow-red-500/40 transform hover:scale-105 flex items-center space-x-2 group-hover:scale-110"
