@@ -21,11 +21,7 @@ const menu: Array<Menu | "divider"> = [
     pathname: "/dashboard",
     title: "Stats",
   },
-  {
-      icon: "Bot",
-      pathname: "/inbox",
-      title: "Assistant",
-    },
+
     // {
     //   icon: "HardDrive",
     //   pathname: "/dashboard/file-manager",

@@ -12,6 +12,7 @@ import simpleMenuRole2 from "@/main/simple-menu-role-2";
 import simpleMenuRole3 from "@/main/simple-menu-role-3";
 import topMenu from "@/main/top-menu";
 import { useConfig } from '../config';
+import { co } from "@fullcalendar/core/internal-common";
 
 export interface Menu {
   icon: keyof typeof icons;
@@ -40,7 +41,7 @@ export const selectMenu = (layout: Themes["layout"]) => (state: RootState) => {
   // Get config from state instead of using hook
   const config = state.config;
   const userRole = config?.userRole;
-  console.log('config?.name', config?.name);
+  console.log('config?.name', config);
   if (layout == "top-menu") {
     return topMenu;
   }
@@ -52,7 +53,7 @@ export const selectMenu = (layout: Themes["layout"]) => (state: RootState) => {
       return simpleMenu3;
     }else if (config?.name === "MTDC") {
       return simpleMenuMTDC;
-    } else if (config?.name === "Juta") {
+    } else if (config?.name === "Juta" || config?.name === "Omniyal AI") {
       return simpleMenuJuta;
     } else {
       switch (userRole) {

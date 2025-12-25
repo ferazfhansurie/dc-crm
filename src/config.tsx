@@ -1,26 +1,8 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { getAuth, User, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
-import { initializeApp } from "firebase/app";
 import { useNavigate } from "react-router-dom";
 import LZString from 'lz-string';
 import { useDispatch } from 'react-redux';
 import { setConfig } from './stores/configSlice';
-
-const firebaseConfig = {
-  apiKey: "AIzaSyCc0oSHlqlX7fLeqqonODsOIC3XA8NI7hc",
-  authDomain: "onboarding-a5fcb.firebaseapp.com",
-  databaseURL: "https://onboarding-a5fcb-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "onboarding-a5fcb",
-  storageBucket: "onboarding-a5fcb.appspot.com",
-  messagingSenderId: "334607574757",
-  appId: "1:334607574757:web:2603a69bf85f4a1e87960c",
-  measurementId: "G-2C9J1RY67L"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-
-setPersistence(auth, browserLocalPersistence);
 
 interface ConfigContextProps {
   config: any;
@@ -81,14 +63,14 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
   }, [navigate]);
 
   const fetchConfigOnAuthChange = () => {
-    const fetchConfig = async (user: User) => {
+    const fetchConfig = async (userEmail: string) => {
       try {
-        console.log('Starting config fetch for user:', user.email);
+        console.log('Starting config fetch for user:', userEmail);
         setIsLoading(true);
 
         // Fetch user data from Neon database
         const userResponse = await fetch(
-          `https://bisnesgpt.jutateknologi.com/api/user/config?email=${encodeURIComponent(user.email!)}`,
+          `https://bisnesgpt.jutateknologi.com/api/user/config?email=${encodeURIComponent(userEmail)}`,
           {
             method: "GET",
             headers: {
@@ -179,26 +161,45 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
       }
     };
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('Auth state changed, user:', user);
-      if (user) {
-        console.log('User authenticated, fetching config for:', user.email);
-        fetchConfig(user);
-      } else {
-        console.log('No user authenticated');
-        const currentPath = window.location.pathname;
-        if (currentPath === '/register') {
-          navigate('/register');
-        } else  if (!currentPath.includes('/guest-chat')) {
+    // Check for authenticated user from localStorage (Neon database)
+    const checkAuth = () => {
+      console.log('Checking authentication status');
+      const userDataStr = localStorage.getItem("userData");
       
-        } else {
-
+      if (userDataStr) {
+        try {
+          const parsedUserData = JSON.parse(userDataStr);
+          const userEmail = parsedUserData.email;
+          
+          if (userEmail) {
+            console.log('User authenticated via Neon database:', userEmail);
+            fetchConfig(userEmail);
+          } else {
+            console.log('No email found in userData');
+            handleUnauthenticated();
+          }
+        } catch (error) {
+          console.error('Error parsing userData:', error);
+          handleUnauthenticated();
         }
-        setIsLoading(false);
+      } else {
+        console.log('No userData found in localStorage');
+        handleUnauthenticated();
       }
-    });
+    };
 
-    return () => unsubscribe();
+    const handleUnauthenticated = () => {
+      const currentPath = window.location.pathname;
+      if (currentPath === '/register') {
+        navigate('/register');
+      } else if (!currentPath.includes('/guest-chat')) {
+        // User is not authenticated and not on a public page
+      }
+      setIsLoading(false);
+    };
+
+    // Run auth check immediately
+    checkAuth();
   };
 
   return (

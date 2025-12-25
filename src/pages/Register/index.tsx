@@ -6,30 +6,11 @@ import { FormInput } from "@/components/Base/Form";
 import Button from "@/components/Base/Button";
 import clsx from "clsx";
 import { Link, useNavigate } from "react-router-dom";
-import { initializeApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
-import { getFirestore, doc, setDoc, collection, getDocs, addDoc, query, where, getDoc } from "firebase/firestore";
 import { useState, useEffect } from "react";
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import axios from "axios";
 import { getCountries, getCountryCallingCode, parsePhoneNumber, AsYouType, CountryCode } from 'libphonenumber-js'
-
-// Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyCc0oSHlqlX7fLeqqonODsOIC3XA8NI7hc",
-  authDomain: "onboarding-a5fcb.firebaseapp.com",
-  databaseURL: "https://onboarding-a5fcb-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "onboarding-a5fcb",
-  storageBucket: "onboarding-a5fcb.appspot.com",
-  messagingSenderId: "334607574757",
-  appId: "1:334607574757:web:2603a69bf85f4a1e87960c",
-  measurementId: "G-2C9J1RY67L"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const firestore = getFirestore(app);
 
 function Main() {
   const [name, setName] = useState("");
@@ -80,85 +61,7 @@ function Main() {
     }
   };
 
-  const sendVerificationCode = async () => {
-    try {
-      // Validate phone number
-      if (phoneNumber.length < 10) {
-        toast.error("Please enter a valid phone number");
-        return;
-      }
-      // Double check if phone number is still available
-      const isRegistered = await isPhoneNumberRegistered(phoneNumber);
-      if (isRegistered) {
-        toast.error("This phone number is already registered");
-        return;
-      }
-      const formattedPhone = formatPhoneNumber(phoneNumber).substring(1) + '@c.us'; // Remove '+' for WhatsApp
-      const code = generateVerificationCode();
-      localStorage.setItem('verificationCode', code);
-      const user = getAuth().currentUser;
-      if (!user) {
-        console.error("User not authenticated");
-      }
-      const docUserRef = doc(firestore, 'user', user?.email!);
-      const docUserSnapshot = await getDoc(docUserRef);
-      if (!docUserSnapshot.exists()) {
-        
-        return;
-      }
-      const dataUser = docUserSnapshot.data();
-      const companyId = dataUser.companyId;
-      const docRef = doc(firestore, 'companies', companyId);
-      const docSnapshot = await getDoc(docRef);
-      if (!docSnapshot.exists()) {
-        
-        return;
-      }
-      const data2 = docSnapshot.data();
-      const baseUrl = data2.apiUrl || 'https://bisnesgpt.jutateknologi.com';
-      const response = await fetch(`${baseUrl}/api/v2/messages/text/001/${formattedPhone}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: `Your verification code is: ${code}`,
-          phoneIndex: 0,
-          userName: "System"
-        }),
-      });
 
-      if (!response.ok) {
-        throw new Error('Failed to send verification code');
-      }
-
-      setIsVerificationSent(true);
-      setVerificationStep(true);
-      setCooldown(10);
-      toast.success("Verification code sent!");
-    } catch (error) {
-      toast.error("Failed to send verification code");
-      console.error(error);
-    }
-  };
-
-  const isPhoneNumberRegistered = async (phoneNumber: string) => {
-    try {
-      const formattedPhone = formatPhoneNumber(phoneNumber);
-      const usersRef = collection(firestore, "user");
-      // Check both phone and phoneNumber fields
-      const q1 = query(usersRef, where("phone", "==", formattedPhone));
-      const q2 = query(usersRef, where("phoneNumber", "==", formattedPhone));
-      
-      const [snapshot1, snapshot2] = await Promise.all([
-        getDocs(q1),
-        getDocs(q2)
-      ]);
-      
-      return !snapshot1.empty || !snapshot2.empty;
-    } catch (error) {
-      console.error("Error checking phone number:", error);
-      throw error;
-    }
-  };
 
 
   const handleRegister = async () => {
