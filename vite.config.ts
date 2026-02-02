@@ -1,6 +1,8 @@
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import fs from "fs";
+import path from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -20,6 +22,15 @@ export default defineConfig({
     }
   },
   server: {
+    // Enable HTTPS for local development (required for Facebook SDK)
+    https: process.env.HTTPS_ENABLED === 'true' ? {
+      key: fs.existsSync(path.resolve(__dirname, 'localhost-key.pem')) 
+        ? fs.readFileSync(path.resolve(__dirname, 'localhost-key.pem'))
+        : undefined,
+      cert: fs.existsSync(path.resolve(__dirname, 'localhost.pem'))
+        ? fs.readFileSync(path.resolve(__dirname, 'localhost.pem'))
+        : undefined,
+    } : undefined,
     proxy: {
       '/api': {
         target: 'http://localhost:3000', // Change this to your backend server's URL

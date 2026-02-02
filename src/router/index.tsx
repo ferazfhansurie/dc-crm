@@ -68,6 +68,7 @@ import DataImport from "../pages/DataImport";
 import Builder2 from "../pages/Builder2";
 import ChatGPTStyle from "../pages/ChatGPTStyle";
 import SplitTest from "../pages/SplitTest";
+import WhatsAppCallback from "../pages/WhatsAppCallback";
 
 
 function Router() {
@@ -178,6 +179,7 @@ function Router() {
     { path: "/guest-chat/:companyId", element: <GuestChat />},
     { path: "/feedback/:formTitle/:phone", element: <PublicFeedbackForm />},
     { path: "/attendance/:eventTitle/:phone", element: <PublicAttendanceForm />},
+    { path: "/whatsapp-callback", element: <WhatsAppCallback /> },
 
         { path: "notification", element: <Notification /> },
     { path: "dashboard-overview-2", element: <DashboardOverview2 /> },
