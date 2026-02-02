@@ -1060,34 +1060,65 @@ console.log("userEmail:", userEmail);
                 </div>
 
                 <div className="bg-gradient-to-r from-green-50/50 to-emerald-50/30 dark:from-green-900/20 dark:to-emerald-900/10 backdrop-blur-xl rounded-2xl p-4 border border-green-200/40 dark:border-green-700/40">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-                    <div className="flex items-center space-x-4">
-                      <div className="p-2 rounded-xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 backdrop-blur-sm border border-green-200/40 dark:border-green-700/40">
-                        <Lucide icon="Link" className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  {(() => {
+                    const phone0 = qrCodes.find(q => q.phoneIndex === 0);
+                    const isConnected = phone0?.status === 'ready' || phone0?.status === 'authenticated';
+                    
+                    if (isConnected) {
+                      return (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            <div className="p-2 rounded-xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 backdrop-blur-sm border border-green-200/40 dark:border-green-700/40">
+                              <Lucide icon="CheckCircle" className="w-5 h-5 text-green-600 dark:text-green-400" />
+                            </div>
+                            <div>
+                              <span className="text-sm font-semibold text-green-700 dark:text-green-300">
+                                WhatsApp Connected
+                              </span>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">
+                                {phone0?.phoneInfo || 'Connected successfully'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                            <span className="text-xs font-medium text-green-600 dark:text-green-400">Active</span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    
+                    return (
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+                        <div className="flex items-center space-x-4">
+                          <div className="p-2 rounded-xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 backdrop-blur-sm border border-green-200/40 dark:border-green-700/40">
+                            <Lucide icon="Link" className="w-5 h-5 text-green-600 dark:text-green-400" />
+                          </div>
+                          <div>
+                            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                              Connect WhatsApp Business
+                            </span>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              Click to start the official signup flow
+                            </p>
+                          </div>
+                        </div>
+                        <WhatsAppEmbeddedSignup
+                          companyId={companyId}
+                          phoneIndex={0}
+                          onSuccess={(data) => {
+                            toast.success(`Connected: ${data.displayPhoneNumber}`);
+                            fetchPhoneStatus();
+                          }}
+                          onError={(error) => {
+                            toast.error(error);
+                          }}
+                          buttonText="Connect via Meta"
+                          className="bg-gradient-to-r from-green-500/90 to-emerald-500/90 hover:from-green-600/90 hover:to-emerald-600/90 backdrop-blur-sm border-green-400/30 shadow-xl shadow-green-500/30 transition-all duration-300 rounded-xl px-6 py-3 hover:scale-105 transform-gpu hover:shadow-2xl hover:shadow-green-500/40"
+                        />
                       </div>
-                      <div>
-                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                          Connect WhatsApp Business
-                        </span>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          Click to start the official signup flow
-                        </p>
-                      </div>
-                    </div>
-                    <WhatsAppEmbeddedSignup
-                      companyId={companyId}
-                      phoneIndex={0}
-                      onSuccess={(data) => {
-                        toast.success(`Connected: ${data.displayPhoneNumber}`);
-                        fetchPhoneStatus();
-                      }}
-                      onError={(error) => {
-                        toast.error(error);
-                      }}
-                      buttonText="Connect via Meta"
-                      className="bg-gradient-to-r from-green-500/90 to-emerald-500/90 hover:from-green-600/90 hover:to-emerald-600/90 backdrop-blur-sm border-green-400/30 shadow-xl shadow-green-500/30 transition-all duration-300 rounded-xl px-6 py-3 hover:scale-105 transform-gpu hover:shadow-2xl hover:shadow-green-500/40"
-                    />
-                  </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="bg-gradient-to-r from-amber-50/50 to-yellow-50/30 dark:from-amber-900/20 dark:to-yellow-900/10 backdrop-blur-xl rounded-2xl p-4 border border-amber-200/40 dark:border-amber-700/40">

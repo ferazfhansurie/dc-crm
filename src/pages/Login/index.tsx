@@ -431,7 +431,7 @@ function Main() {
         }} />
 
         {/* Main content */}
-        <div className={`relative z-10 w-full max-w-[380px] px-5 transition-all duration-1000 ease-out ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+        <div className={`relative z-10 w-full max-w-[95%] sm:max-w-[420px] px-4 sm:px-5 mx-auto transition-all duration-1000 ease-out ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
 
           {/* Logo section */}
           <div className="text-center mb-8">
@@ -631,20 +631,20 @@ function Main() {
 
       {/* Password Reset Modal */}
       {showResetModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-md"
             onClick={() => { setShowResetModal(false); setResetMessage(""); setResetEmail(""); }}
             style={{ animation: 'fade-in 0.3s ease-out' }}
           />
-          <div className="relative glass-card-premium rounded-3xl p-6 w-full max-w-[360px] fade-up">
+          <div className="relative glass-card-premium rounded-3xl p-5 sm:p-6 w-full max-w-[95%] sm:max-w-[380px] mx-auto fade-up">
             <div className="text-center mb-5">
-              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-500/20 to-indigo-500/20 flex items-center justify-center border border-purple-500/20 backdrop-blur-xl">
-                <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 mx-auto mb-3 sm:mb-4 rounded-2xl bg-gradient-to-br from-purple-500/20 to-indigo-500/20 flex items-center justify-center border border-purple-500/20 backdrop-blur-xl">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-white mb-1">Reset Password</h3>
+              <h3 className="text-base sm:text-lg font-semibold text-white mb-1">Reset Password</h3>
               <p className="text-xs text-gray-400/80 font-light">
                 Enter your email to receive a reset link
               </p>
