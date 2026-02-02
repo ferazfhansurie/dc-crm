@@ -52,6 +52,7 @@ interface WhatsAppEmbeddedSignupProps {
   onError?: (error: string) => void;
   buttonText?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 const WhatsAppEmbeddedSignup: React.FC<WhatsAppEmbeddedSignupProps> = ({
@@ -61,6 +62,7 @@ const WhatsAppEmbeddedSignup: React.FC<WhatsAppEmbeddedSignupProps> = ({
   onError,
   buttonText = "Connect WhatsApp Business",
   className = "",
+  disabled = false,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [sdkLoaded, setSdkLoaded] = useState(false);
@@ -221,6 +223,20 @@ const WhatsAppEmbeddedSignup: React.FC<WhatsAppEmbeddedSignupProps> = ({
       >
         <Lucide icon="Loader2" className="w-4 h-4 animate-spin" />
         Loading Facebook SDK...
+      </Button>
+    );
+  }
+
+  // Show disabled state if already connected
+  if (disabled) {
+    return (
+      <Button
+        variant="secondary"
+        className={`flex items-center gap-2 opacity-60 cursor-not-allowed ${className}`}
+        disabled
+      >
+        <Lucide icon="CheckCircle" className="w-4 h-4 text-green-500" />
+        Already Connected
       </Button>
     );
   }

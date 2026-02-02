@@ -95,6 +95,9 @@ function SettingsPage() {
   const [qrCodes, setQrCodes] = useState<any[]>([]);
   const [isLoadingStatus, setIsLoadingStatus] = useState(false);
   const [phoneNames, setPhoneNames] = useState<{ [key: number]: string }>({});
+  
+  // Track if company is using Cloud API (v2)
+  const [isCloudApiConnected, setIsCloudApiConnected] = useState(false);
 
   useEffect(() => {
     fetchSettings();
@@ -178,7 +181,7 @@ console.log("userEmail:", userEmail);
       const dynamicApiUrl =
         userCompanyData?.companyData?.api_url || companyData.apiUrl;
  
-      setApiUrl("http://localhost:8443");
+      setApiUrl(dynamicApiUrl || "https://bisnesgpt.jutateknologi.com");
 
       // Set phone and AI settings from company config
       setPhoneCount(companyData.phoneCount || 0);
@@ -208,7 +211,7 @@ console.log("userEmail:", userEmail);
       }
 
       // 5. Fetch phone status and names now that we have both companyId and apiUrl
-      const finalApiUrl = "http://localhost:8443";
+      const finalApiUrl = dynamicApiUrl || "https://bisnesgpt.jutateknologi.com";
       if (userCompanyId && finalApiUrl) {
         try {
           // Fetch phone status immediately with the correct API URL
@@ -219,6 +222,9 @@ console.log("userEmail:", userEmail);
           if (statusResponse.status === 200) {
             const data: BotStatusResponse = statusResponse.data;
             let qrCodesData: QRCodeData[] = [];
+
+            // Track if company is using Cloud API (v2)
+            setIsCloudApiConnected(data.v2 === true);
 
             if (data.phones && Array.isArray(data.phones)) {
               qrCodesData = data.phones.map((phone: Phone) => ({
@@ -385,6 +391,9 @@ console.log("userEmail:", userEmail);
       if (response.status === 200) {
         const data: BotStatusResponse = response.data;
         let qrCodesData: QRCodeData[] = [];
+
+        // Track if company is using Cloud API (v2)
+        setIsCloudApiConnected(data.v2 === true);
 
         // Check if phones array exists before mapping
         if (data.phones && Array.isArray(data.phones)) {
@@ -1062,9 +1071,10 @@ console.log("userEmail:", userEmail);
                 <div className="bg-gradient-to-r from-green-50/50 to-emerald-50/30 dark:from-green-900/20 dark:to-emerald-900/10 backdrop-blur-xl rounded-2xl p-4 border border-green-200/40 dark:border-green-700/40">
                   {(() => {
                     const phone0 = qrCodes.find(q => q.phoneIndex === 0);
-                    const isConnected = phone0?.status === 'ready' || phone0?.status === 'authenticated';
+                    const isQrConnected = phone0?.status === 'ready' || phone0?.status === 'authenticated';
                     
-                    if (isConnected) {
+                    // Show connected state if using Cloud API (v2)
+                    if (isCloudApiConnected) {
                       return (
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-4">
@@ -1073,10 +1083,10 @@ console.log("userEmail:", userEmail);
                             </div>
                             <div>
                               <span className="text-sm font-semibold text-green-700 dark:text-green-300">
-                                WhatsApp Connected
+                                Meta Cloud API Connected
                               </span>
                               <p className="text-xs text-slate-500 dark:text-slate-400">
-                                {phone0?.phoneInfo || 'Connected successfully'}
+                                Connected via official WhatsApp Business API
                               </p>
                             </div>
                           </div>
@@ -1108,12 +1118,14 @@ console.log("userEmail:", userEmail);
                           phoneIndex={0}
                           onSuccess={(data) => {
                             toast.success(`Connected: ${data.displayPhoneNumber}`);
+                            setIsCloudApiConnected(true);
                             fetchPhoneStatus();
                           }}
                           onError={(error) => {
                             toast.error(error);
                           }}
                           buttonText="Connect via Meta"
+                          disabled={isCloudApiConnected}
                           className="bg-gradient-to-r from-green-500/90 to-emerald-500/90 hover:from-green-600/90 hover:to-emerald-600/90 backdrop-blur-sm border-green-400/30 shadow-xl shadow-green-500/30 transition-all duration-300 rounded-xl px-6 py-3 hover:scale-105 transform-gpu hover:shadow-2xl hover:shadow-green-500/40"
                         />
                       </div>
