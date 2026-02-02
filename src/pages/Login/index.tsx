@@ -6,6 +6,8 @@ import Button from "@/components/Base/Button";
 import clsx from "clsx";
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { getAuth, sendPasswordResetEmail } from "firebase/auth";
+import { firebaseApp } from "@/firebaseconfig";
 
 function Main() {
   const [email, setEmail] = useState("");
@@ -52,7 +54,7 @@ function Main() {
   };
 
   const handleForgotPassword = async () => {
-    const auth = getAuth(app);
+    const auth = getAuth(firebaseApp);
     setError("");
     setResetMessage("");
     
