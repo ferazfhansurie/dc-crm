@@ -3138,7 +3138,7 @@ function Main() {
           },
           credentials: "include",
           body: JSON.stringify({
-            phoneIndex: selectedContact.phoneIndex ?? 0,
+            phoneIndex: userPhone ?? selectedContact.phoneIndex ?? 0,
             contactPhone: phoneNumber,
           }),
         }
@@ -6179,6 +6179,7 @@ function Main() {
             }
           }
         }, 50);
+        console.log(messages);
       } catch (error) {
         console.error("Error in selectChat:", error);
         toast.error(
@@ -6809,6 +6810,20 @@ function Main() {
                   fileSize: message.media_metadata?.file_size,
                 };
                 break;
+              case "album":
+                // Album messages contain multiple images/videos - treat as image gallery
+                formattedMessage.type = "image";
+                formattedMessage.image = {
+                  link: message.media_url,
+                  data: message.media_data,
+                  mimetype: message.media_metadata?.mimetype || "image/jpeg",
+                  filename: message.media_metadata?.filename,
+                  caption: message.media_metadata?.caption || message.content,
+                  width: message.media_metadata?.width,
+                  height: message.media_metadata?.height,
+                  thumbnail: message.media_metadata?.thumbnail,
+                };
+                break;
               default:
                 formattedMessage.text = {
                   body: message.content || "",
@@ -6901,6 +6916,7 @@ function Main() {
       // Show all messages if no phone filtering is needed
       setMessages(allMessages);
     }
+    
   }, [allMessages, userPhone, phoneNames]);
   async function fetchMessages(
     selectedChatId: string,
@@ -6912,15 +6928,32 @@ function Main() {
     if (page === 0) {
       const cachedMessages = getCachedMessages(selectedChatId);
       if (cachedMessages && cachedMessages.length > 0) {
-        console.log(
-          `🚀 Using cached messages for chat ${selectedChatId}: ${cachedMessages.length} messages loaded instantly`
-        );
-        setAllMessages(cachedMessages);
-        setDisplayedMessages(cachedMessages);
-        setMessagePage(0);
-        setHasMoreMessages(cachedMessages.length === MESSAGES_PER_PAGE);
-        setLoading(false);
-        return;
+        // Check if cached messages have incomplete media data (null link AND null data for media types)
+        const hasIncompleteMedia = cachedMessages.some((msg: any) => {
+          if (msg.type === 'document' && msg.document) {
+            return !msg.document.link && !msg.document.data;
+          }
+          if (msg.type === 'image' && msg.image) {
+            return !msg.image.link && !msg.image.data && !msg.image.url;
+          }
+          return false;
+        });
+
+        if (hasIncompleteMedia) {
+          console.log(`⚠️ Cached messages have incomplete media data, clearing cache and fetching fresh...`);
+          clearCachedMessages(selectedChatId);
+        } else {
+          console.log(
+            `🚀 Using cached messages for chat ${selectedChatId}: ${cachedMessages.length} messages loaded instantly`
+          );
+          setAllMessages(cachedMessages);
+          console.log("cached messages", cachedMessages);
+          setDisplayedMessages(cachedMessages);
+          setMessagePage(0);
+          setHasMoreMessages(cachedMessages.length === MESSAGES_PER_PAGE);
+          setLoading(false);
+          return;
+        }
       } else {
         console.log(
           `📭 No cached messages found for chat ${selectedChatId}, fetching from API...`
@@ -6981,6 +7014,32 @@ function Main() {
       const responseData = await messagesResponse.json();
       const messages = responseData.messages || [];
       console.log("messages:", messages);
+
+      // DEBUG: Log all unique message types and their structure
+      const messagesByType: Record<string, any[]> = {};
+      messages.forEach((msg: any) => {
+        if (!messagesByType[msg.message_type]) {
+          messagesByType[msg.message_type] = [];
+        }
+        messagesByType[msg.message_type].push(msg);
+      });
+      console.log("📊 Messages by type:", Object.keys(messagesByType));
+      
+      // Log details for problematic types
+      ['album', 'unknown', 'image', 'document'].forEach(type => {
+        if (messagesByType[type]) {
+          console.log(`📷 ${type.toUpperCase()} messages (${messagesByType[type].length}):`, 
+            messagesByType[type].map((m: any) => ({
+              id: m.message_id,
+              type: m.message_type,
+              content: m.content,
+              media_url: m.media_url,
+              media_data: m.media_data ? `[base64 data: ${m.media_data.length} chars]` : null,
+              media_metadata: m.media_metadata
+            }))
+          );
+        }
+      });
 
       // Debug: Log all action messages to see their structure
       const actionMessages = messages.filter(
@@ -7154,6 +7213,21 @@ function Main() {
               };
               break;
 
+            case "album":
+              // Album messages contain multiple images/videos - treat as image gallery
+              formattedMessage.type = "image";
+              formattedMessage.image = {
+                link: message.media_url,
+                data: message.media_data,
+                mimetype: message.media_metadata?.mimetype || "image/jpeg",
+                filename: message.media_metadata?.filename,
+                caption: message.media_metadata?.caption || message.content,
+                width: message.media_metadata?.width,
+                height: message.media_metadata?.height,
+                thumbnail: message.media_metadata?.thumbnail,
+              };
+              break;
+
             case "location":
               formattedMessage.location = message.content
                 ? JSON.parse(message.content)
@@ -7270,6 +7344,42 @@ function Main() {
       });
 
       console.log("formattedMessages:", mergedMessages);
+
+      // DEBUG: Log formatted messages by type to see the final structure
+      const formattedByType: Record<string, any[]> = {};
+      mergedMessages.forEach((msg: any) => {
+        if (!formattedByType[msg.type]) {
+          formattedByType[msg.type] = [];
+        }
+        formattedByType[msg.type].push(msg);
+      });
+      console.log("📊 FORMATTED Messages by type:", Object.keys(formattedByType));
+      
+      // Log formatted messages for problematic types
+      ['album', 'unknown', 'image', 'document'].forEach(type => {
+        if (formattedByType[type]) {
+          console.log(`✅ FORMATTED ${type.toUpperCase()} (${formattedByType[type].length}):`, 
+            formattedByType[type].map((m: any) => ({
+              id: m.id,
+              type: m.type,
+              image: m.image ? { 
+                hasData: !!m.image.data, 
+                hasLink: !!m.image.link, 
+                hasUrl: !!m.image.url,
+                mimetype: m.image.mimetype,
+                caption: m.image.caption
+              } : null,
+              document: m.document ? {
+                hasData: !!m.document.data,
+                hasLink: !!m.document.link,
+                mimetype: m.document.mimetype,
+                filename: m.document.filename
+              } : null,
+              text: m.text
+            }))
+          );
+        }
+      });
 
       if (page === 0) {
         // Initial load - replace all messages and cache them
@@ -7502,6 +7612,21 @@ function Main() {
                   caption: message.media_metadata?.caption,
                   pageCount: message.media_metadata?.page_count,
                   fileSize: message.media_metadata?.file_size,
+                };
+                break;
+
+              case "album":
+                // Album messages contain multiple images/videos - treat as image gallery
+                formattedMessage.type = "image";
+                formattedMessage.image = {
+                  link: message.media_url,
+                  data: message.media_data,
+                  mimetype: message.media_metadata?.mimetype || "image/jpeg",
+                  filename: message.media_metadata?.filename,
+                  caption: message.media_metadata?.caption || message.content,
+                  width: message.media_metadata?.width,
+                  height: message.media_metadata?.height,
+                  thumbnail: message.media_metadata?.thumbnail,
                 };
                 break;
 
@@ -7876,6 +8001,21 @@ function Main() {
               };
               break;
 
+            case "album":
+              // Album messages contain multiple images/videos - treat as image gallery
+              formattedMessage.type = "image";
+              formattedMessage.image = {
+                link: message.media_url,
+                data: message.media_data,
+                mimetype: message.media_metadata?.mimetype || "image/jpeg",
+                filename: message.media_metadata?.filename,
+                caption: message.media_metadata?.caption || message.content,
+                width: message.media_metadata?.width,
+                height: message.media_metadata?.height,
+                thumbnail: message.media_metadata?.thumbnail,
+              };
+              break;
+
             case "location":
               formattedMessage.location = message.content
                 ? JSON.parse(message.content)
@@ -7989,7 +8129,7 @@ function Main() {
 
       setAllMessages(mergedMessages); // Store all messages for filtering
       setMessages(mergedMessages); // Update the main messages state
-      console.log(messages);
+    
     } catch (error) {
       console.error("Failed to fetch messages:", error);
     }
@@ -13800,6 +13940,10 @@ function Main() {
                                             return message.text?.body
                                               ? `📷 ${message.text?.body}`
                                               : "📷 Photo";
+                                          case "album":
+                                            return message.text?.body
+                                              ? `📷 ${message.text?.body}`
+                                              : "📷 Album";
                                           case "document":
                                             return `📄 ${
                                               message.document?.filename ||
@@ -14527,82 +14671,98 @@ function Main() {
                                 )}
                               {message.type === "image" && message.image && (
                                 <>
-                                  <div className="p-0 message-content image-message">
-                                    <img
-                                      src={(() => {
-                                        // Priority: base64 data > url > link
-                                        if (
-                                          message.image.data &&
-                                          message.image.mimetype
-                                        ) {
-                                          return `data:${message.image.mimetype};base64,${message.image.data}`;
-                                        }
-                                        if (message.image.url) {
-                                          const fullUrl = getFullImageUrl(
-                                            message.image.url
-                                          );
-                                          console.log(
-                                            "Using image URL:",
-                                            fullUrl
-                                          );
-                                          return fullUrl;
-                                        }
-                                        if (message.image.link) {
-                                          const fullUrl = getFullImageUrl(
-                                            message.image.link
-                                          );
-                                          console.log(
-                                            "Using image link:",
-                                            fullUrl
-                                          );
-                                          return fullUrl;
-                                        }
+                                  {/* Check if media is available or expired */}
+                                  {(message.image.data || message.image.url || message.image.link) ? (
+                                    <div className="p-0 message-content image-message">
+                                      <img
+                                        src={(() => {
+                                          // Priority: base64 data > url > link
+                                          if (
+                                            message.image.data &&
+                                            message.image.mimetype
+                                          ) {
+                                            return `data:${message.image.mimetype};base64,${message.image.data}`;
+                                          }
+                                          if (message.image.url) {
+                                            const fullUrl = getFullImageUrl(
+                                              message.image.url
+                                            );
+                                            console.log(
+                                              "Using image URL:",
+                                              fullUrl
+                                            );
+                                            return fullUrl;
+                                          }
+                                          if (message.image.link) {
+                                            const fullUrl = getFullImageUrl(
+                                              message.image.link
+                                            );
+                                            console.log(
+                                              "Using image link:",
+                                              fullUrl
+                                            );
+                                            return fullUrl;
+                                          }
 
-                                        return logoImage; // Fallback to placeholder
-                                      })()}
-                                      alt="Image"
-                                      className="rounded-2xl message-image cursor-pointer"
-                                      style={{
-                                        maxWidth: "300px",
-                                        maxHeight: "300px",
-                                        objectFit: "contain",
-                                        display: "block", // Ensure image is displayed as block
-                                        width: "auto", // Allow natural width
-                                        height: "auto", // Allow natural height
-                                      }}
-                                      onClick={() => {
-                                        const imageUrl =
-                                          message.image?.data &&
-                                          message.image?.mimetype
-                                            ? `data:${message.image.mimetype};base64,${message.image.data}`
-                                            : message.image?.url
-                                            ? getFullImageUrl(message.image.url)
-                                            : message.image?.link
-                                            ? getFullImageUrl(
-                                                message.image.link
-                                              )
-                                            : "";
-                                        if (imageUrl) {
-                                          openImageModal(imageUrl);
-                                        }
-                                      }}
-                                      onError={(e) => {
-                                        const originalSrc = e.currentTarget.src;
-                                        console.error(
-                                          "Error loading image:",
-                                          originalSrc
-                                        );
-                                        console.error(
-                                          "Image object:",
-                                          message.image
-                                        );
-                                        // Prevent infinite loop by checking if we're already showing the fallback
-                                        if (originalSrc !== logoImage) {
-                                          e.currentTarget.src = logoImage;
-                                        }
-                                      }}
-                                    />
-                                  </div>
+                                          return logoImage; // Fallback to placeholder
+                                        })()}
+                                        alt="Image"
+                                        className="rounded-2xl message-image cursor-pointer"
+                                        style={{
+                                          maxWidth: "300px",
+                                          maxHeight: "300px",
+                                          objectFit: "contain",
+                                          display: "block", // Ensure image is displayed as block
+                                          width: "auto", // Allow natural width
+                                          height: "auto", // Allow natural height
+                                        }}
+                                        onClick={() => {
+                                          const imageUrl =
+                                            message.image?.data &&
+                                            message.image?.mimetype
+                                              ? `data:${message.image.mimetype};base64,${message.image.data}`
+                                              : message.image?.url
+                                              ? getFullImageUrl(message.image.url)
+                                              : message.image?.link
+                                              ? getFullImageUrl(
+                                                  message.image.link
+                                                )
+                                              : "";
+                                          if (imageUrl) {
+                                            openImageModal(imageUrl);
+                                          }
+                                        }}
+                                        onError={(e) => {
+                                          const originalSrc = e.currentTarget.src;
+                                          console.error(
+                                            "Error loading image:",
+                                            originalSrc
+                                          );
+                                          console.error(
+                                            "Image object:",
+                                            message.image
+                                          );
+                                          // Prevent infinite loop by checking if we're already showing the fallback
+                                          if (originalSrc !== logoImage) {
+                                            e.currentTarget.src = logoImage;
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                  ) : (
+                                    /* Media expired or unavailable */
+                                    <div className="p-3 message-content rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center gap-2">
+                                      <Lucide icon="ImageOff" className="w-8 h-8 text-gray-400" />
+                                      <div>
+                                        <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                          Image not available
+                                        </div>
+                                        <div className="text-xs text-gray-400 dark:text-gray-500">
+                                          {(message.image as any)?.expired ? "Media has expired" : "Media data unavailable"}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
                                   {message.image?.caption && (
                                     <div className="mt-2">
                                       <div
@@ -14619,6 +14779,81 @@ function Main() {
                                         }}
                                       >
                                         {formatText(message.image.caption)}
+                                      </div>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                              {/* Album type - multiple images/videos from WhatsApp */}
+                              {message.type === "album" && (message.image || (message as any).album) && (
+                                <>
+                                  <div className="p-0 message-content image-message relative">
+                                    <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full z-10">
+                                      📷 Album
+                                    </div>
+                                    <img
+                                      src={(() => {
+                                        const albumData = message.image || (message as any).album;
+                                        // Priority: base64 data > url > link
+                                        if (albumData?.data && albumData?.mimetype) {
+                                          return `data:${albumData.mimetype};base64,${albumData.data}`;
+                                        }
+                                        if (albumData?.url) {
+                                          return getFullImageUrl(albumData.url);
+                                        }
+                                        if (albumData?.link) {
+                                          return getFullImageUrl(albumData.link);
+                                        }
+                                        return logoImage; // Fallback to placeholder
+                                      })()}
+                                      alt="Album"
+                                      className="rounded-2xl message-image cursor-pointer"
+                                      style={{
+                                        maxWidth: "300px",
+                                        maxHeight: "300px",
+                                        objectFit: "contain",
+                                        display: "block",
+                                        width: "auto",
+                                        height: "auto",
+                                      }}
+                                      onClick={() => {
+                                        const albumData = message.image || (message as any).album;
+                                        const imageUrl =
+                                          albumData?.data && albumData?.mimetype
+                                            ? `data:${albumData.mimetype};base64,${albumData.data}`
+                                            : albumData?.url
+                                            ? getFullImageUrl(albumData.url)
+                                            : albumData?.link
+                                            ? getFullImageUrl(albumData.link)
+                                            : "";
+                                        if (imageUrl) {
+                                          openImageModal(imageUrl);
+                                        }
+                                      }}
+                                      onError={(e) => {
+                                        const originalSrc = e.currentTarget.src;
+                                        if (originalSrc !== logoImage) {
+                                          e.currentTarget.src = logoImage;
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                  {(message.image?.caption || (message as any).album?.caption) && (
+                                    <div className="mt-2">
+                                      <div
+                                        className={`whitespace-pre-wrap break-words overflow-hidden leading-relaxed text-sm font-normal ${
+                                          message.from_me
+                                            ? `${myMessageTextClass}`
+                                            : `${otherMessageTextClass}`
+                                        }`}
+                                        style={{
+                                          wordBreak: "break-word",
+                                          overflowWrap: "break-word",
+                                          lineHeight: "1.4",
+                                          letterSpacing: "0.01em",
+                                        }}
+                                      >
+                                        {formatText(message.image?.caption || (message as any).album?.caption)}
                                       </div>
                                     </div>
                                   )}
@@ -15185,6 +15420,52 @@ function Main() {
                                       <span>Call ended</span>
                                     )}
                                   </div>
+                                </div>
+                              )}
+                              {/* Fallback for unknown message types with media data */}
+                              {message.type === "unknown" && (message as any)[message.type] && (
+                                <div className="unknown-content p-2.5 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                                  {(() => {
+                                    const unknownData = (message as any)[message.type];
+                                    const mediaUrl = unknownData?.url || unknownData?.data;
+                                    const mimetype = unknownData?.metadata?.mimetype || unknownData?.mimetype || "";
+                                    
+                                    if (mediaUrl && mimetype.startsWith("image/")) {
+                                      return (
+                                        <img
+                                          src={unknownData.data 
+                                            ? `data:${mimetype};base64,${unknownData.data}` 
+                                            : mediaUrl}
+                                          alt="Media"
+                                          className="rounded-lg max-w-[200px] max-h-[200px] object-contain cursor-pointer"
+                                          onClick={() => openImageModal(unknownData.data 
+                                            ? `data:${mimetype};base64,${unknownData.data}` 
+                                            : mediaUrl)}
+                                        />
+                                      );
+                                    } else if (mediaUrl) {
+                                      return (
+                                        <div className="flex items-center space-x-2">
+                                          <Lucide icon="File" className="w-4 h-4 text-gray-500" />
+                                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                                            Media attachment
+                                          </span>
+                                          <button
+                                            onClick={() => window.open(mediaUrl, "_blank")}
+                                            className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                                          >
+                                            View
+                                          </button>
+                                        </div>
+                                      );
+                                    } else {
+                                      return (
+                                        <span className="text-sm text-gray-500 dark:text-gray-400 italic">
+                                          Unsupported message type
+                                        </span>
+                                      );
+                                    }
+                                  })()}
                                 </div>
                               )}
 
@@ -17033,7 +17314,7 @@ function Main() {
                                   body: JSON.stringify({
                                     companyId,
                                     contactPhone: phoneNumber,
-                                    phoneIndex: selectedContact.phoneIndex ?? 0,
+                                    phoneIndex: userPhone ?? selectedContact.phoneIndex ?? 0,
                                   }),
                                 }
                               );

@@ -18,6 +18,7 @@ function Main() {
   const [showPassword, setShowPassword] = useState(false);
   const [registerResult, setRegisterResult] = useState<string | null>(null);
   const [selectedCountry] = useState<CountryCode>('MY');
+  const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -108,326 +109,558 @@ function Main() {
   return (
     <>
       <style>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0px) rotate(0deg); }
-          50% { transform: translateY(-20px) rotate(180deg); }
+        /* ===== AURORA BACKGROUND ===== */
+        @keyframes aurora {
+          0%, 100% {
+            background-position: 50% 50%, 50% 50%;
+          }
+          25% {
+            background-position: 0% 50%, 100% 50%;
+          }
+          50% {
+            background-position: 50% 100%, 50% 0%;
+          }
+          75% {
+            background-position: 100% 50%, 0% 50%;
+          }
         }
-        @keyframes float-slow {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-12px); }
+
+        @keyframes shimmer {
+          0% { transform: translateX(-100%) rotate(45deg); }
+          100% { transform: translateX(100%) rotate(45deg); }
         }
-        @keyframes pulse-glow {
-          0%, 100% { opacity: 0.4; transform: scale(1); }
-          50% { opacity: 0.7; transform: scale(1.02); }
+
+        @keyframes float-gentle {
+          0%, 100% { transform: translateY(0) translateX(0) rotate(0deg); }
+          25% { transform: translateY(-15px) translateX(5px) rotate(2deg); }
+          50% { transform: translateY(-8px) translateX(-5px) rotate(-1deg); }
+          75% { transform: translateY(-20px) translateX(3px) rotate(1deg); }
         }
-        @keyframes slide-up {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
+
+        @keyframes orbit {
+          0% { transform: rotate(0deg) translateX(100px) rotate(0deg); }
+          100% { transform: rotate(360deg) translateX(100px) rotate(-360deg); }
         }
-        @keyframes fade-in {
-          from { opacity: 0; }
-          to { opacity: 1; }
+
+        @keyframes pulse-soft {
+          0%, 100% { opacity: 0.3; transform: scale(1); }
+          50% { opacity: 0.6; transform: scale(1.05); }
         }
-        @keyframes gradient-shift {
+
+        @keyframes glow-pulse {
+          0%, 100% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.3), 0 0 40px rgba(139, 92, 246, 0.1); }
+          50% { box-shadow: 0 0 30px rgba(139, 92, 246, 0.5), 0 0 60px rgba(139, 92, 246, 0.2); }
+        }
+
+        @keyframes slide-up-fade {
+          0% { opacity: 0; transform: translateY(30px) scale(0.98); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes border-flow {
           0%, 100% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
         }
-        .animate-float { animation: float 6s ease-in-out infinite; }
-        .animate-float-slow { animation: float-slow 4s ease-in-out infinite; }
-        .animate-pulse-glow { animation: pulse-glow 4s ease-in-out infinite; }
-        .animate-slide-up { animation: slide-up 0.5s ease-out forwards; }
-        .animate-fade-in { animation: fade-in 0.6s ease-out forwards; }
 
-        .glass-card {
-          background: rgba(15, 15, 35, 0.6);
-          backdrop-filter: blur(24px);
-          -webkit-backdrop-filter: blur(24px);
+        @keyframes text-shimmer {
+          0% { background-position: -200% center; }
+          100% { background-position: 200% center; }
+        }
+
+        @keyframes ripple {
+          0% { transform: scale(0); opacity: 0.5; }
+          100% { transform: scale(4); opacity: 0; }
+        }
+
+        @keyframes morph {
+          0%, 100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+          50% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
+        }
+
+        @keyframes spin-slow {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+
+        @keyframes spin-reverse {
+          0% { transform: rotate(360deg); }
+          100% { transform: rotate(0deg); }
+        }
+
+        @keyframes breathe {
+          0%, 100% { transform: scale(1); opacity: 0.5; }
+          50% { transform: scale(1.1); opacity: 0.8; }
+        }
+
+        @keyframes checkmark-draw {
+          0% { stroke-dashoffset: 24; }
+          100% { stroke-dashoffset: 0; }
+        }
+
+        .aurora-bg {
+          background:
+            radial-gradient(ellipse at 20% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
+            radial-gradient(ellipse at 80% 80%, rgba(59, 130, 246, 0.12) 0%, transparent 50%),
+            radial-gradient(ellipse at 40% 60%, rgba(168, 85, 247, 0.1) 0%, transparent 40%),
+            radial-gradient(ellipse at 60% 30%, rgba(99, 102, 241, 0.08) 0%, transparent 45%),
+            linear-gradient(135deg, #0a0a1a 0%, #0f0f2d 25%, #0a0a1a 50%, #0d0d25 75%, #0a0a1a 100%);
+          background-size: 200% 200%, 200% 200%, 150% 150%, 180% 180%, 100% 100%;
+          animation: aurora 20s ease-in-out infinite;
+        }
+
+        .noise-overlay {
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+          opacity: 0.03;
+          pointer-events: none;
+        }
+
+        .glass-card-premium {
+          background: linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0.05) 0%,
+            rgba(255, 255, 255, 0.02) 50%,
+            rgba(255, 255, 255, 0.05) 100%
+          );
+          backdrop-filter: blur(40px) saturate(150%);
+          -webkit-backdrop-filter: blur(40px) saturate(150%);
           border: 1px solid rgba(255, 255, 255, 0.08);
           box-shadow:
-            0 8px 32px rgba(0, 0, 0, 0.4),
-            inset 0 1px 0 rgba(255, 255, 255, 0.1);
-        }
-
-        .glass-input {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .glass-input:focus {
-          background: rgba(255, 255, 255, 0.08);
-          border-color: rgba(139, 92, 246, 0.5);
-          box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15), 0 0 20px rgba(139, 92, 246, 0.2);
-          outline: none;
-        }
-        .glass-input::placeholder {
-          color: rgba(156, 163, 175, 0.6);
-        }
-
-        .btn-primary {
-          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 50%, #8b5cf6 100%);
-          background-size: 200% 200%;
-          animation: gradient-shift 3s ease infinite;
-          transition: all 0.3s ease;
+            0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+            0 20px 50px -15px rgba(0, 0, 0, 0.5),
+            0 0 100px -20px rgba(139, 92, 246, 0.15);
           position: relative;
           overflow: hidden;
         }
-        .btn-primary::before {
+
+        .glass-card-premium::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+        }
+
+        .glass-input-premium {
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          position: relative;
+        }
+
+        .glass-input-premium:hover {
+          background: rgba(255, 255, 255, 0.05);
+          border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        .glass-input-premium:focus {
+          background: rgba(255, 255, 255, 0.06);
+          border-color: rgba(139, 92, 246, 0.5);
+          box-shadow:
+            0 0 0 4px rgba(139, 92, 246, 0.1),
+            0 0 30px rgba(139, 92, 246, 0.15),
+            inset 0 0 20px rgba(139, 92, 246, 0.03);
+          outline: none;
+        }
+
+        .glass-input-premium::placeholder {
+          color: rgba(156, 163, 175, 0.5);
+          transition: color 0.3s ease;
+        }
+
+        .glass-input-premium:focus::placeholder {
+          color: rgba(156, 163, 175, 0.3);
+        }
+
+        .input-wrapper-premium {
+          position: relative;
+        }
+
+        .input-wrapper-premium::after {
+          content: '';
+          position: absolute;
+          bottom: 0;
+          left: 50%;
+          width: 0;
+          height: 2px;
+          background: linear-gradient(90deg, #8b5cf6, #6366f1, #8b5cf6);
+          background-size: 200% 100%;
+          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          transform: translateX(-50%);
+          border-radius: 2px;
+          animation: border-flow 3s linear infinite;
+        }
+
+        .input-wrapper-premium:focus-within::after {
+          width: calc(100% - 24px);
+        }
+
+        .btn-premium {
+          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 50%, #7c3aed 100%);
+          background-size: 200% 200%;
+          position: relative;
+          overflow: hidden;
+          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow:
+            0 4px 15px rgba(139, 92, 246, 0.3),
+            inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-premium::before {
           content: '';
           position: absolute;
           top: 0;
           left: -100%;
           width: 100%;
           height: 100%;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-          transition: left 0.5s ease;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+          transition: left 0.6s ease;
         }
-        .btn-primary:hover::before {
+
+        .btn-premium:hover {
+          transform: translateY(-2px);
+          box-shadow:
+            0 8px 30px rgba(139, 92, 246, 0.4),
+            0 0 60px rgba(139, 92, 246, 0.2),
+            inset 0 1px 0 rgba(255, 255, 255, 0.2);
+          background-position: 100% 100%;
+        }
+
+        .btn-premium:hover::before {
           left: 100%;
         }
-        .btn-primary:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
-        }
-        .btn-primary:active {
+
+        .btn-premium:active {
           transform: translateY(0);
         }
 
-        .btn-secondary {
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+        .btn-premium .ripple {
+          position: absolute;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.4);
+          animation: ripple 0.6s ease-out;
+        }
+
+        .btn-secondary-premium {
+          background: rgba(255, 255, 255, 0.02);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          position: relative;
+          overflow: hidden;
+        }
+
+        .btn-secondary-premium::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(99, 102, 241, 0.1));
+          opacity: 0;
+          transition: opacity 0.4s ease;
+        }
+
+        .btn-secondary-premium:hover {
+          border-color: rgba(139, 92, 246, 0.3);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-secondary-premium:hover::before {
+          opacity: 1;
+        }
+
+        .icon-float {
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .input-wrapper-premium:focus-within .icon-float {
+          transform: translateY(-1px) scale(1.1);
+          color: rgba(139, 92, 246, 0.9);
+        }
+
+        .morph-blob {
+          animation: morph 8s ease-in-out infinite;
+        }
+
+        .stagger-1 { animation-delay: 0.05s; }
+        .stagger-2 { animation-delay: 0.1s; }
+        .stagger-3 { animation-delay: 0.15s; }
+        .stagger-4 { animation-delay: 0.2s; }
+        .stagger-5 { animation-delay: 0.25s; }
+        .stagger-6 { animation-delay: 0.3s; }
+        .stagger-7 { animation-delay: 0.35s; }
+        .stagger-8 { animation-delay: 0.4s; }
+
+        .text-gradient {
+          background: linear-gradient(135deg, #fff 0%, #a5b4fc 50%, #fff 100%);
+          background-size: 200% 200%;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          animation: text-shimmer 8s ease-in-out infinite;
+        }
+
+        .logo-premium {
+          animation: glow-pulse 3s ease-in-out infinite, breathe 4s ease-in-out infinite;
+        }
+
+        .ring-outer {
+          animation: spin-slow 25s linear infinite;
+        }
+
+        .ring-inner {
+          animation: spin-reverse 18s linear infinite;
+        }
+
+        .floating-shape {
+          animation: float-gentle 6s ease-in-out infinite;
+        }
+
+        .orbit-dot {
+          animation: orbit 12s linear infinite;
+        }
+
+        .fade-up {
+          animation: slide-up-fade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          opacity: 0;
+        }
+
+        .feature-tag {
+          background: rgba(139, 92, 246, 0.1);
+          border: 1px solid rgba(139, 92, 246, 0.2);
           transition: all 0.3s ease;
         }
-        .btn-secondary:hover {
-          background: rgba(255, 255, 255, 0.08);
-          border-color: rgba(255, 255, 255, 0.2);
+
+        .feature-tag:hover {
+          background: rgba(139, 92, 246, 0.15);
+          border-color: rgba(139, 92, 246, 0.3);
           transform: translateY(-1px);
         }
 
-        .input-icon {
-          color: rgba(156, 163, 175, 0.5);
-          transition: color 0.3s ease;
-        }
-        .glass-input:focus + .input-icon,
-        .input-wrapper:focus-within .input-icon {
-          color: rgba(139, 92, 246, 0.8);
+        /* Custom scrollbar for the form */
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
         }
 
-        @keyframes logo-pulse {
-          0%, 100% {
-            box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4),
-                        0 0 0 0 rgba(99, 102, 241, 0.3),
-                        0 0 60px rgba(139, 92, 246, 0.3);
-          }
-          50% {
-            box-shadow: 0 0 0 15px rgba(139, 92, 246, 0),
-                        0 0 0 30px rgba(99, 102, 241, 0),
-                        0 0 80px rgba(139, 92, 246, 0.5);
-          }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
         }
-        @keyframes rotate-slow {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(139, 92, 246, 0.3);
+          border-radius: 2px;
         }
-        @keyframes rotate-reverse {
-          from { transform: rotate(360deg); }
-          to { transform: rotate(0deg); }
-        }
-        @keyframes breathe {
-          0%, 100% { transform: scale(1); opacity: 0.6; }
-          50% { transform: scale(1.05); opacity: 1; }
-        }
-        .logo-container {
-          animation: logo-pulse 3s ease-in-out infinite;
-        }
-        .logo-ring-outer {
-          animation: rotate-slow 20s linear infinite;
-        }
-        .logo-ring-inner {
-          animation: rotate-reverse 15s linear infinite;
-        }
-        .logo-glow {
-          animation: breathe 3s ease-in-out infinite;
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(139, 92, 246, 0.5);
         }
       `}</style>
 
       <div className="relative flex items-center justify-center min-h-screen overflow-hidden py-8">
-        {/* Animated gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-purple-950/50 to-slate-950">
-          {/* Animated orbs */}
-          <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-purple-600/20 rounded-full blur-[100px] animate-pulse-glow" />
-          <div className="absolute bottom-1/3 right-1/4 w-96 h-96 bg-blue-600/15 rounded-full blur-[120px] animate-pulse-glow" style={{ animationDelay: '2s' }} />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-indigo-600/20 rounded-full blur-[80px] animate-pulse-glow" style={{ animationDelay: '4s' }} />
+        {/* Aurora animated background */}
+        <div className="absolute inset-0 aurora-bg" />
 
-          {/* Floating particles */}
-          <div className="absolute top-[15%] right-[15%] w-2 h-2 bg-white/30 rounded-full animate-float-slow" />
-          <div className="absolute bottom-[25%] left-[10%] w-1.5 h-1.5 bg-purple-400/40 rounded-full animate-float" style={{ animationDelay: '1s' }} />
-          <div className="absolute top-[40%] right-[25%] w-1 h-1 bg-blue-400/50 rounded-full animate-float-slow" style={{ animationDelay: '2s' }} />
-          <div className="absolute bottom-[35%] left-[25%] w-2.5 h-2.5 bg-indigo-400/30 rounded-full animate-float" style={{ animationDelay: '3s' }} />
-          <div className="absolute top-[60%] right-[10%] w-1.5 h-1.5 bg-violet-400/40 rounded-full animate-float-slow" style={{ animationDelay: '0.5s' }} />
+        {/* Noise texture overlay */}
+        <div className="absolute inset-0 noise-overlay" />
 
-          {/* Subtle grid */}
-          <div className="absolute inset-0 opacity-[0.015]" style={{
-            backgroundImage: `radial-gradient(rgba(255,255,255,0.3) 1px, transparent 1px)`,
-            backgroundSize: '40px 40px'
-          }} />
-        </div>
+        {/* Animated mesh gradient orbs */}
+        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] morph-blob bg-gradient-to-br from-purple-600/20 via-violet-600/15 to-transparent blur-[100px] animate-pulse-soft" />
+        <div className="absolute bottom-1/4 right-1/4 w-[600px] h-[600px] morph-blob bg-gradient-to-tl from-blue-600/15 via-indigo-600/10 to-transparent blur-[120px] animate-pulse-soft" style={{ animationDelay: '2s' }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] morph-blob bg-gradient-to-r from-fuchsia-600/10 via-purple-600/15 to-transparent blur-[80px] animate-pulse-soft" style={{ animationDelay: '4s' }} />
+
+        {/* Floating geometric shapes */}
+        <div className="absolute top-[8%] right-[18%] w-14 h-14 border border-purple-500/20 rotate-45 floating-shape opacity-30" style={{ animationDelay: '0s' }} />
+        <div className="absolute bottom-[18%] left-[12%] w-10 h-10 border border-indigo-500/20 rotate-12 floating-shape opacity-25" style={{ animationDelay: '1s' }} />
+        <div className="absolute top-[55%] right-[8%] w-7 h-7 border border-violet-500/25 rotate-[30deg] floating-shape opacity-30" style={{ animationDelay: '2s' }} />
+        <div className="absolute top-[25%] left-[6%] w-16 h-16 border border-blue-500/15 rounded-full floating-shape opacity-20" style={{ animationDelay: '1.5s' }} />
+
+        {/* Floating particles */}
+        <div className="absolute top-[12%] right-[22%] w-2 h-2 bg-purple-400/40 rounded-full floating-shape blur-[1px]" style={{ animationDelay: '0.5s' }} />
+        <div className="absolute bottom-[28%] left-[10%] w-1.5 h-1.5 bg-indigo-400/50 rounded-full floating-shape blur-[0.5px]" style={{ animationDelay: '1.2s' }} />
+        <div className="absolute top-[42%] right-[6%] w-1 h-1 bg-violet-400/60 rounded-full floating-shape" style={{ animationDelay: '2.3s' }} />
+        <div className="absolute bottom-[12%] right-[28%] w-2.5 h-2.5 bg-blue-400/30 rounded-full floating-shape blur-[1px]" style={{ animationDelay: '0.8s' }} />
+        <div className="absolute top-[68%] left-[22%] w-1.5 h-1.5 bg-fuchsia-400/40 rounded-full floating-shape" style={{ animationDelay: '1.8s' }} />
+
+        {/* Subtle grid pattern */}
+        <div className="absolute inset-0 opacity-[0.02]" style={{
+          backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+                           linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
+          backgroundSize: '60px 60px'
+        }} />
 
         {/* Main content */}
-        <div className={`relative z-10 w-full max-w-[380px] px-4 transition-all duration-700 ease-out ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
+        <div className={`relative z-10 w-full max-w-[420px] px-5 transition-all duration-1000 ease-out ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
 
-          {/* Logo and header */}
+          {/* Logo section */}
           <div className="text-center mb-6">
-            <div className="mb-4 flex justify-center">
+            <div className="mb-5 flex justify-center">
               <div className="relative">
-                {/* Outer glow */}
-                <div className="absolute -inset-6 bg-gradient-to-r from-purple-600/30 via-indigo-500/30 to-purple-600/30 rounded-full blur-2xl logo-glow" />
+                {/* Outer glow effect */}
+                <div className="absolute -inset-7 bg-gradient-to-r from-purple-600/20 via-indigo-500/20 to-violet-600/20 rounded-full blur-3xl animate-pulse-soft" />
 
                 {/* Animated outer ring */}
-                <div className="absolute -inset-4 logo-ring-outer">
-                  <div className="w-full h-full rounded-full border border-dashed border-purple-500/30" />
+                <div className="absolute -inset-5 ring-outer">
+                  <div className="w-full h-full rounded-full border border-dashed border-purple-500/25" />
                 </div>
 
                 {/* Animated inner ring */}
-                <div className="absolute -inset-2 logo-ring-inner">
-                  <div className="w-full h-full rounded-full border border-indigo-400/20" style={{
-                    borderStyle: 'dotted',
-                    borderWidth: '1px'
+                <div className="absolute -inset-2.5 ring-inner">
+                  <div className="w-full h-full rounded-full" style={{
+                    border: '1px dotted rgba(129, 140, 248, 0.2)'
                   }} />
                 </div>
 
+                {/* Orbiting dot */}
+                <div className="absolute inset-0 orbit-dot">
+                  <div className="w-1.5 h-1.5 bg-purple-400 rounded-full blur-[1px]" />
+                </div>
+
                 {/* Main logo container */}
-                <div className="relative w-20 h-20 logo-container rounded-full bg-gradient-to-br from-purple-600/30 via-indigo-600/20 to-violet-600/30 p-1">
-                  <div className="w-full h-full rounded-full bg-gradient-to-br from-slate-900 via-slate-900/95 to-slate-800 flex items-center justify-center overflow-hidden border border-white/10">
+                <div className="relative w-20 h-20 logo-premium rounded-full bg-gradient-to-br from-purple-600/30 via-indigo-600/20 to-violet-600/30 p-1">
+                  <div className="w-full h-full rounded-full bg-gradient-to-br from-slate-900/95 via-slate-900 to-slate-800/95 flex items-center justify-center overflow-hidden border border-white/10 backdrop-blur-xl">
                     <img
                       alt="Logo"
-                      className="w-12 h-12 object-contain drop-shadow-lg"
+                      className="w-12 h-12 object-contain drop-shadow-2xl"
                       src={logoUrl}
                       onError={(e) => { e.currentTarget.src = logoUrl2; }}
                     />
                   </div>
                 </div>
 
-                {/* Accent dots */}
-                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-purple-400 rounded-full animate-pulse" />
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-indigo-400 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }} />
-                <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-1 h-1 bg-violet-400 rounded-full animate-pulse" style={{ animationDelay: '1s' }} />
-                <div className="absolute top-1/2 -right-1 -translate-y-1/2 w-1.5 h-1.5 bg-purple-300 rounded-full animate-pulse" style={{ animationDelay: '1.5s' }} />
+                {/* Corner accents */}
+                <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-gradient-to-b from-purple-400 to-purple-600 rounded-full shadow-lg shadow-purple-500/50" />
+                <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 bg-gradient-to-t from-indigo-400 to-indigo-600 rounded-full shadow-lg shadow-indigo-500/50" />
+                <div className="absolute top-1/2 -left-1.5 -translate-y-1/2 w-1 h-1 bg-gradient-to-r from-violet-400 to-violet-600 rounded-full shadow-lg shadow-violet-500/50" />
+                <div className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-1.5 h-1.5 bg-gradient-to-l from-purple-300 to-purple-500 rounded-full shadow-lg shadow-purple-400/50" />
               </div>
             </div>
-            <h1 className="text-2xl font-bold text-white mb-1 tracking-tight">
-              Create Account
+
+            <h1 className="text-2xl font-bold text-gradient mb-1.5 tracking-tight">
+              Create Your Account
             </h1>
-            <p className="text-sm text-gray-400">
-              Join Omniyal to manage your business
+            <p className="text-sm text-gray-400/80 font-light">
+              Start your journey with Omniyal today
             </p>
           </div>
 
-          {/* Glassmorphic card */}
-          <div className="glass-card rounded-2xl p-5">
-            <div className="space-y-3">
+          {/* Glass card */}
+          <div className={`glass-card-premium rounded-3xl p-6 fade-up ${isVisible ? 'stagger-1' : ''}`}>
+            <div className="space-y-4">
 
-              {/* Name and Company inputs */}
+              {/* Name and Company row */}
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-medium text-gray-400 mb-1.5 ml-0.5">
+                {/* Full Name */}
+                <div className={`fade-up ${isVisible ? 'stagger-2' : ''}`}>
+                  <label className="block text-[10px] font-medium text-gray-400/90 mb-1.5 ml-1 tracking-wide uppercase">
                     Full Name
                   </label>
-                  <div className="relative input-wrapper">
+                  <div className="input-wrapper-premium">
                     <input
                       type="text"
-                      className="glass-input w-full pl-9 pr-3 py-2.5 rounded-xl text-white text-sm"
+                      className="glass-input-premium w-full pl-10 pr-3 py-3 rounded-xl text-white text-sm font-light"
                       placeholder="Your name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       onKeyDown={handleKeyDown}
+                      onFocus={() => setFocusedInput('name')}
+                      onBlur={() => setFocusedInput(null)}
                     />
-                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 icon-float transition-all duration-300 ${focusedInput === 'name' ? 'text-purple-400' : 'text-gray-500/60'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-medium text-gray-400 mb-1.5 ml-0.5">
-                    Company Name
+                {/* Company Name */}
+                <div className={`fade-up ${isVisible ? 'stagger-2' : ''}`}>
+                  <label className="block text-[10px] font-medium text-gray-400/90 mb-1.5 ml-1 tracking-wide uppercase">
+                    Company
                   </label>
-                  <div className="relative input-wrapper">
+                  <div className="input-wrapper-premium">
                     <input
                       type="text"
-                      className="glass-input w-full pl-9 pr-3 py-2.5 rounded-xl text-white text-sm"
+                      className="glass-input-premium w-full pl-10 pr-3 py-3 rounded-xl text-white text-sm font-light"
                       placeholder="Company"
                       value={companyName}
                       onChange={(e) => setCompanyName(e.target.value)}
                       onKeyDown={handleKeyDown}
+                      onFocus={() => setFocusedInput('company')}
+                      onBlur={() => setFocusedInput(null)}
                     />
-                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 icon-float transition-all duration-300 ${focusedInput === 'company' ? 'text-purple-400' : 'text-gray-500/60'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                     </svg>
                   </div>
                 </div>
               </div>
 
-              {/* Phone input */}
-              <div>
-                <label className="block text-[11px] font-medium text-gray-400 mb-1.5 ml-0.5">
+              {/* Phone Number */}
+              <div className={`fade-up ${isVisible ? 'stagger-3' : ''}`}>
+                <label className="block text-[10px] font-medium text-gray-400/90 mb-1.5 ml-1 tracking-wide uppercase">
                   Phone Number
                 </label>
-                <div className="relative input-wrapper">
+                <div className="input-wrapper-premium">
                   <input
                     type="tel"
-                    className="glass-input w-full pl-9 pr-3 py-2.5 rounded-xl text-white text-sm"
+                    className="glass-input-premium w-full pl-10 pr-4 py-3 rounded-xl text-white text-sm font-light"
                     placeholder={`+${getCountryCallingCode(selectedCountry)} 123456789`}
                     value={phoneNumber}
                     onChange={handlePhoneChange}
                     onKeyDown={handleKeyDown}
+                    onFocus={() => setFocusedInput('phone')}
+                    onBlur={() => setFocusedInput(null)}
                   />
-                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 icon-float transition-all duration-300 ${focusedInput === 'phone' ? 'text-purple-400' : 'text-gray-500/60'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                   </svg>
                 </div>
               </div>
 
-              {/* Email input */}
-              <div>
-                <label className="block text-[11px] font-medium text-gray-400 mb-1.5 ml-0.5">
+              {/* Email */}
+              <div className={`fade-up ${isVisible ? 'stagger-4' : ''}`}>
+                <label className="block text-[10px] font-medium text-gray-400/90 mb-1.5 ml-1 tracking-wide uppercase">
                   Email Address
                 </label>
-                <div className="relative input-wrapper">
+                <div className="input-wrapper-premium">
                   <input
                     type="email"
-                    className="glass-input w-full pl-9 pr-3 py-2.5 rounded-xl text-white text-sm"
+                    className="glass-input-premium w-full pl-10 pr-4 py-3 rounded-xl text-white text-sm font-light"
                     placeholder="Enter your email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     onKeyDown={handleKeyDown}
+                    onFocus={() => setFocusedInput('email')}
+                    onBlur={() => setFocusedInput(null)}
                   />
-                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 icon-float transition-all duration-300 ${focusedInput === 'email' ? 'text-purple-400' : 'text-gray-500/60'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
                 </div>
               </div>
 
-              {/* Password input */}
-              <div>
-                <label className="block text-[11px] font-medium text-gray-400 mb-1.5 ml-0.5">
+              {/* Password */}
+              <div className={`fade-up ${isVisible ? 'stagger-5' : ''}`}>
+                <label className="block text-[10px] font-medium text-gray-400/90 mb-1.5 ml-1 tracking-wide uppercase">
                   Password
                 </label>
-                <div className="relative input-wrapper">
+                <div className="input-wrapper-premium">
                   <input
                     type={showPassword ? "text" : "password"}
-                    className="glass-input w-full pl-9 pr-10 py-2.5 rounded-xl text-white text-sm"
+                    className="glass-input-premium w-full pl-10 pr-11 py-3 rounded-xl text-white text-sm font-light"
                     placeholder="Create a password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyDown={handleKeyDown}
+                    onFocus={() => setFocusedInput('password')}
+                    onBlur={() => setFocusedInput(null)}
                   />
-                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 icon-float transition-all duration-300 ${focusedInput === 'password' ? 'text-purple-400' : 'text-gray-500/60'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500/60 hover:text-purple-400 transition-all duration-300 hover:scale-110"
                   >
                     {showPassword ? (
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -445,8 +678,8 @@ function Main() {
 
               {/* Error message */}
               {registerResult && (
-                <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-xl animate-slide-up">
-                  <p className="text-red-400 text-xs text-center flex items-center justify-center gap-1.5">
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl backdrop-blur-xl fade-up">
+                  <p className="text-red-400 text-xs text-center flex items-center justify-center gap-2">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
@@ -459,10 +692,10 @@ function Main() {
               <button
                 onClick={handleRegister}
                 disabled={isLoading}
-                className="btn-primary w-full py-2.5 text-white text-sm font-medium rounded-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none mt-1"
+                className={`btn-premium w-full py-3.5 text-white text-sm font-medium rounded-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none mt-1 fade-up ${isVisible ? 'stagger-6' : ''}`}
               >
                 {isLoading ? (
-                  <span className="flex items-center justify-center gap-2">
+                  <span className="flex items-center justify-center gap-2.5">
                     <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -470,47 +703,72 @@ function Main() {
                     Creating Account...
                   </span>
                 ) : (
-                  <span className="flex items-center justify-center gap-2">
-                    Create Account
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  <span className="flex items-center justify-center gap-2.5">
+                    Get Started
+                    <svg className="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                     </svg>
                   </span>
                 )}
               </button>
 
               {/* Divider */}
-              <div className="relative py-1">
+              <div className={`relative py-1.5 fade-up ${isVisible ? 'stagger-7' : ''}`}>
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-white/5"></div>
+                  <div className="w-full border-t border-white/[0.06]"></div>
                 </div>
                 <div className="relative flex justify-center">
-                  <span className="px-3 text-[10px] text-gray-500 bg-[#0f0f23]">Already have an account?</span>
+                  <span className="px-4 text-[10px] text-gray-500/80 bg-transparent backdrop-blur-xl tracking-wider uppercase">Already have an account?</span>
                 </div>
               </div>
 
               {/* Login button */}
               <button
                 onClick={() => navigate('/login')}
-                className="btn-secondary w-full py-2.5 text-white/80 text-sm font-medium rounded-xl"
+                className={`btn-secondary-premium w-full py-3 text-white/80 text-sm font-medium rounded-xl fade-up ${isVisible ? 'stagger-8' : ''}`}
               >
-                Sign In
+                <span className="relative z-10">Sign In</span>
               </button>
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-center gap-1.5 mt-4">
-            <svg className="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-            <p className="text-[10px] text-gray-600">
-              Your data is secure with us
-            </p>
+          {/* Footer with features */}
+          <div className={`mt-5 fade-up ${isVisible ? 'stagger-8' : ''}`}>
+            <div className="flex items-center justify-center gap-2 flex-wrap">
+              <div className="feature-tag flex items-center gap-1.5 px-2.5 py-1 rounded-full">
+                <svg className="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="text-[10px] text-gray-400">Free Trial</span>
+              </div>
+              <div className="feature-tag flex items-center gap-1.5 px-2.5 py-1 rounded-full">
+                <svg className="w-3 h-3 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <span className="text-[10px] text-gray-400">Secure</span>
+              </div>
+              <div className="feature-tag flex items-center gap-1.5 px-2.5 py-1 rounded-full">
+                <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span className="text-[10px] text-gray-400">Instant Setup</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-      <ToastContainer />
+      <ToastContainer
+        position="top-center"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="dark"
+      />
     </>
   );
 }
