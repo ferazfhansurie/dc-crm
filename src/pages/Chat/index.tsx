@@ -12142,30 +12142,507 @@ function Main() {
   };
 
   return (
-    <div
-      className="flex flex-col md:flex-row overflow-y-auto bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2"
-      style={{ height: "100vh" }}
-    >
-      <audio ref={audioRef} src={noti} />
-      <div
-        className={`flex flex-col w-full md:min-w-[30%] md:max-w-[30%] bg-gray-100 dark:bg-gray-900 border-r border-gray-300 dark:border-gray-700 ${
-          selectedChatId ? "hidden md:flex" : "flex"
-        }`}
-      >
-        <div className="flex items-center justify-between pl-3 pr-3 pt-4 pb-2 sticky top-0 z-10 bg-white/10 dark:bg-gray-900/20 backdrop-blur-md border-b border-white/20 dark:border-gray-700/30 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div>
-              <div className="text-start text-xl font-bold capitalize text-gray-800 dark:text-gray-200 mb-1">
-                {companyName}
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="text-start text-sm font-semibold text-gray-600 dark:text-gray-400">
-                  Total Contacts: {totalContacts}
-                </div>
+    <>
+      {/* Chat Page Styles - Matching Login Page Polish */}
+      <style>{`
+        /* Animation Keyframes */
+        @keyframes float {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-20px) rotate(180deg); }
+        }
+        @keyframes float-slow {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-8px); }
+        }
+        @keyframes pulse-glow {
+          0%, 100% { opacity: 0.3; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(1.02); }
+        }
+        @keyframes slide-up {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slide-in-right {
+          from { opacity: 0; transform: translateX(20px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes gradient-shift {
+          0%, 100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+        }
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        @keyframes breathe {
+          0%, 100% { transform: scale(1); opacity: 0.8; }
+          50% { transform: scale(1.02); opacity: 1; }
+        }
+        @keyframes border-glow {
+          0%, 100% { box-shadow: 0 0 5px rgba(139, 92, 246, 0.3); }
+          50% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.5); }
+        }
+        @keyframes message-appear {
+          from { opacity: 0; transform: translateY(10px) scale(0.95); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes contact-hover {
+          from { transform: scale(1); }
+          to { transform: scale(1.02); }
+        }
+        @keyframes fade-in-up {
+          from { opacity: 0; transform: translateY(15px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes float-delayed {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          25% { transform: translateY(-12px) rotate(2deg); }
+          75% { transform: translateY(8px) rotate(-2deg); }
+        }
 
-                {/* Error Message - Show below if there's an error */}
+        /* Animation Classes */
+        .animate-float { animation: float 6s ease-in-out infinite; }
+        .animate-float-slow { animation: float-slow 4s ease-in-out infinite; }
+        .animate-float-delayed { animation: float-delayed 8s ease-in-out infinite 2s; }
+        .animate-fade-in-up { animation: fade-in-up 0.4s ease-out forwards; }
+        .animate-pulse-glow { animation: pulse-glow 4s ease-in-out infinite; }
+        .animate-slide-up { animation: slide-up 0.4s ease-out forwards; }
+        .animate-slide-in-right { animation: slide-in-right 0.3s ease-out forwards; }
+        .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
+        .animate-breathe { animation: breathe 3s ease-in-out infinite; }
+        .animate-message-appear { animation: message-appear 0.3s ease-out forwards; }
+        .animate-gradient-shift {
+          animation: gradient-shift 3s ease infinite;
+          background-size: 200% auto;
+        }
+        .animate-shimmer {
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+          background-size: 200% 100%;
+          animation: shimmer 2s infinite;
+        }
+
+        /* Glassmorphism Cards - Light Mode */
+        .glass-card {
+          background: rgba(255, 255, 255, 0.7);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.3);
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Glassmorphism Cards - Dark Mode */
+        .dark .glass-card {
+          background: linear-gradient(145deg, rgba(31, 41, 55, 0.9) 0%, rgba(17, 24, 39, 0.85) 100%);
+          border: 1px solid rgba(75, 85, 99, 0.4);
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        /* Glass Sidebar - Light Mode */
+        .glass-sidebar {
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.85) 100%);
+          backdrop-filter: blur(24px);
+          -webkit-backdrop-filter: blur(24px);
+          border-right: 1px solid rgba(226, 232, 240, 0.8);
+        }
+        
+        /* Glass Sidebar - Dark Mode */
+        .dark .glass-sidebar {
+          background: linear-gradient(180deg, rgba(17, 24, 39, 0.98) 0%, rgba(31, 41, 55, 0.95) 50%, rgba(17, 24, 39, 0.98) 100%);
+          border-right: 1px solid rgba(75, 85, 99, 0.3);
+          box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Glass Header - Light Mode */
+        .glass-header {
+          background: rgba(255, 255, 255, 0.85);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+        }
+        
+        /* Glass Header - Dark Mode */
+        .dark .glass-header {
+          background: linear-gradient(180deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.9) 100%);
+          border-bottom: 1px solid rgba(75, 85, 99, 0.4);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Glass Input - Light Mode */
+        .glass-input {
+          background: rgba(255, 255, 255, 0.8);
+          border: 1px solid rgba(226, 232, 240, 0.8);
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-input:focus {
+          background: rgba(255, 255, 255, 0.95);
+          border-color: rgba(99, 102, 241, 0.5);
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1), 0 0 20px rgba(99, 102, 241, 0.1);
+          outline: none;
+        }
+        
+        /* Glass Input - Dark Mode */
+        .dark .glass-input {
+          background: rgba(31, 41, 55, 0.8);
+          border: 1px solid rgba(75, 85, 99, 0.5);
+          color: #f3f4f6;
+        }
+        .dark .glass-input:focus {
+          background: rgba(31, 41, 55, 0.95);
+          border-color: rgba(99, 102, 241, 0.6);
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2), 0 0 20px rgba(99, 102, 241, 0.15);
+        }
+        .dark .glass-input::placeholder {
+          color: #9ca3af;
+        }
+
+        /* Contact Item Styles - Light Mode */
+        .contact-item {
+          background: rgba(255, 255, 255, 0.6);
+          border: 1px solid transparent;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .contact-item:hover {
+          background: rgba(255, 255, 255, 0.9);
+          border-color: rgba(99, 102, 241, 0.2);
+          box-shadow: 0 4px 20px rgba(99, 102, 241, 0.1);
+          transform: translateX(4px);
+        }
+        .contact-item.selected {
+          background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+          border-color: rgba(99, 102, 241, 0.3);
+          box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15), inset 0 0 0 1px rgba(99, 102, 241, 0.1);
+        }
+        
+        /* Contact Item Styles - Dark Mode */
+        .dark .contact-item {
+          background: rgba(31, 41, 55, 0.5);
+          border: 1px solid rgba(55, 65, 81, 0.3);
+        }
+        .dark .contact-item:hover {
+          background: rgba(55, 65, 81, 0.6);
+          border-color: rgba(99, 102, 241, 0.4);
+          box-shadow: 0 4px 20px rgba(99, 102, 241, 0.2);
+        }
+        .dark .contact-item.selected {
+          background: linear-gradient(135deg, rgba(79, 70, 229, 0.25) 0%, rgba(139, 92, 246, 0.2) 100%);
+          border-color: rgba(99, 102, 241, 0.5);
+          box-shadow: 0 4px 20px rgba(99, 102, 241, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        /* Message Bubbles - Light Mode */
+        .message-bubble-sent {
+          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+          color: white;
+          border-radius: 18px 18px 4px 18px;
+          box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
+        }
+        .message-bubble-received {
+          background: rgba(255, 255, 255, 0.95);
+          color: #1e293b;
+          border-radius: 18px 18px 18px 4px;
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+          border: 1px solid rgba(226, 232, 240, 0.8);
+        }
+        
+        /* Message Bubbles - Dark Mode */
+        .dark .message-bubble-sent {
+          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+          box-shadow: 0 2px 12px rgba(99, 102, 241, 0.4);
+        }
+        .dark .message-bubble-received {
+          background: rgba(30, 41, 59, 0.9);
+          color: #e2e8f0;
+          border: 1px solid rgba(51, 65, 85, 0.6);
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Tag Pills - Light Mode */
+        .tag-pill {
+          background: rgba(99, 102, 241, 0.1);
+          color: #4f46e5;
+          border: 1px solid rgba(99, 102, 241, 0.2);
+          transition: all 0.2s ease;
+        }
+        .tag-pill:hover {
+          background: rgba(99, 102, 241, 0.2);
+          transform: scale(1.05);
+        }
+        .tag-pill.active {
+          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+          color: white;
+          border-color: transparent;
+          box-shadow: 0 2px 10px rgba(99, 102, 241, 0.4);
+        }
+        
+        /* Tag Pills - Dark Mode */
+        .dark .tag-pill {
+          background: rgba(139, 92, 246, 0.15);
+          color: #a78bfa;
+          border-color: rgba(139, 92, 246, 0.3);
+        }
+        .dark .tag-pill:hover {
+          background: rgba(139, 92, 246, 0.25);
+        }
+        .dark .tag-pill.active {
+          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+          color: white;
+          box-shadow: 0 2px 10px rgba(139, 92, 246, 0.5);
+        }
+
+        /* Button Styles - Primary */
+        .btn-chat-primary {
+          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #6366f1 100%);
+          background-size: 200% 200%;
+          animation: gradient-shift 3s ease infinite;
+          transition: all 0.3s ease;
+          position: relative;
+          overflow: hidden;
+        }
+        .btn-chat-primary::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+          transition: left 0.5s ease;
+        }
+        .btn-chat-primary:hover::before {
+          left: 100%;
+        }
+        .btn-chat-primary:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+        }
+        .btn-chat-primary:active {
+          transform: translateY(0);
+        }
+
+        /* Button Styles - Secondary */
+        .btn-chat-secondary {
+          background: rgba(255, 255, 255, 0.8);
+          border: 1px solid rgba(226, 232, 240, 0.8);
+          transition: all 0.3s ease;
+        }
+        .btn-chat-secondary:hover {
+          background: rgba(255, 255, 255, 0.95);
+          border-color: rgba(99, 102, 241, 0.3);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        .dark .btn-chat-secondary {
+          background: rgba(30, 41, 59, 0.6);
+          border-color: rgba(51, 65, 85, 0.6);
+        }
+        .dark .btn-chat-secondary:hover {
+          background: rgba(30, 41, 59, 0.8);
+          border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        /* Chat Area Background - Light Mode */
+        .chat-area-bg {
+          background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
+          position: relative;
+        }
+        .chat-area-bg::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239ca3af' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+          opacity: 0.5;
+        }
+        
+        /* Chat Area Background - Dark Mode */
+        .dark .chat-area-bg {
+          background: linear-gradient(180deg, rgba(17, 24, 39, 1) 0%, rgba(31, 41, 55, 0.95) 30%, rgba(17, 24, 39, 1) 100%);
+        }
+        .dark .chat-area-bg::before {
+          background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%236366f1' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+          opacity: 1;
+        }
+
+        /* Scrollbar Styles - Light Mode */
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.05);
+          border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(99, 102, 241, 0.3);
+          border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(99, 102, 241, 0.5);
+        }
+        
+        /* Scrollbar Styles - Dark Mode */
+        .dark .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.05);
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(139, 92, 246, 0.3);
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(139, 92, 246, 0.5);
+        }
+
+        /* Avatar Glow */
+        .avatar-glow {
+          position: relative;
+        }
+        .avatar-glow::after {
+          content: '';
+          position: absolute;
+          inset: -2px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #6366f1, #8b5cf6, #6366f1);
+          background-size: 200% 200%;
+          animation: gradient-shift 3s ease infinite;
+          z-index: -1;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
+        .avatar-glow:hover::after {
+          opacity: 1;
+        }
+
+        /* Floating Orbs - Light Mode */
+        .floating-orb {
+          position: absolute;
+          border-radius: 50%;
+          filter: blur(60px);
+          pointer-events: none;
+        }
+        .floating-orb-1 {
+          width: 300px;
+          height: 300px;
+          background: rgba(99, 102, 241, 0.1);
+          top: 10%;
+          right: 10%;
+          animation: float-slow 8s ease-in-out infinite;
+        }
+        .floating-orb-2 {
+          width: 200px;
+          height: 200px;
+          background: rgba(139, 92, 246, 0.08);
+          bottom: 20%;
+          left: 5%;
+          animation: float-slow 10s ease-in-out infinite;
+          animation-delay: 2s;
+        }
+        
+        /* Floating Orbs - Dark Mode */
+        .dark .floating-orb-1 {
+          background: rgba(79, 70, 229, 0.25);
+        }
+        .dark .floating-orb-2 {
+          background: rgba(139, 92, 246, 0.2);
+        }
+
+        /* Status Indicators */
+        .status-online {
+          background: linear-gradient(135deg, #22c55e, #16a34a);
+          box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+        }
+        .status-offline {
+          background: linear-gradient(135deg, #ef4444, #dc2626);
+          box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+        }
+
+        /* Unread Badge Animation */
+        .unread-badge {
+          animation: breathe 2s ease-in-out infinite;
+        }
+
+        /* Input Area Glass Effect - Light Mode */
+        .input-area-glass {
+          background: rgba(255, 255, 255, 0.9);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border-top: 1px solid rgba(226, 232, 240, 0.6);
+          box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
+        }
+        
+        /* Input Area Glass Effect - Dark Mode */
+        .dark .input-area-glass {
+          background: rgba(31, 41, 55, 0.95);
+          border-top: 1px solid rgba(75, 85, 99, 0.5);
+          box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Smooth Page Transitions */
+        .page-transition {
+          animation: fade-in 0.3s ease-out;
+        }
+
+        /* Loading Skeleton */
+        .skeleton {
+          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite;
+        }
+        .dark .skeleton {
+          background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+        }
+      `}</style>
+
+      <div
+        className="flex flex-col md:flex-row overflow-y-auto page-transition dark:bg-gray-900"
+        style={{ 
+          height: "100vh",
+        }}
+      >
+        {/* Dynamic Background for Light/Dark Mode */}
+        <div 
+          className="fixed inset-0 -z-10 transition-colors duration-500"
+          style={{
+            background: "var(--tw-gradient-stops, linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f1f5f9 100%))"
+          }}
+        ></div>
+        <style>{`
+          .dark .page-transition { 
+            --tw-gradient-stops: linear-gradient(135deg, #111827 0%, #1f2937 50%, #111827 100%);
+          }
+          :not(.dark) .page-transition {
+            --tw-gradient-stops: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f1f5f9 100%);
+          }
+        `}</style>
+        
+        {/* Floating Orbs for Visual Interest */}
+        <div className="floating-orb floating-orb-1 hidden md:block"></div>
+        <div className="floating-orb floating-orb-2 hidden md:block"></div>
+        
+        <audio ref={audioRef} src={noti} />
+        
+        {/* Sidebar Container */}
+        <div
+          className={`flex flex-col w-full md:min-w-[30%] md:max-w-[30%] glass-sidebar custom-scrollbar animate-slide-up ${
+            selectedChatId ? "hidden md:flex" : "flex"
+          }`}
+        >
+          {/* Header Section */}
+          <div className="flex items-center justify-between pl-4 pr-4 pt-5 pb-3 sticky top-0 z-10 glass-header">
+            <div className="flex items-center gap-3">
+              <div>
+                <div className="text-start text-xl font-bold capitalize text-gray-800 dark:text-gray-100 mb-1 tracking-tight">
+                  {companyName}
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="text-start text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Total Contacts: <span className="font-semibold text-indigo-600 dark:text-indigo-400">{totalContacts}</span>
+                  </div>
+
+                {/* Error Message - Animated Badge */}
                 {wsError && (
-                  <div className="text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-1.5 py-1 rounded-md font-medium">
+                  <div className="text-xs text-red-500 dark:text-red-400 bg-red-50/80 dark:bg-red-900/30 backdrop-blur-sm px-2 py-1 rounded-lg font-medium animate-slide-up border border-red-200/50 dark:border-red-800/50">
                     {wsError}
                   </div>
                 )}
@@ -12173,7 +12650,7 @@ function Main() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             {/* Phone Connection Status Indicator */}
             {!phoneStatusLoading && Object.entries(phoneNames).some(([index]) => {
               const phoneStatus = qrCodes[parseInt(index)]?.status || "unknown";
@@ -12181,22 +12658,22 @@ function Main() {
               console.log('Banner check - phoneStatus:', phoneStatus, 'isConnected:', isConnected, 'qrCodes:', qrCodes, 'phoneNames:', phoneNames);
               return !isConnected;
             }) && (
-              <div className="flex items-center justify-center space-x-1.5 text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded-lg border border-orange-200 dark:border-orange-800/50">
-                <Lucide icon="AlertTriangle" className="w-3 h-3" />
+              <div className="flex items-center justify-center space-x-1.5 text-xs text-orange-600 dark:text-orange-400 bg-orange-50/80 dark:bg-orange-900/30 backdrop-blur-sm px-2.5 py-1.5 rounded-xl border border-orange-200/60 dark:border-orange-800/50 animate-slide-up shadow-sm">
+                <Lucide icon="AlertTriangle" className="w-3.5 h-3.5" />
                 <span className="font-medium">Phone Connection Needed</span>
               </div>
             )}
             
-            {/* Phone Selection Button */}
+            {/* Phone Selection Button - Polished */}
             <button
               onClick={() => setShowPhoneModal(true)}
-              className="flex items-center space-x-1.5 text-sm font-bold opacity-75 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-md hover:bg-white dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100/50 focus:ring-blue-500/50 transition-all duration-300 border border-white/30 dark:border-gray-600/50"
+              className="flex items-center space-x-2 text-sm font-semibold btn-chat-secondary px-3 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all duration-300"
             >
               <Lucide
                 icon="Phone"
-                className="w-3 h-3 text-gray-800 dark:text-white"
+                className="w-4 h-4 text-indigo-600 dark:text-indigo-400"
               />
-              <span className="text-gray-800 font-bold dark:text-white">
+              <span className="text-gray-700 dark:text-gray-200">
                 {userData?.phone !== undefined
                   ? (() => {
                       const phoneIndex = parseInt(userData.phone);
@@ -12210,37 +12687,35 @@ function Main() {
               </span>
               <Lucide
                 icon="ChevronDown"
-                className="w-2.5 h-2.5 text-gray-500"
+                className="w-3 h-3 text-gray-400 dark:text-gray-500"
               />
             </button>
 
-            {/* WebSocket Status - Clickable to disconnect */}
-            <div className="flex items-center gap-1.5 w-full">
-              <button
-                onClick={() => {}}
-                className={`flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg shadow-md border transition-all duration-300 ease-out hover:scale-105 active:scale-95 cursor-pointer w-full backdrop-blur-sm ${
+            {/* WebSocket Status - Polished */}
+            <div className="flex items-center gap-2 w-full">
+              <div
+                className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl shadow-sm border transition-all duration-300 w-full ${
                   wsConnected
-                    ? "bg-white/90 dark:bg-gray-800/90 border-white/30 dark:border-gray-600/50 hover:bg-white dark:hover:bg-gray-700"
-                    : "bg-white/90 dark:bg-gray-800/90 border-white/30 dark:border-gray-600/50"
+                    ? "bg-emerald-50/80 dark:bg-emerald-900/20 border-emerald-200/60 dark:border-emerald-700/40"
+                    : "bg-red-50/80 dark:bg-red-900/20 border-red-200/60 dark:border-red-700/40"
                 }`}
-                disabled={!wsConnected}
               >
                 {wsConnected ? (
                   <>
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span className="text-xs font-bold text-green-600 dark:text-green-400">
+                    <div className="w-2 h-2 rounded-full status-online"></div>
+                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                       Live
                     </span>
                   </>
                 ) : (
                   <>
-                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                    <span className="text-xs font-bold text-red-600 dark:text-red-400">
+                    <div className="w-2 h-2 rounded-full status-offline"></div>
+                    <span className="text-xs font-semibold text-red-600 dark:text-red-400">
                       Offline
                     </span>
                   </>
                 )}
-              </button>
+              </div>
 
               {/* Reconnect Button - Only show when disconnected */}
               {!wsConnected && (
@@ -12256,7 +12731,7 @@ function Main() {
                     // This will trigger the useEffect to re-run and create a new connection
                     setWsVersion((prev) => prev + 1);
                   }}
-                  className="flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-bold bg-gradient-to-r from-blue-500/90 to-blue-600/90 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-300 ease-out shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none w-full backdrop-blur-sm border border-blue-400/50"
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold btn-chat-primary text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed w-full"
                   disabled={wsReconnectAttempts >= maxReconnectAttempts}
                 >
                   <svg
@@ -12395,20 +12870,21 @@ function Main() {
             </div>
           </div>
         )}
-        <div className="sticky top-20 bg-white/10 dark:bg-gray-900/20 backdrop-blur-sm p-2 z-30 border-b border-white/20 dark:border-gray-700/30">
+        {/* Search Bar Section - Polished */}
+        <div className="sticky top-20 glass-header p-3 z-30">
           <div className="flex items-center space-x-2">
             {notifications.length > 0 && (
               <NotificationPopup notifications={notifications} />
             )}
 
-            {/* WhatsApp Web-style search bar */}
+            {/* Polished Search Bar */}
             <div className="relative flex-grow">
               <button
                 onClick={() => setIsSearchModalOpen(true)}
-                className="flex items-center w-full h-9 py-2 pl-7 pr-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm text-gray-500 dark:text-gray-400 rounded-lg hover:bg-white dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all duration-300 border border-white/30 dark:border-gray-600/50 shadow-sm hover:shadow-md"
+                className="flex items-center w-full h-10 py-2 pl-10 pr-4 glass-input text-gray-500 dark:text-gray-400 rounded-xl focus:outline-none transition-all duration-300 shadow-sm hover:shadow-md group"
               >
-                <Lucide icon="Search" className="absolute left-2.5 w-4 h-4" />
-                <span className="ml-2 text-base">Search contacts...</span>
+                <Lucide icon="Search" className="absolute left-3 w-4 h-4 text-gray-400 dark:text-gray-500 group-hover:text-indigo-500 dark:group-hover:text-indigo-400 transition-colors" />
+                <span className="ml-2 text-sm font-medium">Search contacts...</span>
               </button>
 
               <SearchModal
@@ -12507,14 +12983,14 @@ function Main() {
               </Dialog>
             </div>
 
-            {/* Action buttons with WhatsApp Web styling */}
-            <div className="flex items-center space-x-1.5">
+            {/* Action buttons - Polished */}
+            <div className="flex items-center space-x-2">
               {isAssistantAvailable && (
                 <button
-                  className={`flex items-center justify-center p-2 rounded-lg transition-all duration-300 ease-out hover:scale-105 active:scale-95 backdrop-blur-sm border shadow-sm hover:shadow-md ${
+                  className={`flex items-center justify-center p-2.5 rounded-xl transition-all duration-300 ease-out hover:scale-105 active:scale-95 shadow-md hover:shadow-lg ${
                     companyStopBot
-                      ? "bg-red-500/90 hover:bg-red-600/90 text-white border-red-400/50"
-                      : "bg-green-500/90 hover:bg-green-600/90 text-white border-green-400/50"
+                      ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white"
+                      : "bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white"
                   } ${userRole === "3" ? "opacity-50 cursor-not-allowed" : ""}`}
                   onClick={toggleBot}
                   disabled={userRole === "3"}
@@ -12527,20 +13003,20 @@ function Main() {
                 </button>
               )}
 
-              {/* Employee assignment button */}
+              {/* Employee assignment button - Polished */}
               <Menu as="div" className="relative inline-block text-left">
-                <Menu.Button className="flex items-center justify-center p-2 bg-white/80 dark:bg-gray-800/80 hover:bg-white/90 dark:hover:bg-gray-700/90 backdrop-blur-sm rounded-lg transition-all duration-300 border border-white/30 dark:border-gray-600/50 shadow-sm hover:shadow-md">
+                <Menu.Button className="flex items-center justify-center p-2.5 btn-chat-secondary rounded-xl transition-all duration-300 shadow-sm hover:shadow-md">
                   <Lucide
                     icon="Users"
-                    className="w-4 h-4 text-gray-800 dark:text-gray-200"
+                    className="w-4 h-4 text-indigo-600 dark:text-indigo-400"
                   />
                 </Menu.Button>
-                <Menu.Items className="absolute right-0 mt-1.5 w-36 shadow-lg rounded-md bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 p-1.5 z-10 max-h-40 overflow-y-auto">
-                  <div className="p-1.5">
+                <Menu.Items className="absolute right-0 mt-2 w-48 glass-card rounded-xl p-2 z-10 max-h-64 overflow-y-auto custom-scrollbar animate-slide-up">
+                  <div className="p-2">
                     <input
                       type="text"
                       placeholder="Search employees..."
-                      className="w-full p-1.5 border rounded-md mb-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+                      className="w-full p-2 glass-input rounded-lg text-gray-900 dark:text-gray-100 text-sm"
                       value={employeeSearch}
                       onChange={(e) => setEmployeeSearch(e.target.value)}
                     />
@@ -12548,12 +13024,12 @@ function Main() {
                   <Menu.Item>
                     {({ active }) => (
                       <button
-                        className={`flex items-center w-full text-left p-1.5 rounded-md transition-colors duration-200 text-sm ${
+                        className={`flex items-center w-full text-left p-2.5 rounded-lg transition-all duration-200 text-sm font-medium ${
                           !selectedEmployee
-                            ? "bg-blue-500 text-white"
+                            ? "bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-md"
                             : active
-                            ? "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                            : "text-gray-700 dark:text-gray-200"
+                            ? "bg-gray-100 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100"
+                            : "text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/30"
                         }`}
                         onClick={() => setSelectedEmployee(null)}
                       >
@@ -12579,12 +13055,12 @@ function Main() {
                       <Menu.Item key={employee.id}>
                         {({ active }) => (
                           <button
-                            className={`flex items-center justify-between w-full text-left p-1.5 rounded-md transition-colors duration-200 text-sm ${
+                            className={`flex items-center justify-between w-full text-left p-2.5 rounded-lg transition-all duration-200 text-sm ${
                               selectedEmployee === employee.name
-                                ? "bg-blue-500 text-white"
+                                ? "bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-md"
                                 : active
-                                ? "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                : "text-gray-700 dark:text-gray-200"
+                                ? "bg-gray-100 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100"
+                                : "text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/30"
                             }`}
                             onClick={() =>
                               setSelectedEmployee(
@@ -12594,10 +13070,10 @@ function Main() {
                               )
                             }
                           >
-                            <span>{employee.name}</span>
+                            <span className="font-medium">{employee.name}</span>
                             <div className="flex items-center space-x-1.5 text-xs">
                               {employee.quotaLeads !== undefined && (
-                                <span className="text-gray-500 dark:text-gray-400">
+                                <span className={`${selectedEmployee === employee.name ? 'text-white/80' : 'text-gray-500 dark:text-gray-400'}`}>
                                   {employee.assignedContacts || 0}/
                                   {employee.quotaLeads} leads
                                 </span>
@@ -12610,24 +13086,26 @@ function Main() {
                 </Menu.Items>
               </Menu>
 
-              {/* Tags expansion toggle */}
+              {/* Tags expansion toggle - Polished */}
               <button
-                className="p-1.5 bg-blue-100/80 dark:bg-blue-600/40 backdrop-blur-sm hover:bg-blue-200/90 dark:hover:bg-blue-500/50 rounded-lg transition-all duration-300 border border-blue-200/50 dark:border-blue-500/30 shadow-sm hover:shadow-md"
+                className="p-2.5 btn-chat-secondary rounded-xl transition-all duration-300 shadow-sm hover:shadow-md"
                 onClick={toggleTagsExpansion}
                 title={isTagsExpanded ? "Show Less Tags" : "Show More Tags"}
               >
                 <Lucide
                   icon={isTagsExpanded ? "ChevronUp" : "ChevronDown"}
-                  className="w-3 h-3 text-blue-700 dark:text-blue-300"
+                  className="w-4 h-4 text-indigo-600 dark:text-indigo-400"
                 />
               </button>
             </div>
           </div>
         </div>
+        
+        {/* Tags Section - Polished */}
         <div
-          className={`mt-2 mb-1 px-3 py-2 pr-6 mr-2 transition-all duration-300 ease-in-out ${
-            isTagsExpanded ? "max-h-96 pb-2" : "max-h-20"
-          } overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent  backdrop-blur-sm rounded-xl  shadow-sm`}
+          className={`mt-2 mb-2 px-4 py-3 transition-all duration-500 ease-in-out ${
+            isTagsExpanded ? "max-h-96 pb-3" : "max-h-24"
+          } overflow-y-auto custom-scrollbar mx-3 rounded-xl glass-card`}
         >
           <div className="flex flex-wrap gap-2 justify-center">
             {[
@@ -12810,22 +13288,22 @@ function Main() {
                 <button
                   key={typeof tag === "string" ? tag : tag.id}
                   onClick={() => filterTagContact(tagName)}
-                  className={`px-3 py-2 rounded-xl text-xs font-medium transition-all duration-300 ease-out hover:scale-105 active:scale-95 ${
+                  className={`tag-pill px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-300 ease-out hover:scale-105 active:scale-95 ${
                     tagLower === activeTags[0]
-                      ? "bg-blue-600/90 backdrop-blur-md text-white shadow-lg shadow-blue-500/30 border border-blue-400/50"
-                      : "bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-gray-700 dark:text-gray-200 hover:bg-white/90 dark:hover:bg-gray-700/90 border border-white/30 dark:border-gray-600/50 shadow-sm hover:shadow-md"
+                      ? "active"
+                      : ""
                   }`}
                 >
-                  <span className="flex items-center space-x-1">
+                  <span className="flex items-center gap-1.5">
                     <span>{tagName}</span>
                     {userData?.role === "1" && unreadCount > 0 && (
                       <span
-                        className={`px-2 py-1 rounded-full text-sm font-bold backdrop-blur-sm border ${
+                        className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold unread-badge ${
                           tagName.toLowerCase() === "stop bot"
-                            ? "bg-red-100/80 text-red-700 dark:text-red-300 dark:bg-red-900/60 border-red-200/50 dark:border-red-700/50"
+                            ? "bg-red-500 text-white"
                             : tagName.toLowerCase() === "active bot"
-                            ? "bg-green-100/80 text-green-700 dark:text-green-300 dark:bg-green-900/60 border-green-200/50 dark:border-green-700/50"
-                            : "bg-blue-100/80 text-blue-700 dark:text-blue-300 dark:bg-blue-900/60 border-blue-200/50 dark:border-blue-700/50"
+                            ? "bg-emerald-500 text-white"
+                            : "bg-indigo-500 text-white"
                         }`}
                       >
                         {unreadCount}
@@ -12838,34 +13316,35 @@ function Main() {
           </div>
         </div>
 
+        {/* Contact List Section - Polished */}
         <div
-          className="bg-white/5 dark:bg-gray-900/10 backdrop-blur-sm flex-1 overflow-y-scroll h-full relative p-3 rounded-xl shadow-inner shadow-white/10 dark:shadow-gray-900/20"
+          className="flex-1 overflow-y-auto h-full relative px-2 py-3 custom-scrollbar"
           ref={contactListRef}
         >
           {isLoadingMoreContacts && (
-            <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm flex items-center justify-center z-10">
-              <div className="flex flex-col items-center bg-white/90 dark:bg-gray-800/90 backdrop-blur-md p-4 rounded-xl shadow-lg border border-white/30 dark:border-gray-600/30">
-                <LoadingIcon icon="oval" className="w-4 h-4 text-blue-500" />
-                <span className="mt-1.5 text-xs text-gray-600 dark:text-gray-400 font-medium">
+            <div className="absolute inset-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md flex items-center justify-center z-10 animate-fade-in">
+              <div className="flex flex-col items-center glass-card p-6 rounded-2xl shadow-xl">
+                <div className="w-10 h-10 border-3 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin"></div>
+                <span className="mt-3 text-sm text-gray-600 dark:text-gray-400 font-medium">
                   Loading more contacts...
                 </span>
               </div>
             </div>
           )}
-          {loadedContacts.length === 0 ? ( // Check if loadedContacts is empty
-            <div className="flex items-center justify-center h-full min-h-[400px]">
+          {loadedContacts.length === 0 ? (
+            <div className="flex items-center justify-center h-full min-h-[400px] animate-fade-in">
               {loadedContacts.length === 0 && (
-                <div className="flex flex-col items-center text-center max-w-md mx-auto">
-                  {/* Modern icon with gradient background */}
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center mb-3 shadow-md">
+                <div className="flex flex-col items-center text-center max-w-md mx-auto p-6">
+                  {/* Animated Icon */}
+                  <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg animate-float-slow">
                     <Lucide
                       icon="MessageCircle"
-                      className="h-5 w-5 text-white"
+                      className="h-8 w-8 text-white"
                     />
                   </div>
 
-                  {/* Main heading with better typography */}
-                  <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-1">
+                  {/* Heading */}
+                  <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2 tracking-tight">
                     {isInitialLoading
                       ? "Loading contacts..."
                       : isTagFiltering
@@ -12873,8 +13352,8 @@ function Main() {
                       : "No contacts found"}
                   </h2>
 
-                  {/* Subtitle with better styling */}
-                  <p className="text-gray-600 dark:text-gray-400 mb-3 text-center text-sm">
+                  {/* Description */}
+                  <p className="text-gray-500 dark:text-gray-400 mb-4 text-center text-sm leading-relaxed">
                     {isInitialLoading
                       ? "Please wait while we load your contacts"
                       : isTagFiltering
@@ -12882,47 +13361,47 @@ function Main() {
                       : "Start by adding your first contact or importing from your phone"}
                   </p>
 
-                  {/* Enhanced loading progress */}
+                  {/* Loading Progress Card */}
                   {isInitialLoading && (
-                    <div className="w-full max-w-sm bg-white/20 dark:bg-gray-800/30 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-white/30 dark:border-gray-600/30">
-                      <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1.5">
+                    <div className="w-full max-w-sm glass-card rounded-2xl p-5 animate-slide-up">
+                      <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
                         <span className="font-medium">Loading progress</span>
-                        <span className="font-bold text-blue-600 dark:text-blue-400">
+                        <span className="font-bold text-indigo-600 dark:text-indigo-400">
                           {realLoadingProgress}%
                         </span>
                       </div>
 
-                      {/* Modern progress bar */}
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                      {/* Progress Bar */}
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
                         <div
-                          className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-500 ease-out shadow-sm"
+                          className="bg-gradient-to-r from-indigo-500 to-purple-600 h-2.5 rounded-full transition-all duration-500 ease-out"
                           style={{ width: `${realLoadingProgress}%` }}
                         ></div>
                       </div>
 
-                      {/* Loading steps with better visual hierarchy */}
+                      {/* Loading Steps */}
                       <div className="mt-4 space-y-2">
                         {loadingSteps.userConfig && (
-                          <div className="flex items-center text-xs text-green-600 dark:text-green-400">
-                            <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                          <div className="flex items-center text-xs text-emerald-600 dark:text-emerald-400 animate-slide-up">
+                            <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></div>
                             <span>User configuration loaded</span>
                           </div>
                         )}
                         {loadingSteps.contactsFetch && (
-                          <div className="flex items-center text-xs text-green-600 dark:text-green-400">
-                            <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                          <div className="flex items-center text-xs text-emerald-600 dark:text-emerald-400 animate-slide-up">
+                            <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></div>
                             <span>Contacts fetched</span>
                           </div>
                         )}
                         {loadingSteps.contactsProcess && (
-                          <div className="flex items-center text-xs text-blue-600 dark:text-blue-400">
-                            <div className="w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse"></div>
+                          <div className="flex items-center text-xs text-indigo-600 dark:text-indigo-400 animate-slide-up">
+                            <div className="w-2 h-2 bg-indigo-500 rounded-full mr-2 animate-pulse"></div>
                             <span>Processing contacts...</span>
                           </div>
                         )}
                         {loadingSteps.complete && (
-                          <div className="flex items-center text-xs text-green-600 dark:text-green-400 font-medium">
-                            <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                          <div className="flex items-center text-xs text-emerald-600 dark:text-emerald-400 font-medium animate-slide-up">
+                            <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></div>
                             <span>Loading complete!</span>
                           </div>
                         )}
@@ -12930,11 +13409,11 @@ function Main() {
                     </div>
                   )}
 
-                  {/* Enhanced tag filtering state */}
+                  {/* Tag Filtering State */}
                   {isTagFiltering && (
-                    <div className="w-full max-w-sm bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-800">
+                    <div className="w-full max-w-sm glass-card rounded-2xl p-6 animate-slide-up">
                       <div className="flex items-center justify-center mb-4">
-                        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                        <div className="w-10 h-10 border-3 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin"></div>
                       </div>
                       <p className="text-sm text-blue-700 dark:text-blue-300 font-medium text-center">
                         Searching through {contacts.length.toLocaleString()}{" "}
@@ -12953,27 +13432,25 @@ function Main() {
                   `${contact.phone}-${index}`
                 }
               >
+                {/* Contact Item - Polished */}
                 <div
-                  className={`px-3 py-2.5 cursor-pointer transition-all duration-300 ease-out group mx-2 my-1.5 select-none rounded-xl transform hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-500/10 dark:hover:shadow-blue-400/10 hover:ring-2 hover:ring-blue-500/20 dark:hover:ring-blue-400/20 hover:animate-pulse ${
-                    contact.contact_id !== undefined
-                      ? selectedChatId === contact.contact_id
-                        ? "bg-gradient-to-r from-blue-50/80 to-purple-50/80 dark:from-blue-900/30 dark:to-purple-900/30 backdrop-blur-md border-2 border-blue-400/60 dark:border-blue-500/60 shadow-xl shadow-blue-500/30 dark:shadow-blue-400/30 ring-4 ring-blue-500/20 dark:ring-blue-400/20 scale-[1.02] animate-pulse selected-contact"
-                        : "backdrop-blur-sm border-0 hover:bg-white/20 dark:hover:bg-gray-700/30 hover:border hover:border-blue-300/30 dark:hover:border-blue-500/30"
-                      : selectedChatId === contact.contact_id
-                      ? "bg-gradient-to-r from-blue-50/80 to-purple-50/80 dark:from-blue-900/30 dark:to-purple-900/30 backdrop-blur-md border-2 border-blue-400/60 dark:border-blue-500/60 shadow-xl shadow-blue-500/30 dark:shadow-blue-400/30 ring-4 ring-blue-500/20 dark:ring-blue-400/20 scale-[1.02] animate-pulse selected-contact"
-                      : "backdrop-blur-sm border-0 hover:bg-white/20 dark:hover:bg-gray-700/30 hover:border hover:border-blue-300/30 dark:hover:border-blue-500/30"
+                  className={`contact-item px-4 py-3 cursor-pointer transition-all duration-300 ease-out group mx-1 my-1.5 select-none rounded-2xl ${
+                    selectedChatId === contact.contact_id
+                      ? "selected"
+                      : ""
                   }`}
                   onClick={() => selectChat(contact.contact_id!, contact.id!)}
                   onContextMenu={(e) => handleContextMenu(e, contact)}
                   title="Right-click for more options"
                 >
-                  <div className="flex items-center space-x-1.5">
-                    <div className="relative flex-shrink-0">
+                  <div className="flex items-center space-x-3">
+                    {/* Avatar */}
+                    <div className="relative flex-shrink-0 avatar-glow">
                       <div
-                        className={`w-10 h-10 bg-white/30 dark:bg-gray-600/90 backdrop-blur-md rounded-full flex items-center justify-center text-gray-600 dark:text-gray-300 overflow-hidden border shadow-lg transition-all duration-300 group-hover:scale-110 group-hover:shadow-xl group-hover:shadow-blue-500/20 dark:group-hover:shadow-blue-400/20 group-hover:border-blue-300/50 dark:group-hover:border-blue-500/50 ${
+                        className={`w-12 h-12 rounded-full flex items-center justify-center overflow-hidden transition-all duration-300 ${
                           selectedChatId === contact.contact_id
-                            ? "border-2 border-blue-400/80 dark:border-blue-500/80 shadow-xl shadow-blue-500/40 dark:shadow-blue-400/40 scale-110 ring-4 ring-blue-500/30 dark:ring-blue-400/30"
-                            : "border-white/40 dark:border-gray-500/60 shadow-white/20 dark:shadow-gray-500/20"
+                            ? "ring-2 ring-indigo-500 dark:ring-indigo-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-900"
+                            : "ring-1 ring-gray-200 dark:ring-gray-700"
                         }`}
                       >
                         {contact &&
@@ -12983,7 +13460,7 @@ function Main() {
                               <img
                                 src={contact.profilePicUrl}
                                 alt="Profile"
-                                className="w-full h-full object-cover rounded-full"
+                                className="w-full h-full object-cover"
                                 onError={(e) => {
                                   const originalSrc = e.currentTarget.src;
                                   if (originalSrc !== logoImage) {
@@ -12992,30 +13469,31 @@ function Main() {
                                 }}
                               />
                             ) : (
-                              <Lucide
-                                icon="Users"
-                                className="w-2.5 h-2.5 text-white dark:text-gray-200"
-                              />
+                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600">
+                                <Lucide
+                                  icon="Users"
+                                  className="w-5 h-5 text-white"
+                                />
+                              </div>
                             )
                           ) : contact.profilePicUrl ? (
                             <img
                               src={contact.profilePicUrl}
                               alt={contact.contactName || "Profile"}
-                              className="w-full h-full object-cover rounded-full"
+                              className="w-full h-full object-cover"
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-                              <Lucide icon="User" className="w-2.5 h-2.5" />
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 text-white">
+                              <Lucide icon="User" className="w-5 h-5" />
                             </div>
                           ))}
                       </div>
 
-                      {/* Unread badge - Show prominently when count > 0, show plain text when count = 0 */}
+                      {/* Unread Badge - Polished */}
                       {contact.unreadCount !== undefined && (
                         <>
-                          {/* Prominent badge for unread messages */}
                           {(contact.unreadCount ?? 0) > 0 && (
-                            <span className="absolute -top-1 -right-1 bg-green-500/90 backdrop-blur-sm text-white text-sm rounded-full px-1.5 py-1 min-w-[18px] h-[18px] flex items-center justify-center font-bold border border-white/30 shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-green-500/30 group-hover:bg-green-600/90">
+                            <span className="absolute -top-0.5 -right-0.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center font-bold shadow-md unread-badge">
                               {(contact.unreadCount ?? 0) > 99
                                 ? "99+"
                                 : contact.unreadCount ?? 0}
@@ -13025,15 +13503,16 @@ function Main() {
                       )}
                     </div>
 
+                    {/* Contact Info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex flex-col space-y-0.5">
+                      <div className="flex flex-col gap-0.5">
                         <div className="flex justify-between items-start">
                           <div className="flex-1 min-w-0">
                             <h3
-                              className={`text-sm font-semibold truncate mb-0 transition-all duration-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:font-bold ${
+                              className={`text-sm font-semibold truncate transition-all duration-300 ${
                                 selectedChatId === contact.contact_id
-                                  ? "text-blue-700 dark:text-blue-300 font-bold text-base"
-                                  : "text-gray-900 dark:text-gray-100"
+                                  ? "text-indigo-700 dark:text-indigo-300"
+                                  : "text-gray-800 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400"
                               }`}
                             >
                               {(
@@ -13418,13 +13897,13 @@ function Main() {
             ))
           ) : null}
         </div>
+        {/* Pagination - Polished */}
         <div
-          className={`flex flex-col justify-center items-center gap-1.5 mt-3 mb-3 px-2 ${
+          className={`flex flex-col justify-center items-center gap-2 py-3 px-3 glass-header ${
             isLoadingMoreContacts ? "opacity-50" : ""
           }`}
         >
-          {/* Main Pagination */}
-          <div className="flex justify-center items-center p-1">
+          <div className="flex justify-center items-center">
             <ReactPaginate
               breakLabel="…"
               nextLabel="Next"
@@ -13436,24 +13915,24 @@ function Main() {
               )}
               previousLabel="Previous"
               renderOnZeroPageCount={null}
-              containerClassName="flex justify-center items-center flex-wrap gap-0.5 p-1.5 rounded-xl bg-white/10 dark:bg-gray-800/20 backdrop-blur-xl border border-white/20 dark:border-gray-600/30 shadow-lg"
-              pageClassName="mx-0.25"
-              pageLinkClassName="px-2 py-1.5 rounded-lg bg-white/20 dark:bg-gray-700/30 backdrop-blur-md text-gray-700 dark:text-gray-300 hover:bg-white/40 dark:hover:bg-gray-600/50 text-xs min-w-[20px] text-center font-medium transition-all duration-300 border border-white/30 dark:border-gray-500/40 shadow-md hover:shadow-lg hover:scale-105 transform"
+              containerClassName="flex justify-center items-center flex-wrap gap-1 p-2 rounded-2xl glass-card"
+              pageClassName="mx-0.5"
+              pageLinkClassName="px-3 py-1.5 rounded-xl bg-white/60 dark:bg-gray-700/40 text-gray-700 dark:text-gray-300 hover:bg-white/90 dark:hover:bg-gray-600/60 text-xs min-w-[32px] text-center font-medium transition-all duration-300 border border-gray-200/50 dark:border-gray-600/50 hover:scale-105"
               previousClassName="mx-0.5"
               nextClassName="mx-0.5"
-              previousLinkClassName="px-2.5 py-1.5 rounded-lg bg-white/20 dark:bg-gray-700/30 backdrop-blur-md text-gray-700 dark:text-gray-300 hover:bg-white/40 dark:hover:bg-gray-600/50 text-xs font-medium transition-all duration-300 border border-white/30 dark:border-gray-500/40 shadow-md hover:shadow-lg hover:scale-105 transform"
-              nextLinkClassName="px-2.5 py-1.5 rounded-lg bg-white/20 dark:bg-gray-700/30 backdrop-blur-md text-gray-700 dark:text-gray-300 hover:bg-white/40 dark:hover:bg-gray-600/50 text-xs font-medium transition-all duration-300 border border-white/30 dark:border-gray-500/40 shadow-md hover:shadow-lg hover:scale-105 transform"
+              previousLinkClassName="px-3 py-1.5 rounded-xl bg-white/60 dark:bg-gray-700/40 text-gray-700 dark:text-gray-300 hover:bg-white/90 dark:hover:bg-gray-600/60 text-xs font-medium transition-all duration-300 border border-gray-200/50 dark:border-gray-600/50 hover:scale-105"
+              nextLinkClassName="px-3 py-1.5 rounded-xl bg-white/60 dark:bg-gray-700/40 text-gray-700 dark:text-gray-300 hover:bg-white/90 dark:hover:bg-gray-600/60 text-xs font-medium transition-all duration-300 border border-gray-200/50 dark:border-gray-600/50 hover:scale-105"
               disabledClassName="opacity-40 cursor-not-allowed hover:scale-100"
               activeClassName="font-bold"
-              activeLinkClassName="bg-gradient-to-r from-blue-500/80 to-purple-600/80 text-white hover:from-blue-600/90 hover:to-purple-700/90 border-blue-400/60 shadow-lg hover:shadow-xl"
+              activeLinkClassName="bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 border-transparent shadow-md"
               forcePage={currentPage}
             />
           </div>
         </div>
         {isLoadingMoreContacts && (
-          <div className="flex flex-col items-center justify-center mt-3 mb-3 p-4 bg-white/15 dark:bg-gray-800/25 backdrop-blur-xl rounded-2xl border border-white/25 dark:border-gray-600/40 shadow-2xl">
-            <LoadingIcon icon="oval" className="w-4 h-4 text-primary" />
-            <span className="mt-2 text-sm text-gray-700 dark:text-gray-300 font-medium">
+          <div className="flex flex-col items-center justify-center py-4 px-4 glass-card mx-3 mb-3 rounded-2xl animate-slide-up">
+            <div className="w-8 h-8 border-3 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin"></div>
+            <span className="mt-3 text-sm text-gray-600 dark:text-gray-400 font-medium">
               Loading more contacts...
             </span>
             <div className="mt-2 w-full max-w-xs">
@@ -13464,11 +13943,11 @@ function Main() {
           </div>
         )}
       </div>
-      <div className="flex flex-col w-full sm:w-3/4 relative flex-1 overflow-hidden bg-gradient-to-br from-white/5 to-white/10 dark:from-gray-800/10 dark:to-gray-800/15 backdrop-blur-sm">
+      <div className="flex flex-col w-full sm:w-3/4 relative flex-1 overflow-hidden bg-gradient-to-br from-slate-50/80 to-slate-100/60 dark:from-gray-900 dark:via-gray-800/95 dark:to-gray-900 backdrop-blur-sm">
         {selectedChatId ? (
           <>
             <div
-              className="flex items-center justify-between p-3 bg-white/10 dark:bg-gray-900/20 backdrop-blur-xl border-b border-white/20 dark:border-gray-700/30 shadow-lg shadow-black/5 dark:shadow-black/20 cursor-pointer transition-all duration-300 hover:bg-white/15 dark:hover:bg-gray-800/25"
+              className="flex items-center justify-between p-3 bg-white/80 dark:bg-gray-800/90 backdrop-blur-xl border-b border-slate-200/80 dark:border-gray-700/50 shadow-lg shadow-black/5 dark:shadow-black/30 cursor-pointer transition-all duration-300 hover:bg-white/90 dark:hover:bg-gray-800/95"
               onClick={handleEyeClick}
             >
               <div className="flex items-center space-x-3">
@@ -13477,7 +13956,7 @@ function Main() {
                     e.stopPropagation();
                     handleBack();
                   }}
-                  className="p-2 hover:bg-white/20 dark:hover:bg-gray-800/40 rounded-xl transition-all duration-300 backdrop-blur-sm border border-white/20 dark:border-gray-600/30 hover:scale-105 hover:shadow-lg hover:shadow-blue-500/20 dark:hover:shadow-blue-400/20"
+                  className="p-2 hover:bg-slate-100 dark:hover:bg-gray-700/60 rounded-xl transition-all duration-300 backdrop-blur-sm border border-slate-200/80 dark:border-gray-600/50 hover:scale-105 hover:shadow-lg hover:shadow-indigo-500/20 dark:hover:shadow-indigo-400/20"
                 >
                   <Lucide
                     icon="ChevronLeft"
@@ -13650,7 +14129,7 @@ function Main() {
               </div>
             </div>
             <div
-              className="flex-1 overflow-y-auto p-2 bg-gradient-to-br from-white/8 via-white/3 to-transparent dark:from-gray-800/15 dark:via-gray-800/8 dark:to-transparent backdrop-blur-2xl"
+              className="flex-1 overflow-y-auto p-2 bg-gradient-to-b from-slate-50/90 via-slate-100/80 to-slate-50/90 dark:from-gray-900/95 dark:via-gray-800/90 dark:to-gray-900/95"
               style={{
                 paddingBottom: "75px",
                 backgroundSize: "cover",
@@ -15008,32 +15487,32 @@ function Main() {
                 </button>
               </div>
             )}
-            <div className="absolute bottom-0 left-0 right-0 mx-2 mb-2">
-              <div className="flex items-center w-full bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl pl-3 pr-3 py-2 rounded-3xl border-0 shadow-lg shadow-black/10 dark:shadow-slate-900/20">
+            <div className="absolute bottom-0 left-0 right-0 mx-2 mb-2 animate-fade-in-up">
+              <div className="flex items-center w-full bg-white/95 dark:bg-gray-800 backdrop-blur-2xl pl-3 pr-3 py-2.5 rounded-3xl border border-slate-200/80 dark:border-gray-600/60 shadow-2xl shadow-black/10 dark:shadow-black/40 transition-all duration-300 hover:shadow-3xl hover:shadow-indigo-500/10 dark:hover:shadow-indigo-400/20 hover:border-indigo-400/30 dark:hover:border-indigo-500/40">
                 <button
-                  className="p-2 m-0 hover:bg-white/20 dark:hover:bg-slate-700/40 rounded-xl transition-all duration-200 hover:scale-105 group border-0"
+                  className="p-2.5 m-0 hover:bg-gradient-to-br hover:from-blue-500/20 hover:to-purple-500/20 dark:hover:from-blue-500/30 dark:hover:to-purple-500/30 rounded-xl transition-all duration-300 hover:scale-110 group border-0 hover:shadow-lg hover:shadow-blue-500/20"
                   onClick={() => setEmojiPickerOpen(!isEmojiPickerOpen)}
                 >
                   <span className="flex items-center justify-center w-5 h-5">
                     <Lucide
                       icon="Smile"
-                      className="w-5 h-5 text-slate-700 dark:text-slate-700 group-hover:text-blue-500 dark:group-hover:text-blue-500 transition-colors duration-200"
+                      className="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors duration-300"
                     />
                   </span>
                 </button>
                 <button
-                  className="p-2 m-0 hover:bg-white/20 dark:hover:bg-slate-700/40 rounded-xl transition-all duration-200 hover:scale-105 group"
+                  className="p-2.5 m-0 hover:bg-gradient-to-br hover:from-green-500/20 hover:to-emerald-500/20 dark:hover:from-green-500/30 dark:hover:to-emerald-500/30 rounded-xl transition-all duration-300 hover:scale-110 group hover:shadow-lg hover:shadow-green-500/20"
                   onClick={() => setIsAttachmentModalOpen(true)}
                 >
                   <span className="flex items-center justify-center w-5 h-5">
                     <Lucide
                       icon="Paperclip"
-                      className="w-5 h-5 text-slate-700 dark:text-slate-700 group-hover:text-blue-500 dark:group-hover:text-blue-500 transition-colors duration-200"
+                      className="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-green-500 dark:group-hover:text-green-400 transition-colors duration-300"
                     />
                   </span>
                 </button>
                 <button
-                  className="p-2 m-0 hover:bg-white/20 dark:hover:bg-white/20 rounded-xl transition-all duration-200 hover:scale-105 group"
+                  className="p-2.5 m-0 hover:bg-gradient-to-br hover:from-purple-500/20 hover:to-pink-500/20 dark:hover:from-purple-500/30 dark:hover:to-pink-500/30 rounded-xl transition-all duration-300 hover:scale-110 group hover:shadow-lg hover:shadow-purple-500/20"
                   onClick={() => {
                     setIsQuickRepliesOpen(true);
                     setQuickReplyFilter("");
@@ -15042,7 +15521,7 @@ function Main() {
                   <span className="flex items-center justify-center w-5 h-5">
                     <Lucide
                       icon="MessageSquare"
-                      className="w-5 h-5 text-slate-700 dark:text-slate-700 group-hover:text-blue-500 dark:group-hover:text-blue-500 transition-colors duration-200"
+                      className="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-purple-500 dark:group-hover:text-purple-400 transition-colors duration-300"
                     />
                   </span>
                 </button>
@@ -15070,7 +15549,7 @@ function Main() {
                 )}
                 <textarea
                   ref={textareaRef}
-                  className="flex-grow h-8 px-3 py-2 text-sm resize-none overflow-hidden bg-transparent dark:bg-transparent text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 border-none outline-none focus:outline-none focus:ring-0 focus:border-none transition-all duration-200"
+                  className="flex-grow h-8 px-4 py-2 text-sm resize-none overflow-hidden bg-transparent dark:bg-transparent text-gray-800 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 border-none outline-none focus:outline-none focus:ring-0 focus:border-none transition-all duration-300 font-medium"
                   placeholder={
                     messageMode === "privateNote"
                       ? "Type a private note..."
@@ -15198,13 +15677,13 @@ function Main() {
                   disabled={userRole === "3"}
                 />
                 <button
-                  className="p-2 m-0 hover:bg-white/20 dark:hover:bg-white/20 rounded-xl transition-all duration-200 hover:scale-105 group"
+                  className="p-2.5 m-0 hover:bg-gradient-to-br hover:from-rose-500/20 hover:to-red-500/20 dark:hover:from-rose-500/30 dark:hover:to-red-500/30 rounded-xl transition-all duration-300 hover:scale-110 group hover:shadow-lg hover:shadow-rose-500/20"
                   onClick={toggleRecordingPopup}
                 >
                   <span className="flex items-center justify-center w-5 h-5">
                     <Lucide
                       icon="Mic"
-                      className="w-5 h-5 text-slate-700 dark:text-slate-700 group-hover:text-blue-500 dark:group-hover:text-blue-500 transition-colors duration-200"
+                      className="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-rose-500 dark:group-hover:text-rose-400 transition-colors duration-300"
                     />
                   </span>
                 </button>
@@ -15217,16 +15696,19 @@ function Main() {
             </div>
           </>
         ) : (
-          <div className="hidden md:flex flex-col w-full h-full bg-gradient-to-br from-white/10 to-white/20 dark:from-gray-800/20 dark:to-gray-800/30 backdrop-blur-xl text-gray-800 dark:text-gray-200 items-center justify-center p-8">
-            <div className="flex flex-col items-center justify-center p-12 rounded-3xl shadow-2xl bg-white/20 dark:bg-gray-800/25 backdrop-blur-2xl border border-white/40 dark:border-gray-600/50 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)]">
-              <div className="w-24 h-24 mb-8 overflow-hidden rounded-2xl shadow-2xl bg-white/30 dark:bg-gray-700/40 backdrop-blur-md border border-white/50 dark:border-gray-600/60 p-3">
+          <div className="hidden md:flex flex-col w-full h-full bg-gradient-to-br from-blue-50/50 via-purple-50/30 to-pink-50/50 dark:from-gray-800/30 dark:via-gray-800/20 dark:to-gray-900/30 backdrop-blur-2xl text-gray-800 dark:text-gray-200 items-center justify-center p-8 animate-fade-in relative overflow-hidden">
+            {/* Floating orbs for decoration */}
+            <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-400/10 dark:bg-blue-600/10 rounded-full blur-3xl animate-float"></div>
+            <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-400/10 dark:bg-purple-600/10 rounded-full blur-3xl animate-float-delayed"></div>
+            <div className="flex flex-col items-center justify-center p-12 rounded-3xl glass-card shadow-2xl animate-slide-up">
+              <div className="w-24 h-24 mb-8 overflow-hidden rounded-2xl shadow-2xl bg-white/40 dark:bg-gray-700/50 backdrop-blur-xl border border-white/60 dark:border-gray-600/60 p-3 transition-all duration-500 hover:scale-110 hover:shadow-3xl hover:shadow-blue-500/20">
                 <img
                   src={logoImage}
                   alt="Logo"
-                  className="w-full h-full object-cover rounded-xl"
+                  className="w-full h-full object-cover rounded-xl transition-all duration-300 hover:brightness-110"
                 />
               </div>
-              <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 text-center mb-6 bg-gradient-to-r from-gray-800 to-gray-600 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
+              <h2 className="text-3xl font-bold text-center mb-6 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 dark:from-blue-400 dark:via-purple-400 dark:to-pink-400 bg-clip-text text-transparent animate-gradient-shift bg-[length:200%_auto]">
                 {hasNoPhones
                   ? "No Phones Connected"
                   : isAssistantInfoLoaded && (!assistantInfo.instructions || assistantInfo.instructions.trim() === "") 
@@ -15234,7 +15716,7 @@ function Main() {
                     : "Welcome to Chat"
                 }
               </h2>
-              <p className="text-gray-700 dark:text-gray-300 text-lg text-center mb-10 max-w-lg leading-relaxed font-medium px-4">
+              <p className="text-gray-600 dark:text-gray-300 text-lg text-center mb-10 max-w-lg leading-relaxed font-medium px-4">
                 {hasNoPhones
                   ? "You need to connect your WhatsApp phones before you can start chatting. Please set up your phone connections first."
                   : isAssistantInfoLoaded && (!assistantInfo.instructions || assistantInfo.instructions.trim() === "") 
@@ -15248,29 +15730,31 @@ function Main() {
                 <div className="flex flex-col sm:flex-row gap-6 mb-8">
                   <button
                     onClick={() => navigate('/loading')}
-                    className="bg-gradient-to-r from-green-500/80 to-emerald-600/80 hover:from-green-600/90 hover:to-emerald-700/90 text-white font-bold py-5 px-10 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105 backdrop-blur-md border border-green-400/50 dark:border-green-300/50"
+                    className="relative overflow-hidden bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-4 px-8 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-green-500/30 transform hover:scale-105 backdrop-blur-md border border-green-400/50 dark:border-green-300/50"
                   >
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-3 relative z-10">
                       <Lucide icon="Wifi" className="w-5 h-5" />
                       <span>Connect Phones</span>
                     </div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full animate-shimmer"></div>
                   </button>
                 </div>
               ) : !(isAssistantInfoLoaded && (!assistantInfo.instructions || assistantInfo.instructions.trim() === "")) ? (
                 // Show normal chat buttons when phones are available and instructions are set
-                <div className="flex flex-col sm:flex-row gap-6 mb-8">
+                <div className="flex flex-col sm:flex-row gap-4 mb-8">
                   <button
                     onClick={openNewChatModal}
-                    className="bg-gradient-to-r from-blue-500/80 to-purple-600/80 hover:from-blue-600/90 hover:to-purple-700/90 text-white font-bold py-5 px-10 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105 backdrop-blur-md border border-blue-400/50 dark:border-blue-300/50"
+                    className="relative overflow-hidden bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-4 px-8 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-blue-500/30 transform hover:scale-105 backdrop-blur-md border border-blue-400/50 dark:border-blue-300/50"
                   >
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-3 relative z-10">
                       <Lucide icon="Plus" className="w-5 h-5" />
                       <span>Start New Chat</span>
                     </div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full animate-shimmer"></div>
                   </button>
                   <button
                     onClick={() => setIsSearchModalOpen(true)}
-                    className="bg-white/30 hover:bg-white/50 dark:bg-gray-700/30 dark:hover:bg-gray-600/50 text-gray-800 dark:text-gray-200 font-semibold py-5 px-10 rounded-2xl transition-all duration-300 border border-white/50 dark:border-gray-600/50 shadow-lg hover:shadow-xl backdrop-blur-md hover:scale-105 transform"
+                    className="relative overflow-hidden bg-white/50 hover:bg-white/70 dark:bg-gray-700/50 dark:hover:bg-gray-600/70 text-gray-800 dark:text-gray-200 font-semibold py-4 px-8 rounded-2xl transition-all duration-300 border border-white/60 dark:border-gray-600/60 shadow-lg hover:shadow-xl hover:shadow-purple-500/20 backdrop-blur-md hover:scale-105 transform"
                   >
                     <div className="flex items-center space-x-3">
                       <Lucide icon="Search" className="w-5 h-5" />
@@ -15280,9 +15764,9 @@ function Main() {
                   <button
                     onClick={() => setIsSyncModalOpen(true)}
                     disabled={fetching}
-                    className="bg-gradient-to-r from-green-500/80 to-emerald-600/80 hover:from-green-600/90 hover:to-emerald-700/90 disabled:from-gray-400/50 disabled:to-gray-500/50 disabled:cursor-not-allowed text-white font-bold py-5 px-10 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105 backdrop-blur-md border border-green-400/50 dark:border-green-300/50"
+                    className="relative overflow-hidden bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white font-bold py-4 px-8 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-green-500/30 transform hover:scale-105 disabled:hover:scale-100 backdrop-blur-md border border-green-400/50 dark:border-green-300/50"
                   >
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-3 relative z-10">
                       {fetching ? (
                         <LoadingIcon icon="oval" color="white" className="w-5 h-5" />
                       ) : (
@@ -15290,6 +15774,7 @@ function Main() {
                       )}
                       <span>{fetching ? "Syncing..." : "Sync Database"}</span>
                     </div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full animate-shimmer"></div>
                   </button>
                 </div>
               ) : null}
@@ -19028,6 +19513,7 @@ function Main() {
       
    
     </div>
+    </>
   );
 }
 
