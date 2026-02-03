@@ -65,9 +65,17 @@ export const selectMenu = (layout: Themes["layout"]) => (state: RootState) => {
       return simpleMenu3;
     }else if (config?.name === "MTDC") {
       return simpleMenuMTDC;
-    } else if (config?.name === "Juta" || config?.name === "Omniyal AI") {
+    } else if (config?.name === "Juta" || config?.name === "Omniyal AI" || config?.name === "Desitech Creation") {
       return filterMenuByEmail(simpleMenuJuta);
     } else {
+      // Check if user email should see inbox even on other menus
+      const userEmail = localStorage.getItem("userEmail")?.toLowerCase() || "";
+      const canSeeInbox = userEmail.includes("juta") || userEmail.includes("omniyal") || userEmail.includes("desitecreation");
+      
+      if (canSeeInbox) {
+        return filterMenuByEmail(simpleMenuJuta);
+      }
+      
       switch (userRole) {
         case "1":
           return simpleMenu;
@@ -77,6 +85,7 @@ export const selectMenu = (layout: Themes["layout"]) => (state: RootState) => {
           return simpleMenuRole3;
         default:
           return simpleMenu;
+      }
       }
     }
   }
