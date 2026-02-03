@@ -89,6 +89,10 @@ function SettingsPage() {
     trialEndDate: string | null;
     apiUrl: string | null;
     phoneCount: number;
+    // Cloud API specific fields
+    wabaId?: string;
+    phoneNumberId?: string;
+    accessToken?: string;
   }
 
   // Phone status and QR code data
@@ -223,8 +227,10 @@ console.log("userEmail:", userEmail);
             const data: BotStatusResponse = statusResponse.data;
             let qrCodesData: QRCodeData[] = [];
 
-            // Track if company is using Cloud API (v2)
-            setIsCloudApiConnected(data.v2 === true);
+            // Track if company is using Cloud API (v2) - must have v2=true AND valid Cloud API credentials
+            const hasCloudApiCredentials = data.v2 === true && 
+              !!(data.wabaId || data.phoneNumberId || data.accessToken);
+            setIsCloudApiConnected(hasCloudApiCredentials);
 
             if (data.phones && Array.isArray(data.phones)) {
               qrCodesData = data.phones.map((phone: Phone) => ({
@@ -392,8 +398,10 @@ console.log("userEmail:", userEmail);
         const data: BotStatusResponse = response.data;
         let qrCodesData: QRCodeData[] = [];
 
-        // Track if company is using Cloud API (v2)
-        setIsCloudApiConnected(data.v2 === true);
+        // Track if company is using Cloud API (v2) - must have v2=true AND valid Cloud API credentials
+        const hasCloudApiCredentials = data.v2 === true && 
+          !!(data.wabaId || data.phoneNumberId || data.accessToken);
+        setIsCloudApiConnected(hasCloudApiCredentials);
 
         // Check if phones array exists before mapping
         if (data.phones && Array.isArray(data.phones)) {
