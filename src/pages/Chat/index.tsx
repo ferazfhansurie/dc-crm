@@ -48,6 +48,7 @@ import { Transition } from "@headlessui/react";
 import VirtualContactList from "../../components/VirtualContactList";
 import SearchModal from "@/components/SearchModal";
 import QuickRepliesModal from "@/components/QuickRepliesModal";
+import TemplateSelectorModal from "@/components/TemplateSelectorModal";
 import { time } from "console";
 import { toInteger } from "lodash";
 declare global {
@@ -1023,6 +1024,17 @@ function Main() {
   const [quotaAIMessage, setQuotaAIMessage] = useState<number>(0);
   const [quotaBlastedMessage, setQuotaBlastedMessage] = useState<number>(0);
   const [companyPlan, setCompanyPlan] = useState<string>("");
+
+  // Template and 24-hour window states
+  const [isTemplateSelectorOpen, setIsTemplateSelectorOpen] = useState(false);
+  const [sessionWindowInfo, setSessionWindowInfo] = useState<{
+    isOpen: boolean;
+    requiresTemplate: boolean;
+    hoursRemaining?: number;
+    lastCustomerMessage?: string;
+  } | null>(null);
+  const [isOfficialApi, setIsOfficialApi] = useState(false);
+  const [connectionType, setConnectionType] = useState<string>('wwebjs');
 
   // Usage Dashboard states
   const [isUsageDashboardOpen, setIsUsageDashboardOpen] =
@@ -5054,6 +5066,50 @@ function Main() {
     }
   }, [selectedChatId]);
 
+  // Check connection type and 24-hour session window when contact changes
+  useEffect(() => {
+    const checkSessionWindow = async () => {
+      if (!companyId || !selectedContact?.phone) {
+        setSessionWindowInfo(null);
+        return;
+      }
+
+      try {
+        // First check connection type
+        const connectionResponse = await fetch(
+          `${baseUrl}/api/templates/connection-type/${companyId}?phoneIndex=${userData?.phone || 0}`,
+          { credentials: "include" }
+        );
+        
+        if (connectionResponse.ok) {
+          const connectionData = await connectionResponse.json();
+          setConnectionType(connectionData.connectionType || 'wwebjs');
+          setIsOfficialApi(connectionData.requiresTemplates || false);
+
+          // Only check session window for official API
+          if (connectionData.requiresTemplates) {
+            const cleanPhone = selectedContact.phone.replace(/[^\d]/g, '');
+            const sessionResponse = await fetch(
+              `${baseUrl}/api/templates/session/${companyId}/${cleanPhone}?phoneIndex=${userData?.phone || 0}`,
+              { credentials: "include" }
+            );
+
+            if (sessionResponse.ok) {
+              const sessionData = await sessionResponse.json();
+              setSessionWindowInfo(sessionData.sessionWindow);
+            }
+          } else {
+            setSessionWindowInfo(null);
+          }
+        }
+      } catch (error) {
+        console.error("Error checking session window:", error);
+      }
+    };
+
+    checkSessionWindow();
+  }, [companyId, selectedContact?.phone, userData?.phone]);
+
   useEffect(() => {
     console.log("🔍 DEBUGGING: useEffect for fetchConfigFromDatabase running");
     fetchConfigFromDatabase().catch((error) => {
@@ -8200,9 +8256,68 @@ function Main() {
     }
   };
 
+  // Handle sending template messages (for 24-hour window)
+  const handleSendTemplate = async (templateName: string, language: string, components: any[]) => {
+    if (!selectedChatId || !selectedContact?.phone || !companyId) {
+      toast.error("Missing required information to send template");
+      return;
+    }
+
+    try {
+      const cleanPhone = selectedContact.phone.replace(/[^\d]/g, '');
+      
+      const response = await fetch(`${baseUrl}/api/whatsapp/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          companyId,
+          phoneIndex: userData?.phone || 0,
+          chatId: selectedChatId,
+          type: 'template',
+          templateName,
+          templateLang: language,
+          templateComponents: components
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send template');
+      }
+
+      const data = await response.json();
+      
+      // Refresh messages to show the sent template
+      if (whapiToken) {
+        await fetchMessages(selectedChatId, whapiToken);
+      }
+
+      // Reset session window info (template opens new 24h window)
+      setSessionWindowInfo({
+        isOpen: true,
+        requiresTemplate: false
+      });
+
+      toast.success("Template message sent successfully!");
+      setIsTemplateSelectorOpen(false);
+    } catch (error: any) {
+      console.error("Error sending template:", error);
+      toast.error(error.message || "Failed to send template message");
+      throw error;
+    }
+  };
+
   const handleSendMessage = async (retryMessage?: any) => {
     const messageToSend = retryMessage || newMessage;
     if (!messageToSend.trim() || !selectedChatId) return;
+
+    // Check if template is required (24-hour window expired for official API)
+    if (isOfficialApi && sessionWindowInfo?.requiresTemplate) {
+      // Open template selector instead of sending regular message
+      setIsTemplateSelectorOpen(true);
+      return;
+    }
 
     // Store the message text before clearing input
     const messageText = messageToSend;
@@ -15768,6 +15883,33 @@ function Main() {
                 </button>
               </div>
             )}
+            {/* 24-hour Window Warning Banner */}
+            {isOfficialApi && sessionWindowInfo?.requiresTemplate && (
+              <div className="absolute bottom-16 left-0 right-0 mx-2 mb-2 animate-fade-in-up z-10">
+                <div className="flex items-center justify-between bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-xl px-4 py-3 shadow-lg">
+                  <div className="flex items-center">
+                    <div className="w-8 h-8 bg-yellow-100 dark:bg-yellow-800 rounded-full flex items-center justify-center mr-3">
+                      <Lucide icon="Clock" className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                        24-hour messaging window expired
+                      </p>
+                      <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                        Use a message template to re-engage this contact
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsTemplateSelectorOpen(true)}
+                    className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    <Lucide icon="FileText" className="w-4 h-4" />
+                    Send Template
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="absolute bottom-0 left-0 right-0 mx-2 mb-2 animate-fade-in-up">
               <div className="flex items-center w-full bg-white/95 dark:bg-gray-800 backdrop-blur-2xl pl-3 pr-3 py-2.5 rounded-3xl border border-slate-200/80 dark:border-gray-600/60 shadow-2xl shadow-black/10 dark:shadow-black/40 transition-all duration-300 hover:shadow-3xl hover:shadow-indigo-500/10 dark:hover:shadow-indigo-400/20 hover:border-indigo-400/30 dark:hover:border-indigo-500/40">
                 <button
@@ -19445,6 +19587,17 @@ function Main() {
         onUpdateReply={updateQuickReply}
         onDeleteReply={deleteQuickReply}
       />
+
+      {/* Template Selector Modal for 24-hour window */}
+      <TemplateSelectorModal
+        isOpen={isTemplateSelectorOpen}
+        onClose={() => setIsTemplateSelectorOpen(false)}
+        onSend={handleSendTemplate}
+        companyId={companyId}
+        phoneIndex={userData?.phone || 0}
+        contactName={selectedContact?.contactName || selectedContact?.firstName || ''}
+      />
+
       {/* Employee Assignment Modal */}
       {isEmployeeModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">

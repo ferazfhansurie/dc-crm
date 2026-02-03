@@ -32,6 +32,11 @@ const menu: Array<Menu | "divider"> = [
       pathname: "/calendar",
       title: "Calendar",
     },
+    {
+      icon: "FileText",
+      pathname: "/message-templates",
+      title: "Message Templates",
+    },
     "divider",
     {
       icon: "Users",

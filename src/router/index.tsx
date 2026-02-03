@@ -69,6 +69,7 @@ import Builder2 from "../pages/Builder2";
 import ChatGPTStyle from "../pages/ChatGPTStyle";
 import SplitTest from "../pages/SplitTest";
 import WhatsAppCallback from "../pages/WhatsAppCallback";
+import MessageTemplates from "../pages/MessageTemplates";
 
 
 function Router() {
@@ -142,6 +143,7 @@ function Router() {
         { path: "inbox", element: <Inbox /> },
         { path: "inbox/fullscreen-chat/:companyId", element: <Inbox /> },
         { path: "split-test", element: <SplitTest /> },
+        { path: "message-templates", element: <MessageTemplates /> },
         { path: "file-manager", element: <FileManager /> },
         { path: "point-of-sale", element: <PointOfSale /> },
         { path: "chat", element: <Chat /> },
