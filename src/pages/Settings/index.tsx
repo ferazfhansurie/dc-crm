@@ -127,7 +127,7 @@ function SettingsPage() {
       console.log('fetching settings for user');
 console.log("userEmail:", userEmail);
       // Check if email includes juta.com
-      if (userEmail.includes("juta.com") || userEmail.includes("desitecreation.com")) {
+      if (userEmail.includes("juta.com") || userEmail.includes("desitecreation.com") || userEmail.includes("omniyal")) {
         setShowCompanyIdChange(true);
       }
 
