@@ -10585,7 +10585,7 @@ function Main() {
                           {selectedBlastTemplate && getTemplateVariableCount(selectedBlastTemplate) > 0 && (
                             <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
                               <h4 className="text-md font-semibold text-white/90 mb-4 flex items-center gap-2">
-                                <Lucide icon="Edit3" className="w-5 h-5 text-violet-400" />
+                                <Lucide icon="Pencil" className="w-5 h-5 text-violet-400" />
                                 Fill Template Variables
                               </h4>
                               <div className="space-y-3">
