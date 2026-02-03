@@ -164,7 +164,7 @@ const PDFModal: React.FC<PDFModalProps> = ({
         </div>
         <div className="flex justify-center">
           <button
-            className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors text-sm"
+            className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors text-sm"
             onClick={() => window.open(documentUrl, "_blank")}
           >
             Download Document
@@ -191,9 +191,9 @@ const MessageList: React.FC<MessageListProps> = ({
   const [newMessage, setNewMessage] = useState("");
 
   const myMessageClass =
-    "flex flex-col max-w-xs lg:max-w-md px-4 py-2 mx-2 mb-3 bg-blue-500 text-white rounded-2xl rounded-br-md shadow-sm self-end ml-auto text-left";
+    "flex flex-col max-w-xs lg:max-w-md px-4 py-3 mx-2 mb-3 message-bubble-user text-white rounded-2xl rounded-br-md self-end ml-auto text-left";
   const otherMessageClass =
-    "flex flex-col max-w-xs lg:max-w-md px-4 py-2 mx-2 mb-3 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-2xl rounded-bl-md shadow-sm border border-gray-200 dark:border-gray-700 self-start text-left";
+    "flex flex-col max-w-xs lg:max-w-md px-4 py-3 mx-2 mb-3 message-bubble-assistant text-gray-900 dark:text-gray-100 rounded-2xl rounded-bl-md self-start text-left border border-gray-100 dark:border-gray-700";
 
   const handleSendMessage = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -206,21 +206,29 @@ const MessageList: React.FC<MessageListProps> = ({
   };
 
   return (
-    <div className="flex flex-col w-full h-full bg-white dark:bg-gray-900 relative">
-      <div className="flex items-center justify-between p-1.5 border-b border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
-        <div className="flex items-center">
-          <div className="px-3 py-1.5 bg-gray-600 dark:bg-gray-500 text-white rounded-full shadow-lg font-semibold text-xs capitalize">
-            {assistantName}
+    <div className="flex flex-col w-full h-full bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm relative rounded-2xl overflow-hidden shadow-xl border border-gray-200/50 dark:border-gray-700/50">
+      <div className="flex items-center justify-between p-3 border-b border-gray-200/80 dark:border-gray-700/80 bg-gradient-to-r from-white/90 to-gray-50/90 dark:from-gray-800/90 dark:to-gray-900/90 backdrop-blur-xl">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl header-gradient flex items-center justify-center shadow-md">
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            </svg>
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-gray-800 dark:text-gray-100 capitalize">
+              {assistantName}
+            </div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">AI Assistant</div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {/* New Chat Button - Always creates a fresh conversation */}
           <button
             onClick={onCreateNewThread}
-            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs active:scale-95 transition-all duration-200 flex items-center gap-1"
+            className="px-3 py-2 btn-primary-gradient text-white rounded-xl text-xs font-medium active:scale-95 transition-all duration-200 flex items-center gap-1.5 shadow-md"
           >
             <svg
-              className="w-3 h-3"
+              className="w-3.5 h-3.5"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -237,15 +245,27 @@ const MessageList: React.FC<MessageListProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 relative">
+      <div className="flex-1 overflow-y-auto p-4 bg-gradient-to-b from-gray-50/50 to-white/50 dark:from-gray-900/50 dark:to-gray-800/50 relative custom-scrollbar">
         {/* Tool Buttons - Positioned at top of chat area */}
-        <div className="flex items-center gap-1.5 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700"></div>
+        <div className="flex items-center gap-1.5 mb-3 pb-2 border-b border-gray-200/50 dark:border-gray-700/50"></div>
 
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center text-gray-500 dark:text-gray-400">
-              <div className="px-3 py-2 bg-[#dcf8c6] dark:bg-green-700 text-black dark:text-white rounded-tr-xl rounded-tl-xl rounded-br-xl rounded-bl-sm self-start text-left max-w-[100%] font-mono text-xs">
-                Chat With {assistantName}...
+            <div className="text-center p-8">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl header-gradient flex items-center justify-center shadow-lg">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">Start a Conversation</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 max-w-xs mx-auto">
+                Chat with <span className="font-medium text-indigo-600 dark:text-indigo-400">{assistantName}</span> to test your AI assistant
+              </p>
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl text-xs text-indigo-600 dark:text-indigo-400">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Type a message below to get started
               </div>
             </div>
           </div>
@@ -343,7 +363,7 @@ const MessageList: React.FC<MessageListProps> = ({
                                                 `Document ${docIndex + 1}`
                                             )
                                           }
-                                          className="px-2 py-0.5 text-xs bg-green-500 dark:bg-green-600 text-white rounded hover:bg-green-600 dark:hover:bg-green-700 transition-colors"
+                                          className="px-2 py-0.5 text-xs bg-indigo-500 dark:bg-indigo-600 text-white rounded hover:bg-indigo-600 dark:hover:bg-indigo-700 transition-colors"
                                         >
                                           View
                                         </button>
@@ -447,43 +467,43 @@ const MessageList: React.FC<MessageListProps> = ({
           </>
         )}
 
-        {/* AI Thinking Indicator - ChatGPT Style */}
+        {/* AI Thinking Indicator - Modern Style */}
         {isAiThinking && (
           <div className="flex justify-start mb-4 animate-fadeIn">
-            <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-bl-md px-4 py-3 max-w-xs shadow-sm border border-gray-200 dark:border-gray-700">
-              <div className="flex items-center space-x-2">
-                <div className="flex space-x-1">
+            <div className="glass-card rounded-2xl rounded-bl-md px-4 py-3 max-w-xs shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="flex space-x-1.5">
                   <div
-                    className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse"
-                    style={{ animationDelay: "0ms", animationDuration: "1.4s" }}
+                    className="w-2 h-2 bg-indigo-500 dark:bg-indigo-400 rounded-full animate-pulse"
+                    style={{ animationDelay: "0ms", animationDuration: "1s" }}
                   ></div>
                   <div
-                    className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse"
+                    className="w-2 h-2 bg-indigo-500 dark:bg-indigo-400 rounded-full animate-pulse"
                     style={{
                       animationDelay: "0.2s",
-                      animationDuration: "1.4s",
+                      animationDuration: "1s",
                     }}
                   ></div>
                   <div
-                    className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-pulse"
+                    className="w-2 h-2 bg-indigo-500 dark:bg-indigo-400 rounded-full animate-pulse"
                     style={{
                       animationDelay: "0.4s",
-                      animationDuration: "1.4s",
+                      animationDuration: "1s",
                     }}
                   ></div>
                 </div>
+                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Thinking...</span>
               </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Fullscreen Button - Positioned inside chatbox */}
-      <div className="absolute bottom-20 right-4 flex gap-2 z-10">
-        {/* Fullscreen Button */}
+      {/* Fullscreen Button - Floating Action Button */}
+      <div className="absolute bottom-24 right-5 flex gap-2 z-10">
         <button
           onClick={enterFullscreenMode}
-          className="p-3 bg-green-500 dark:bg-green-600 text-white rounded-full hover:bg-green-600 dark:hover:bg-green-700 active:scale-95 transition-colors shadow-lg"
+          className="p-3 btn-primary-gradient text-white rounded-xl hover:scale-105 active:scale-95 transition-all duration-200 shadow-lg"
           title="Open in fullscreen"
         >
           <svg
@@ -501,22 +521,24 @@ const MessageList: React.FC<MessageListProps> = ({
         </button>
       </div>
 
-      <div className="p-3 border-t border-gray-300 dark:border-gray-700">
-        <div className="flex items-center">
-          <textarea
-            className="w-full h-8 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-green-500 dark:focus:border-green-400 resize-none"
-            placeholder="Type a message"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyDown={handleSendMessage}
-          />
+      <div className="p-4 border-t border-gray-200/80 dark:border-gray-700/80 bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl">
+        <div className="flex items-center gap-3">
+          <div className="flex-1 relative">
+            <textarea
+              className="w-full h-11 px-4 py-3 text-sm text-gray-700 dark:text-gray-300 glass-input rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none transition-all duration-200"
+              placeholder="Type your message..."
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={handleSendMessage}
+            />
+          </div>
           <button
             onClick={() => onSendMessage(newMessage)}
-            className="px-3 py-1.5 ml-1.5 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-1.5 text-xs"
+            className="h-11 px-5 btn-primary-gradient text-white rounded-xl font-medium active:scale-95 transition-all duration-200 flex items-center gap-2 text-sm shadow-lg"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-3 w-3"
+              className="h-4 w-4"
               viewBox="0 0 20 20"
               fill="currentColor"
             >
@@ -2414,7 +2436,7 @@ const Main: React.FC = () => {
         <div className="flex gap-1.5">
           <button
             onClick={() => setIsTemplateModalOpen(true)}
-            className="px-3 py-1.5 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-1.5 text-xs"
+            className="px-3 py-1.5 bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-1.5 text-xs"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -2616,7 +2638,7 @@ const Main: React.FC = () => {
                                                 `Document ${docIndex + 1}`
                                             )
                                           }
-                                          className="px-3 py-1 text-xs bg-green-500 dark:bg-green-600 text-white rounded hover:bg-green-600 dark:hover:bg-green-700 transition-colors"
+                                          className="px-3 py-1 text-xs bg-indigo-500 dark:bg-indigo-600 text-white rounded hover:bg-indigo-600 dark:hover:bg-indigo-700 transition-colors"
                                         >
                                           View
                                         </button>
@@ -2737,7 +2759,7 @@ const Main: React.FC = () => {
         <div className="p-3 border-t border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
           <div className="flex items-center gap-2">
             <textarea
-              className="flex-1 h-10 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+              className="flex-1 h-10 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
               placeholder="Type a message..."
               value={fullscreenNewMessage}
               onChange={(e) => setFullscreenNewMessage(e.target.value)}
@@ -2746,7 +2768,7 @@ const Main: React.FC = () => {
             />
             <button
               onClick={handleFullscreenSendClick}
-              className="px-4 py-2 bg-green-500 dark:bg-green-600 text-white rounded-lg hover:bg-green-600 dark:hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors text-sm"
+              className="px-4 py-2 bg-indigo-500 dark:bg-indigo-600 text-white rounded-lg hover:bg-indigo-600 dark:hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors text-sm"
             >
               Send
             </button>
@@ -2773,29 +2795,186 @@ const Main: React.FC = () => {
   }
 
   return (
-    <div className="flex justify-center h-screen bg-gray-50 dark:bg-gray-900">
-      <div className={`w-full ${isWideScreen ? "max-w-7xl flex" : "max-w-lg"}`}>
+    <div className="flex justify-center h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 transition-colors duration-500">
+      {/* Global Styles for Polish */}
+      <style>{`
+        /* Glass Morphism Effects */
+        .glass-card {
+          background: rgba(255, 255, 255, 0.85);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+        .dark .glass-card {
+          background: rgba(31, 41, 55, 0.85);
+          border: 1px solid rgba(75, 85, 99, 0.4);
+        }
+        
+        .glass-input {
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border: 1px solid rgba(226, 232, 240, 0.6);
+        }
+        .dark .glass-input {
+          background: rgba(55, 65, 81, 0.95);
+          border: 1px solid rgba(75, 85, 99, 0.6);
+        }
+        
+        /* Custom Scrollbar - Matching Chat */
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.05);
+          border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(99, 102, 241, 0.3);
+          border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(99, 102, 241, 0.5);
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.05);
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(139, 92, 246, 0.3);
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(139, 92, 246, 0.5);
+        }
+        
+        /* Floating Orbs - Matching Chat */
+        .floating-orb {
+          position: absolute;
+          border-radius: 50%;
+          filter: blur(80px);
+          pointer-events: none;
+          z-index: 0;
+        }
+        .floating-orb-1 {
+          width: 350px;
+          height: 350px;
+          background: rgba(99, 102, 241, 0.08);
+          top: 5%;
+          right: 10%;
+          animation: float-slow 10s ease-in-out infinite;
+        }
+        .floating-orb-2 {
+          width: 280px;
+          height: 280px;
+          background: rgba(139, 92, 246, 0.06);
+          bottom: 15%;
+          left: 5%;
+          animation: float-slow 12s ease-in-out infinite;
+          animation-delay: 3s;
+        }
+        .dark .floating-orb-1 {
+          background: rgba(99, 102, 241, 0.15);
+        }
+        .dark .floating-orb-2 {
+          background: rgba(139, 92, 246, 0.12);
+        }
+        
+        @keyframes float-slow {
+          0%, 100% { transform: translateY(0) translateX(0); }
+          25% { transform: translateY(-20px) translateX(10px); }
+          50% { transform: translateY(-10px) translateX(-15px); }
+          75% { transform: translateY(-25px) translateX(5px); }
+        }
+        
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+        
+        /* Primary Button - Indigo/Purple Gradient */
+        .btn-primary-gradient {
+          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+          box-shadow: 0 4px 15px rgba(99, 102, 241, 0.35);
+          transition: all 0.3s ease;
+        }
+        .btn-primary-gradient:hover {
+          box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+          transform: translateY(-1px);
+        }
+        .btn-primary-gradient:active {
+          transform: translateY(0);
+        }
+        
+        /* Message Bubble Enhancement */
+        .message-bubble-user {
+          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+          box-shadow: 0 2px 10px rgba(99, 102, 241, 0.25);
+        }
+        .message-bubble-assistant {
+          background: rgba(255, 255, 255, 0.95);
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .dark .message-bubble-assistant {
+          background: rgba(55, 65, 81, 0.95);
+        }
+        
+        /* Header Gradient */
+        .header-gradient {
+          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        }
+      `}</style>
+      
+      {/* Floating Orbs for Visual Interest */}
+      <div className="floating-orb floating-orb-1 hidden md:block"></div>
+      <div className="floating-orb floating-orb-2 hidden md:block"></div>
+      
+      <div className={`w-full h-full ${isWideScreen ? "max-w-7xl flex py-4 px-2" : "max-w-lg"} relative z-10`}>
         {isWideScreen ? (
           <>
-            <div className="w-1/2 pl-1.5 pr-1.5 ml-1.5 mr-1.5 mt-0 overflow-auto bg-gray-50 dark:bg-gray-800 rounded-lg pt-1.5 px-3 pb-3">
+            <div className="w-1/2 pl-4 pr-4 ml-2 mr-2 flex flex-col glass-card rounded-2xl custom-scrollbar shadow-xl overflow-hidden">
+              {/* Header */}
+              <div className="flex-shrink-0 pt-4 pb-3 px-4 border-b border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl header-gradient flex items-center justify-center shadow-lg">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">AI Assistant</h1>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Configure your assistant</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Scrollable Content Area */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-4">
               {loading ? (
                 <div className="flex items-center justify-center h-full">
-                  <div className="flex flex-col items-center w-3/4 max-w-lg text-center p-3">
-                    <img alt="Logo" className="w-20 h-20 mb-3" src={logoUrl} />
-                    <div className="mt-1.5 text-xs p-1.5 dark:text-gray-200">
+                  <div className="flex flex-col items-center w-3/4 max-w-lg text-center p-6">
+                    <div className="w-20 h-20 mb-4 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center">
+                      <img alt="Logo" className="w-12 h-12" src={logoUrl} />
+                    </div>
+                    <div className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3">
                       Fetching Assistant...
                     </div>
-                    <LoadingIcon icon="three-dots" className="w-16 h-16 p-3" />
+                    <LoadingIcon icon="three-dots" className="w-12 h-12 text-indigo-500" />
                   </div>
                 </div>
               ) : (
                 <>
-                  <div className="mb-3 flex items-center justify-between">
-                    {assistants.length > 1 ? (
+                  {/* Assistant Selector */}
+                  {assistants.length > 1 && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                        Select Assistant
+                      </label>
                       <select
                         value={selectedAssistant}
                         onChange={(e) => handleAssistantChange(e.target.value)}
-                        className="w-full p-1.5 text-lg font-bold border border-gray-300 rounded-lg bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+                        className="w-full p-3 text-sm font-medium border-0 rounded-xl glass-input text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 shadow-sm transition-all duration-200"
                       >
                         {assistants.map((assistant) => (
                           <option key={assistant.id} value={assistant.id}>
@@ -2803,21 +2982,20 @@ const Main: React.FC = () => {
                           </option>
                         ))}
                       </select>
-                    ) : null}
-                  </div>
-                  <div className="mb-3">
-                    <label
-                      className="mb-1.5 text-sm font-medium capitalize dark:text-gray-200"
-                      htmlFor="name"
-                    >
-                      Name
+                    </div>
+                  )}
+                  
+                  {/* Name Input */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2" htmlFor="name">
+                      Assistant Name
                     </label>
                     <div className="relative">
                       <input
                         id="name"
                         name="name"
                         type="text"
-                        className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 pr-8 font-mono"
+                        className="w-full p-3 border-0 rounded-xl glass-input text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 shadow-sm transition-all duration-200 font-medium"
                         placeholder="Name your assistant"
                         value={assistantInfo.name}
                         onChange={handleInputChange}
@@ -2828,15 +3006,18 @@ const Main: React.FC = () => {
                   </div>
 
                   {/* AI Tools Section */}
-                  <div className="mb-3">
-                    <div className="flex flex-wrap gap-1.5">
+                  <div className="mb-4">
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">
+                      Quick Actions
+                    </label>
+                    <div className="flex flex-wrap gap-2">
                       <button
                         onClick={handleAutomatedClick}
-                        className="px-2 py-1.5 bg-blue-500 dark:bg-blue-600 text-white border-2 border-blue-600 dark:border-blue-500 rounded-lg hover:bg-blue-600 dark:hover:bg-blue-700 hover:border-blue-700 dark:hover:border-blue-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 whitespace-nowrap text-xs"
+                        className="px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25 active:scale-95 hover:scale-[1.02] transform transition-all duration-200 ease-out flex items-center gap-2 text-xs font-medium"
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
-                          className="h-3 w-3"
+                          className="h-4 w-4"
                           viewBox="0 0 20 20"
                           fill="currentColor"
                         >
@@ -2850,23 +3031,23 @@ const Main: React.FC = () => {
                       </button>
                       <button
                         onClick={handleManualClick}
-                        className="px-2 py-1.5 bg-indigo-500 dark:bg-indigo-600 text-white border-2 border-indigo-600 dark:border-indigo-500 rounded-lg hover:bg-indigo-600 dark:hover:bg-indigo-700 hover:border-indigo-700 dark:hover:border-indigo-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 whitespace-nowrap text-xs"
+                        className="px-3 py-2 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl hover:from-indigo-600 hover:to-indigo-700 shadow-lg shadow-indigo-500/25 active:scale-95 hover:scale-[1.02] transform transition-all duration-200 ease-out flex items-center gap-2 text-xs font-medium"
                       >
                         <svg
-                          className="h-3 w-3"
+                          className="h-4 w-4"
                           xmlns="http://www.w3.org/2000/svg"
                           viewBox="0 0 20 20"
                           fill="currentColor"
                         >
                           <path d="M2 10a8 8 0 1116 0 8 8 0 01-16 0zm7-3h2v6H9V7zm0 8h2v2H9v-2z" />
                         </svg>
-                        Keyword Tools
+                        Keywords
                       </button>
                       <Link to="/follow-ups">
-                        <button className="px-2 py-1.5 bg-teal-500 dark:bg-teal-600 text-white border-2 border-teal-600 dark:border-teal-500 rounded-lg hover:bg-teal-600 dark:hover:bg-teal-700 hover:border-teal-700 dark:hover:border-teal-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 whitespace-nowrap text-xs">
+                        <button className="px-3 py-2 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-xl hover:from-teal-600 hover:to-teal-700 shadow-lg shadow-teal-500/25 active:scale-95 hover:scale-[1.02] transform transition-all duration-200 ease-out flex items-center gap-2 text-xs font-medium">
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
-                            className="h-3 w-3"
+                            className="h-4 w-4"
                             viewBox="0 0 20 20"
                             fill="currentColor"
                           >
@@ -2876,10 +3057,10 @@ const Main: React.FC = () => {
                         </button>
                       </Link>
                       <Link to="/users-layout-2/builder2">
-                        <button className="px-2 py-1.5 bg-purple-500 dark:bg-purple-600 text-white border-2 border-purple-600 dark:border-purple-500 rounded-lg hover:bg-purple-600 dark:hover:bg-purple-700 hover:border-purple-700 dark:hover:border-purple-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 whitespace-nowrap text-xs">
+                        <button className="px-3 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl hover:from-purple-600 hover:to-purple-700 shadow-lg shadow-purple-500/25 active:scale-95 hover:scale-[1.02] transform transition-all duration-200 ease-out flex items-center gap-2 text-xs font-medium">
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
-                            className="h-3 w-3"
+                            className="h-4 w-4"
                             viewBox="0 0 20 20"
                             fill="currentColor"
                           >
@@ -2894,10 +3075,10 @@ const Main: React.FC = () => {
                         </button>
                       </Link>
                       <Link to="/split-test">
-                        <button className="px-2 py-1.5 bg-orange-500 dark:bg-orange-600 text-white border-2 border-orange-600 dark:border-orange-500 rounded-lg hover:bg-orange-600 dark:hover:bg-orange-700 hover:border-orange-700 dark:hover:border-orange-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 whitespace-nowrap text-xs">
+                        <button className="px-3 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl hover:from-orange-600 hover:to-orange-700 shadow-lg shadow-orange-500/25 active:scale-95 hover:scale-[1.02] transform transition-all duration-200 ease-out flex items-center gap-2 text-xs font-medium">
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
-                            className="h-3 w-3"
+                            className="h-4 w-4"
                             viewBox="0 0 20 20"
                             fill="currentColor"
                           >
@@ -2915,113 +3096,82 @@ const Main: React.FC = () => {
 
                   {/* AI Tools Section - Show when Automated is selected */}
                   {showAiToolsSection && (
-                    <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-100 dark:border-blue-800 shadow-sm">
-                      <div className="flex justify-between items-center mb-3">
-                        <label className="text-lg font-medium dark:text-gray-200 flex items-center gap-2">
-                          <svg
-                            className="w-5 h-5 text-blue-600 dark:text-blue-400"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                          AI Tools
-                        </label>
+                    <div className="mb-4 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl border border-blue-100 dark:border-blue-800/50 shadow-lg">
+                      <div className="flex justify-between items-center mb-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md">
+                            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">AI Tools</span>
+                        </div>
                         <button
                           onClick={() => setShowAiToolsSection(false)}
-                          className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                          className="p-1.5 rounded-lg hover:bg-white/50 dark:hover:bg-gray-700/50 transition-colors"
                         >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-5 w-5"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M6 18L18 6M6 6l12 12"
-                            />
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
                       </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                        Click on any tool category to see examples and copy them
-                        directly to your chat
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                        Click on any tool category to see examples and copy them directly to your chat
                       </p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         <button
                           onClick={() => openAiToolsModal("calendar")}
-                          className="p-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors duration-200 text-left"
+                          className="p-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl transition-all duration-200 text-left shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-95"
                         >
-                          <div className="font-medium">
-                            Calendar & Reminders
-                          </div>
-                          <div className="text-xs opacity-90">
-                            Event management & scheduling
-                          </div>
+                          <div className="font-medium text-sm">Calendar & Reminders</div>
+                          <div className="text-xs opacity-80">Event management & scheduling</div>
                         </button>
                         <button
                           onClick={() => openAiToolsModal("contact")}
-                          className="p-3 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors duration-200 text-left"
+                          className="p-3 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl transition-all duration-200 text-left shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-95"
                         >
-                          <div className="font-medium">Contact Management</div>
-                          <div className="text-xs opacity-90">
-                            Contact & tag operations
-                          </div>
+                          <div className="font-medium text-sm">Contact Management</div>
+                          <div className="text-xs opacity-80">Contact & tag operations</div>
                         </button>
                         <button
                           onClick={() => openAiToolsModal("database")}
-                          className="p-3 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors duration-200 text-left"
+                          className="p-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl transition-all duration-200 text-left shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-95"
                         >
-                          <div className="font-medium">
-                            Database & Custom Fields
-                          </div>
-                          <div className="text-xs opacity-90">
-                            Data management tools
-                          </div>
+                          <div className="font-medium text-sm">Database & Custom Fields</div>
+                          <div className="text-xs opacity-80">Data management tools</div>
                         </button>
                         <button
                           onClick={() => openAiToolsModal("followUps")}
-                          className="p-3 bg-pink-500 hover:bg-pink-600 text-white rounded-lg transition-colors duration-200 text-left"
+                          className="p-3 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white rounded-xl transition-all duration-200 text-left shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-95"
                         >
-                          <div className="font-medium">
-                            Follow-Up Management
-                          </div>
-                          <div className="text-xs opacity-90">
-                            Templates & sequences
-                          </div>
+                          <div className="font-medium text-sm">Follow-Up Management</div>
+                          <div className="text-xs opacity-80">Templates & sequences</div>
                         </button>
                         <button
                           onClick={() => openAiToolsModal("utility")}
-                          className="p-3 bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors duration-200 text-left md:col-span-2"
+                          className="p-3 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white rounded-xl transition-all duration-200 text-left shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-95 md:col-span-2"
                         >
-                          <div className="font-medium">Utility Functions</div>
-                          <div className="text-xs opacity-90">
-                            Web search, dates & system tools
-                          </div>
+                          <div className="font-medium text-sm">Utility Functions</div>
+                          <div className="text-xs opacity-80">Web search, dates & system tools</div>
                         </button>
                       </div>
                     </div>
                   )}
 
                   <div className="mb-4">
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                      Instructions
+                    </label>
                     <div className="relative">
                       <textarea
                         id="instructions"
                         name="instructions"
-                        className="w-full p-3 border border-gray-300 rounded-xl h-[500px] text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 font-mono shadow-sm"
-                        placeholder="Tell your assistant what to do"
+                        className="w-full p-4 border-0 rounded-2xl h-[280px] text-sm glass-input text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 font-mono shadow-sm custom-scrollbar leading-relaxed"
+                        placeholder="Tell your assistant what to do..."
                         value={assistantInfo.instructions}
                         onChange={handleInputChange}
                         onFocus={handleFocus}
-                        rows={35}
+                        rows={12}
                         disabled={userRole === "3"}
                       />
                       <button
@@ -3029,7 +3179,7 @@ const Main: React.FC = () => {
                           console.log("Opening fullscreen modal");
                           setIsFullscreenModalOpen(true);
                         }}
-                        className="absolute top-2 right-2 px-3 py-2 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-2"
+                        className="absolute top-3 right-3 p-2.5 bg-white/80 dark:bg-gray-700/80 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-white dark:hover:bg-gray-700 shadow-md active:scale-95 transition-all duration-200 backdrop-blur-sm"
                         title="Edit in fullscreen"
                       >
                         <svg
@@ -3047,10 +3197,10 @@ const Main: React.FC = () => {
                       </button>
 
                       {/* Template Buttons - Positioned at bottom left inside textarea */}
-                      <div className="absolute bottom-2 left-2 flex gap-2">
+                      <div className="absolute bottom-3 left-3 flex gap-2">
                         <button
                           onClick={() => setIsTemplateModalOpen(true)}
-                          className="px-3 py-2 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-2"
+                          className="px-3 py-2 bg-white/90 dark:bg-gray-700/90 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-white dark:hover:bg-gray-700 shadow-md active:scale-95 transition-all duration-200 flex items-center gap-2 text-xs font-medium backdrop-blur-sm"
                         >
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -3071,14 +3221,8 @@ const Main: React.FC = () => {
                       <button
                         ref={updateButtonRef}
                         onClick={updateAssistantInfo}
-                        className={`absolute bottom-2 right-2 px-4 py-2 ${
-                          isSaving
-                            ? "bg-green-600 dark:bg-green-700"
-                            : "bg-green-500 dark:bg-green-600"
-                        } text-white border-2 border-green-600 dark:border-green-500 rounded-lg hover:bg-green-600 dark:hover:bg-green-700 hover:border-green-700 dark:hover:border-green-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-2 ${
-                          userRole === "3"
-                            ? "opacity-50 cursor-not-allowed"
-                            : ""
+                        className={`absolute bottom-3 right-3 px-4 py-2.5 btn-primary-gradient text-white rounded-xl font-medium text-sm flex items-center gap-2 ${
+                          userRole === "3" ? "opacity-50 cursor-not-allowed" : ""
                         }`}
                         onFocus={handleFocus}
                         disabled={userRole === "3"}
@@ -3122,7 +3266,7 @@ const Main: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-100 dark:border-green-800 shadow-sm">
+                  <div className="mb-4 p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg border border-indigo-100 dark:border-indigo-800 shadow-sm">
                     <div className="space-y-3">
                       <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         Response Delay (seconds)
@@ -3135,7 +3279,7 @@ const Main: React.FC = () => {
                           max="300"
                           value={aiDelay}
                           onChange={(e) => setAiDelay(Number(e.target.value))}
-                          className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-xs bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+                          className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-xs bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           disabled={userRole === "3"}
                         />
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -3147,7 +3291,7 @@ const Main: React.FC = () => {
                       <div>
                         <button
                           onClick={handleSaveAiSettings}
-                          className="px-3 py-1.5 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-1.5 text-xs"
+                          className="px-3 py-1.5 bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-1.5 text-xs"
                           disabled={userRole === "3"}
                         >
                           <svg
@@ -3191,12 +3335,12 @@ const Main: React.FC = () => {
                         id="file-upload"
                         type="file"
                         onChange={handleFileUpload}
-                        className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 hover:border-gray-400 dark:hover:border-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
+                        className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 hover:border-gray-400 dark:hover:border-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         disabled={uploading || userRole === "3"}
                       />
                       {uploading && (
                         <div className="absolute inset-0 bg-white/80 dark:bg-gray-700/80 rounded-lg flex items-center justify-center">
-                          <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
+                          <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
                             <svg
                               className="animate-spin h-3 w-3"
                               fill="none"
@@ -3247,7 +3391,7 @@ const Main: React.FC = () => {
                               href={file.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs text-gray-700 dark:text-gray-300 hover:text-green-600 dark:hover:text-green-400 transition-colors font-medium"
+                              className="text-xs text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-medium"
                             >
                               {file.name}
                             </a>
@@ -3285,8 +3429,9 @@ const Main: React.FC = () => {
                   {error && <div className="mt-4 text-red-500">{error}</div>}
                 </>
               )}
+              </div>
             </div>
-            <div className="w-3/5 pr-2">
+            <div className="w-3/5 pr-4 mr-2 flex flex-col">
               <MessageList
                 messages={messages}
                 onSendMessage={sendMessageToAssistant}
@@ -3309,7 +3454,7 @@ const Main: React.FC = () => {
                 className={({ selected }) =>
                   `w-1/2 py-1.5 text-xs font-medium text-center rounded-lg ${
                     selected
-                      ? "bg-white text-green-600 dark:bg-gray-800 dark:text-green-400"
+                      ? "bg-white text-indigo-600 dark:bg-gray-800 dark:text-indigo-400"
                       : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                   } transition-colors duration-200`
                 }
@@ -3320,7 +3465,7 @@ const Main: React.FC = () => {
                 className={({ selected }) =>
                   `w-1/2 py-1.5 text-xs font-medium text-center rounded-lg ${
                     selected
-                      ? "bg-white text-green-600 dark:bg-gray-800 dark:text-green-400"
+                      ? "bg-white text-indigo-600 dark:bg-gray-800 dark:text-indigo-400"
                       : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                   } transition-colors duration-200`
                 }
@@ -3356,7 +3501,7 @@ const Main: React.FC = () => {
                         id="name"
                         name="name"
                         type="text"
-                        className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 pr-8 font-mono"
+                        className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 pr-8 font-mono"
                         placeholder="Name your assistant"
                         value={assistantInfo.name}
                         onChange={handleInputChange}
@@ -3374,7 +3519,7 @@ const Main: React.FC = () => {
                       <textarea
                         id="description"
                         name="description"
-                        className="w-full p-2 border border-gray-300 rounded-lg h-20 text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+                        className="w-full p-2 border border-gray-300 rounded-lg h-20 text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         placeholder="Add a short description of what this assistant does"
                         value={assistantInfo.description}
                         onChange={handleInputChange}
@@ -3393,7 +3538,7 @@ const Main: React.FC = () => {
                         <textarea
                           id="instructions"
                           name="instructions"
-                          className="w-full p-2 border border-gray-300 rounded-lg h-[500px] text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+                          className="w-full p-2 border border-gray-300 rounded-lg h-[500px] text-xs bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           placeholder="Tell your assistant what to do"
                           value={assistantInfo.instructions}
                           onChange={handleInputChange}
@@ -3427,7 +3572,7 @@ const Main: React.FC = () => {
                         <div className="absolute bottom-1.5 left-1.5 flex gap-1.5">
                           <button
                             onClick={() => setIsTemplateModalOpen(true)}
-                            className="px-2 py-1.5 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-1.5 text-xs"
+                            className="px-2 py-1.5 bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-1.5 text-xs"
                           >
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
@@ -3450,9 +3595,9 @@ const Main: React.FC = () => {
                           onClick={updateAssistantInfo}
                           className={`absolute bottom-2 right-2 px-4 py-2 ${
                             isSaving
-                              ? "bg-green-600 dark:bg-green-700"
-                              : "bg-green-500 dark:bg-green-600"
-                          } text-white border-2 border-green-600 dark:border-green-500 rounded-lg hover:bg-green-600 dark:hover:bg-green-700 hover:border-green-700 dark:hover:border-green-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-2 ${
+                              ? "bg-indigo-600 dark:bg-indigo-700"
+                              : "bg-indigo-500 dark:bg-indigo-600"
+                          } text-white border-2 border-indigo-600 dark:border-indigo-500 rounded-lg hover:bg-indigo-600 dark:hover:bg-indigo-700 hover:border-indigo-700 dark:hover:border-indigo-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-2 ${
                             userRole === "3"
                               ? "opacity-50 cursor-not-allowed"
                               : ""
@@ -3523,7 +3668,7 @@ const Main: React.FC = () => {
                         {files.map((file) => (
                           <li
                             key={file.id}
-                            className="text-sm text-green-500 flex items-center justify-between"
+                            className="text-sm text-indigo-500 flex items-center justify-between"
                           >
                             <a
                               href={file.url}
@@ -3544,7 +3689,7 @@ const Main: React.FC = () => {
                     </div>
 
                     {/* Response Delay Setting for mobile */}
-                    <div className="mb-5 p-4 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-100 dark:border-green-800 shadow-sm">
+                    <div className="mb-5 p-4 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg border border-indigo-100 dark:border-indigo-800 shadow-sm">
                       <div className="space-y-4">
                         <h3 className="text-md font-medium text-gray-700 dark:text-gray-300">
                           Response Delay
@@ -3560,7 +3705,7 @@ const Main: React.FC = () => {
                             max="300"
                             value={aiDelay}
                             onChange={(e) => setAiDelay(Number(e.target.value))}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             disabled={userRole === "3"}
                           />
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -3572,7 +3717,7 @@ const Main: React.FC = () => {
                         <div>
                           <button
                             onClick={handleSaveAiSettings}
-                            className="px-4 py-2 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-2"
+                            className="px-4 py-2 bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-2"
                             disabled={userRole === "3"}
                           >
                             <svg
@@ -3686,7 +3831,7 @@ const Main: React.FC = () => {
                   </div>
                   <div className="relative w-full h-[calc(100vh-180px)]">
                     <textarea
-                      className="w-full h-full p-3 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500 font-mono"
+                      className="w-full h-full p-3 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
                       value={assistantInfo.instructions}
                       onChange={handleInputChange}
                       name="instructions"
@@ -3698,7 +3843,7 @@ const Main: React.FC = () => {
                     <div className="absolute bottom-1.5 left-1.5 flex gap-1.5">
                       <button
                         onClick={() => setIsTemplateModalOpen(true)}
-                        className="px-2 py-1.5 bg-white dark:bg-gray-700 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-1.5 text-xs"
+                        className="px-2 py-1.5 bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/50 shadow-sm active:scale-95 transition-all duration-200 flex items-center gap-1.5 text-xs"
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
@@ -3720,9 +3865,9 @@ const Main: React.FC = () => {
                       onClick={updateAssistantInfo}
                       className={`absolute bottom-1.5 right-1.5 px-3 py-1.5 ${
                         isSaving
-                          ? "bg-green-600 dark:bg-green-700"
-                          : "bg-green-500 dark:bg-green-600"
-                      } text-white border-2 border-green-600 dark:border-green-500 rounded-lg hover:bg-green-600 dark:hover:bg-green-700 hover:border-green-700 dark:hover:border-green-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 text-xs ${
+                          ? "bg-indigo-600 dark:bg-indigo-700"
+                          : "bg-indigo-500 dark:bg-indigo-600"
+                      } text-white border-2 border-indigo-600 dark:border-indigo-500 rounded-lg hover:bg-indigo-600 dark:hover:bg-indigo-700 hover:border-indigo-700 dark:hover:border-indigo-600 shadow-lg active:scale-90 hover:scale-105 transform transition-all duration-200 ease-out flex items-center gap-1.5 text-xs ${
                         userRole === "3" ? "opacity-50 cursor-not-allowed" : ""
                       }`}
                       disabled={userRole === "3"}
@@ -3829,7 +3974,7 @@ const Main: React.FC = () => {
                                   loadTemplate(template);
                                   setIsTemplateModalOpen(false);
                                 }}
-                                className="px-2 py-1 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors duration-200 text-xs flex items-center gap-1"
+                                className="px-2 py-1 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors duration-200 text-xs flex items-center gap-1"
                               >
                                 <svg
                                   xmlns="http://www.w3.org/2000/svg"
@@ -3872,7 +4017,7 @@ const Main: React.FC = () => {
                   <div className="mt-3">
                     <button
                       type="button"
-                      className="inline-flex justify-center rounded-md border border-transparent bg-gray-100 dark:bg-gray-600 px-3 py-1.5 text-xs font-medium text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+                      className="inline-flex justify-center rounded-md border border-transparent bg-gray-100 dark:bg-gray-600 px-3 py-1.5 text-xs font-medium text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                       onClick={() => setIsTemplateModalOpen(false)}
                     >
                       Close
@@ -3972,7 +4117,7 @@ const Main: React.FC = () => {
                           </h4>
                           <button
                             onClick={() => copyToClipboard(tool.example)}
-                            className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors duration-200 text-xs flex items-center gap-1.5"
+                            className="px-2 py-1 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors duration-200 text-xs flex items-center gap-1.5"
                           >
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
@@ -4020,7 +4165,7 @@ const Main: React.FC = () => {
                   <div className="mt-4 flex justify-end">
                     <button
                       type="button"
-                      className="inline-flex justify-center rounded-md border border-transparent bg-gray-100 dark:bg-gray-600 px-3 py-1.5 text-xs font-medium text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+                      className="inline-flex justify-center rounded-md border border-transparent bg-gray-100 dark:bg-gray-600 px-3 py-1.5 text-xs font-medium text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                       onClick={() => setIsAiToolsModalOpen(false)}
                     >
                       Close
