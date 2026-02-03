@@ -86,7 +86,6 @@ export const selectMenu = (layout: Themes["layout"]) => (state: RootState) => {
         default:
           return simpleMenu;
       }
-      }
     }
   }
 
