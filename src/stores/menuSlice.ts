@@ -37,6 +37,18 @@ export const menuSlice = createSlice({
   reducers: {},
 });
 
+// Helper function to filter menu items based on user email
+const filterMenuByEmail = (menu: Array<Menu | "divider">): Array<Menu | "divider"> => {
+  const userEmail = localStorage.getItem("userEmail")?.toLowerCase() || "";
+  const canSeeInbox = userEmail.includes("juta") || userEmail.includes("omniyal") || userEmail.includes("desitecreation");
+  
+  return menu.filter((item) => {
+    if (item === "divider") return true;
+    if (item.pathname === "/inbox" && !canSeeInbox) return false;
+    return true;
+  });
+};
+
 export const selectMenu = (layout: Themes["layout"]) => (state: RootState) => {
   // Get config from state instead of using hook
   const config = state.config;
@@ -54,7 +66,7 @@ export const selectMenu = (layout: Themes["layout"]) => (state: RootState) => {
     }else if (config?.name === "MTDC") {
       return simpleMenuMTDC;
     } else if (config?.name === "Juta" || config?.name === "Omniyal AI") {
-      return simpleMenuJuta;
+      return filterMenuByEmail(simpleMenuJuta);
     } else {
       switch (userRole) {
         case "1":

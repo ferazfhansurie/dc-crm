@@ -602,6 +602,7 @@ function Main() {
   const [activateSleep, setActivateSleep] = useState(false);
   const [sleepAfterMessages, setSleepAfterMessages] = useState(20);
   const [sleepDuration, setSleepDuration] = useState(5);
+  const [enableActiveHours, setEnableActiveHours] = useState(false);
   const [activeTimeStart, setActiveTimeStart] = useState("09:00");
   const [activeTimeEnd, setActiveTimeEnd] = useState("17:00");
   const [messages, setMessages] = useState<Message[]>([
@@ -4178,7 +4179,7 @@ function Main() {
         sleepAfterMessages: activateSleep ? sleepAfterMessages : null,
         sleepDuration: activateSleep ? sleepDuration : null,
         multiple: multiple,
-        ...(activeTimeStart && activeTimeEnd && {
+        ...(enableActiveHours && activeTimeStart && activeTimeEnd && {
           activeHours: {
             start: activeTimeStart,
             end: activeTimeEnd,
@@ -4228,6 +4229,7 @@ function Main() {
     setSelectedDocument(null);
     setBlastStartTime(null);
     setBlastStartDate(new Date());
+    setEnableActiveHours(false);
     setActiveTimeStart("09:00");
     setActiveTimeEnd("17:00");
     setMinDelay(1);
@@ -10644,17 +10646,30 @@ function Main() {
 
                     {/* Active Time Range */}
                     <div className="mt-6 p-6 bg-gradient-to-br from-violet-500/10 to-purple-500/10 backdrop-blur-xl rounded-2xl border border-violet-400/20">
-                      <div className="flex items-center space-x-3 mb-4">
-                        <Lucide
-                          icon="Clock"
-                          className="w-5 h-5 text-violet-400"
-                        />
-                        <h5 className="text-lg font-bold text-white/90 dark:text-slate-200">
-                          Active Time Range
-                        </h5>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center space-x-3">
+                          <Lucide
+                            icon="Clock"
+                            className="w-5 h-5 text-violet-400"
+                          />
+                          <h5 className="text-lg font-bold text-white/90 dark:text-slate-200">
+                            Active Time Range
+                          </h5>
+                        </div>
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={enableActiveHours}
+                            onChange={(e) => setEnableActiveHours(e.target.checked)}
+                            className="mr-2 rounded"
+                          />
+                          <span className="text-sm text-white/70">Enable</span>
+                        </label>
                       </div>
                       <p className="text-sm text-white/70 dark:text-slate-400 mb-4">
-                        Messages will only be sent during this time window each day
+                        {enableActiveHours
+                          ? "Messages will only be sent during this time window each day"
+                          : "Messages will be sent at any time (no time restrictions)"}
                       </p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-3">
@@ -10665,7 +10680,8 @@ function Main() {
                             type="time"
                             value={activeTimeStart}
                             onChange={(e) => setActiveTimeStart(e.target.value)}
-                            className="w-full px-4 py-3 bg-white/5 dark:bg-slate-700/20 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 rounded-2xl shadow-inner focus:border-violet-400/50 focus:ring-2 focus:ring-violet-400/20 transition-all duration-200 text-white"
+                            disabled={!enableActiveHours}
+                            className="w-full px-4 py-3 bg-white/5 dark:bg-slate-700/20 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 rounded-2xl shadow-inner focus:border-violet-400/50 focus:ring-2 focus:ring-violet-400/20 transition-all duration-200 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                           />
                         </div>
                         <div className="space-y-3">
@@ -10676,7 +10692,8 @@ function Main() {
                             type="time"
                             value={activeTimeEnd}
                             onChange={(e) => setActiveTimeEnd(e.target.value)}
-                            className="w-full px-4 py-3 bg-white/5 dark:bg-slate-700/20 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 rounded-2xl shadow-inner focus:border-violet-400/50 focus:ring-2 focus:ring-violet-400/20 transition-all duration-200 text-white"
+                            disabled={!enableActiveHours}
+                            className="w-full px-4 py-3 bg-white/5 dark:bg-slate-700/20 backdrop-blur-xl border border-white/20 dark:border-slate-600/20 rounded-2xl shadow-inner focus:border-violet-400/50 focus:ring-2 focus:ring-violet-400/20 transition-all duration-200 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                           />
                         </div>
                       </div>
