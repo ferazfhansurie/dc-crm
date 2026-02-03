@@ -227,11 +227,6 @@ console.log("userEmail:", userEmail);
             const data: BotStatusResponse = statusResponse.data;
             let qrCodesData: QRCodeData[] = [];
 
-            // Track if company is using Cloud API (v2) - must have v2=true AND valid Cloud API credentials
-            const hasCloudApiCredentials = data.v2 === true && 
-              !!(data.wabaId || data.phoneNumberId || data.accessToken);
-            setIsCloudApiConnected(hasCloudApiCredentials);
-
             if (data.phones && Array.isArray(data.phones)) {
               qrCodesData = data.phones.map((phone: Phone) => ({
                 phoneIndex: phone.phoneIndex,
@@ -255,6 +250,12 @@ console.log("userEmail:", userEmail);
               ];
             }
             setQrCodes(qrCodesData);
+
+            // Track if company is using Cloud API (v2) - must have v2=true AND at least one phone connected
+            const hasConnectedPhone = qrCodesData.some(
+              (phone) => phone.status === 'ready' || phone.status === 'authenticated'
+            );
+            setIsCloudApiConnected(data.v2 === true && hasConnectedPhone);
           }
 
           // Fetch phone names from user-page-context API
@@ -398,11 +399,6 @@ console.log("userEmail:", userEmail);
         const data: BotStatusResponse = response.data;
         let qrCodesData: QRCodeData[] = [];
 
-        // Track if company is using Cloud API (v2) - must have v2=true AND valid Cloud API credentials
-        const hasCloudApiCredentials = data.v2 === true && 
-          !!(data.wabaId || data.phoneNumberId || data.accessToken);
-        setIsCloudApiConnected(hasCloudApiCredentials);
-
         // Check if phones array exists before mapping
         if (data.phones && Array.isArray(data.phones)) {
           // Multiple phones: transform array to QRCodeData[]
@@ -432,6 +428,12 @@ console.log("userEmail:", userEmail);
         } else {
           setQrCodes([]);
         }
+
+        // Track if company is using Cloud API (v2) - must have v2=true AND at least one phone connected
+        const hasConnectedPhone = qrCodesData.some(
+          (phone) => phone.status === 'ready' || phone.status === 'authenticated'
+        );
+        setIsCloudApiConnected(data.v2 === true && hasConnectedPhone);
       }
     } catch (error) {
       console.error("Error fetching phone status:", error);
