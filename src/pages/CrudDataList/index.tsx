@@ -57,6 +57,7 @@ import Papa from "papaparse";
 import ReactPaginate from "react-paginate";
 import { Tab } from "@headlessui/react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+import TemplateSelectorModal from "@/components/TemplateSelectorModal";
 
 import type { DropResult } from "@hello-pangea/dnd";
 
@@ -620,6 +621,21 @@ function Main() {
   const [selectedMessageForView, setSelectedMessageForView] =
     useState<any>(null);
   const [viewMessageDetailsModal, setViewMessageDetailsModal] = useState(false);
+  
+  // Template and 24-hour window states
+  const [isOfficialApi, setIsOfficialApi] = useState(false);
+  const [connectionType, setConnectionType] = useState<string>('wwebjs');
+  const [isTemplateSelectorOpen, setIsTemplateSelectorOpen] = useState(false);
+  const [templateContactsToSend, setTemplateContactsToSend] = useState<string[]>([]);
+  const [pendingMessageToSend, setPendingMessageToSend] = useState<any>(null);
+  
+  // Blast template states
+  const [blastTemplates, setBlastTemplates] = useState<any[]>([]);
+  const [selectedBlastTemplate, setSelectedBlastTemplate] = useState<any>(null);
+  const [blastTemplateVariables, setBlastTemplateVariables] = useState<string[]>([]);
+  const [isLoadingBlastTemplates, setIsLoadingBlastTemplates] = useState(false);
+  const [isSendingBlastTemplate, setIsSendingBlastTemplate] = useState(false);
+  
   const defaultVisibleColumns = {
     checkbox: true,
     contact: true,
@@ -4527,6 +4543,257 @@ function Main() {
       }
     } else {
       return localStorage.getItem("userEmail");
+    }
+  };
+
+  // Check connection type for official API
+  const checkConnectionType = async () => {
+    if (!companyId) return;
+    
+    try {
+      const response = await fetch(
+        `${baseUrl}/api/templates/connection-type/${companyId}?phoneIndex=${phoneIndex || 0}`,
+        { credentials: "include" }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        setConnectionType(data.connectionType || 'wwebjs');
+        setIsOfficialApi(data.requiresTemplates || false);
+      }
+    } catch (error) {
+      console.error("Error checking connection type:", error);
+    }
+  };
+
+  // Check 24-hour session window for a contact
+  const checkSessionWindow = async (contactPhone: string): Promise<{ isOpen: boolean; requiresTemplate: boolean }> => {
+    if (!companyId || !isOfficialApi) {
+      return { isOpen: true, requiresTemplate: false };
+    }
+
+    try {
+      const cleanPhone = contactPhone.replace(/[^\d]/g, '');
+      const response = await fetch(
+        `${baseUrl}/api/templates/session/${companyId}/${cleanPhone}?phoneIndex=${phoneIndex || 0}`,
+        { credentials: "include" }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          isOpen: data.sessionWindow?.isOpen ?? true,
+          requiresTemplate: data.sessionWindow?.requiresTemplate ?? false
+        };
+      }
+    } catch (error) {
+      console.error("Error checking session window:", error);
+    }
+
+    return { isOpen: true, requiresTemplate: false };
+  };
+
+  // Check connection type when companyId or phoneIndex changes
+  useEffect(() => {
+    if (companyId) {
+      checkConnectionType();
+    }
+  }, [companyId, phoneIndex]);
+
+  // Fetch templates for blast when using official API
+  const fetchBlastTemplates = async () => {
+    if (!companyId || !isOfficialApi) return;
+    
+    setIsLoadingBlastTemplates(true);
+    try {
+      const response = await fetch(
+        `${baseUrl}/api/templates/${companyId}?phoneIndex=${phoneIndex || 0}&status=APPROVED`,
+        { credentials: "include" }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        setBlastTemplates(data.templates || []);
+      }
+    } catch (error) {
+      console.error("Error fetching templates:", error);
+      toast.error("Failed to fetch templates");
+    } finally {
+      setIsLoadingBlastTemplates(false);
+    }
+  };
+
+  // Fetch templates when blast modal opens and using official API
+  useEffect(() => {
+    if (blastMessageModal && isOfficialApi && companyId) {
+      fetchBlastTemplates();
+    }
+  }, [blastMessageModal, isOfficialApi, companyId]);
+
+  // Get template variable count
+  const getTemplateVariableCount = (template: any): number => {
+    if (!template?.components) return 0;
+    let count = 0;
+    for (const comp of template.components) {
+      if (comp.text) {
+        const matches = comp.text.match(/\{\{(\d+)\}\}/g);
+        if (matches) count = Math.max(count, ...matches.map((m: string) => parseInt(m.replace(/[{}]/g, ''))));
+      }
+    }
+    return count;
+  };
+
+  // Get template preview text
+  const getTemplatePreviewText = (template: any): string => {
+    if (!template?.components) return '';
+    const parts: string[] = [];
+    for (const comp of template.components) {
+      if (comp.type === 'BODY' && comp.text) {
+        parts.push(comp.text);
+      }
+    }
+    return parts.join('\n');
+  };
+
+  // Handle selecting a blast template
+  const handleSelectBlastTemplate = (template: any) => {
+    setSelectedBlastTemplate(template);
+    const varCount = getTemplateVariableCount(template);
+    setBlastTemplateVariables(Array(varCount).fill(''));
+  };
+
+  // Send blast template messages
+  const sendBlastTemplateMessage = async () => {
+    if (!selectedBlastTemplate || selectedContacts.length === 0) {
+      toast.error("Please select a template and contacts");
+      return;
+    }
+
+    const varCount = getTemplateVariableCount(selectedBlastTemplate);
+    if (varCount > 0 && blastTemplateVariables.some(v => !v.trim())) {
+      toast.error("Please fill in all template variables");
+      return;
+    }
+
+    setIsSendingBlastTemplate(true);
+    setProgress(0);
+
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const totalContacts = selectedContacts.length;
+
+      for (let i = 0; i < selectedContacts.length; i++) {
+        const contact = selectedContacts[i];
+        const cleanPhone = contact.phone?.replace(/[^\d]/g, '');
+        if (!cleanPhone) continue;
+
+        const chatId = `${cleanPhone}@c.us`;
+
+        try {
+          const response = await fetch(
+            `${baseUrl}/api/v2/messages/template/${companyId}/${chatId}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                templateName: selectedBlastTemplate.name,
+                language: selectedBlastTemplate.language,
+                variables: blastTemplateVariables,
+                phoneIndex: phoneIndex || 0,
+              }),
+            }
+          );
+
+          if (response.ok) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch (err) {
+          failCount++;
+        }
+
+        setProgress(((i + 1) / totalContacts) * 100);
+        
+        // Small delay between messages
+        if (i < selectedContacts.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Successfully sent template to ${successCount} contacts`);
+      }
+      if (failCount > 0) {
+        toast.warning(`Failed to send to ${failCount} contacts`);
+      }
+
+      setBlastMessageModal(false);
+      setSelectedBlastTemplate(null);
+      setBlastTemplateVariables([]);
+      setSelectedContacts([]);
+    } catch (error: any) {
+      console.error("Error sending blast template:", error);
+      toast.error(error.message || "Failed to send blast template");
+    } finally {
+      setIsSendingBlastTemplate(false);
+      setProgress(0);
+    }
+  };
+
+  // Handle sending template message
+  const handleSendTemplate = async (templateName: string, language: string, variables: string[]) => {
+    if (!templateContactsToSend.length) {
+      toast.error("No contacts selected for template");
+      return;
+    }
+
+    try {
+      for (const contactId of templateContactsToSend) {
+        const phone = contactId.split("-")[1];
+        const chatId = `${phone}@c.us`;
+
+        const response = await fetch(
+          `${baseUrl}/api/v2/messages/template/${companyId}/${chatId}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              templateName,
+              language,
+              variables,
+              phoneIndex: phoneIndex || 0,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to send template");
+        }
+      }
+
+      toast.success("Template message sent successfully!");
+      setIsTemplateSelectorOpen(false);
+      setTemplateContactsToSend([]);
+      
+      // If there was a pending message (scheduled), delete it
+      if (pendingMessageToSend?.scheduleId) {
+        try {
+          await fetch(
+            `${baseUrl}/api/schedule-message/${companyId}/${pendingMessageToSend.scheduleId}`,
+            { method: "DELETE" }
+          );
+          await fetchScheduledMessages();
+        } catch (e) {
+          console.warn("Failed to delete scheduled message after template send");
+        }
+      }
+      setPendingMessageToSend(null);
+    } catch (error: any) {
+      console.error("Error sending template:", error);
+      toast.error(error.message || "Failed to send template message");
     }
   };
 
@@ -10108,6 +10375,25 @@ function Main() {
                     </div>
                   </div>
 
+                  {/* Official API Notice */}
+                  {isOfficialApi && (
+                    <div className="bg-amber-500/10 backdrop-blur-xl rounded-2xl p-6 border border-amber-400/20">
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                          <Lucide icon="AlertTriangle" className="w-5 h-5 text-amber-400" />
+                        </div>
+                        <div>
+                          <h4 className="text-lg font-semibold text-amber-300">Official WhatsApp API</h4>
+                          <p className="text-sm text-amber-200/80 mt-1">
+                            You're using the Official WhatsApp Business API. Due to Meta's policies, 
+                            you can only send <strong>approved message templates</strong> for bulk messaging. 
+                            Please select a template below.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Phone Selection */}
                   <div className="space-y-4">
                     <div className="flex items-center space-x-3">
@@ -10239,7 +10525,124 @@ function Main() {
                       )}
                   </div>
 
-                  {/* Message Content */}
+                  {/* Template Selection for Official API */}
+                  {isOfficialApi ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center space-x-3">
+                        <Lucide icon="FileText" className="w-5 h-5 text-blue-400" />
+                        <label className="text-lg font-semibold text-white/90 dark:text-slate-200">
+                          Select Message Template
+                        </label>
+                      </div>
+                      
+                      {isLoadingBlastTemplates ? (
+                        <div className="flex items-center justify-center py-8">
+                          <LoadingIcon icon="oval" className="w-8 h-8" />
+                          <span className="ml-2 text-white/70">Loading templates...</span>
+                        </div>
+                      ) : blastTemplates.length === 0 ? (
+                        <div className="text-center py-8 bg-white/5 rounded-2xl border border-white/10">
+                          <Lucide icon="FileX" className="w-12 h-12 text-white/40 mx-auto mb-3" />
+                          <p className="text-white/70">No approved templates found</p>
+                          <p className="text-xs text-white/50 mt-1">
+                            Create templates in the Message Templates page first
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-64 overflow-y-auto p-2">
+                            {blastTemplates.filter(t => t.status === 'APPROVED').map((template) => (
+                              <div
+                                key={template.id}
+                                onClick={() => handleSelectBlastTemplate(template)}
+                                className={`p-4 rounded-2xl border cursor-pointer transition-all duration-200 ${
+                                  selectedBlastTemplate?.id === template.id
+                                    ? 'bg-blue-500/20 border-blue-400/50'
+                                    : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="font-semibold text-white/90">{template.name}</span>
+                                  <span className="text-xs px-2 py-1 rounded-full bg-green-500/20 text-green-300">
+                                    Approved
+                                  </span>
+                                </div>
+                                <p className="text-xs text-white/60 mb-2">Language: {template.language}</p>
+                                <p className="text-sm text-white/70 line-clamp-2">
+                                  {getTemplatePreviewText(template)}
+                                </p>
+                                {getTemplateVariableCount(template) > 0 && (
+                                  <p className="text-xs text-amber-300 mt-2">
+                                    <Lucide icon="AlertCircle" className="w-3 h-3 inline mr-1" />
+                                    {getTemplateVariableCount(template)} variable(s) required
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          
+                          {/* Template Variables Input */}
+                          {selectedBlastTemplate && getTemplateVariableCount(selectedBlastTemplate) > 0 && (
+                            <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+                              <h4 className="text-md font-semibold text-white/90 mb-4 flex items-center gap-2">
+                                <Lucide icon="Edit3" className="w-5 h-5 text-violet-400" />
+                                Fill Template Variables
+                              </h4>
+                              <div className="space-y-3">
+                                {blastTemplateVariables.map((value, idx) => (
+                                  <div key={idx} className="flex items-center gap-3">
+                                    <span className="text-sm text-white/60 w-16">{`{{${idx + 1}}}`}:</span>
+                                    <input
+                                      type="text"
+                                      value={value}
+                                      onChange={(e) => {
+                                        const newVars = [...blastTemplateVariables];
+                                        newVars[idx] = e.target.value;
+                                        setBlastTemplateVariables(newVars);
+                                      }}
+                                      placeholder={`Value for variable ${idx + 1}`}
+                                      className="flex-1 px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/40 focus:border-violet-400/50 focus:ring-2 focus:ring-violet-400/20"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                              <p className="text-xs text-white/50 mt-3">
+                                These values will be the same for all recipients
+                              </p>
+                            </div>
+                          )}
+                          
+                          {/* Template Preview */}
+                          {selectedBlastTemplate && (
+                            <div className="bg-[#e5ddd5] rounded-2xl p-4">
+                              <p className="text-xs text-gray-600 mb-2 font-medium">Preview:</p>
+                              <div className="bg-white rounded-lg shadow max-w-sm mx-auto p-4">
+                                {selectedBlastTemplate.components?.map((comp: any, idx: number) => (
+                                  <div key={idx}>
+                                    {comp.type === 'HEADER' && comp.text && (
+                                      <p className="font-semibold text-gray-800 mb-2">{comp.text}</p>
+                                    )}
+                                    {comp.type === 'BODY' && comp.text && (
+                                      <p className="text-gray-700 whitespace-pre-wrap text-sm">
+                                        {blastTemplateVariables.reduce(
+                                          (text, val, i) => text.replace(`{{${i + 1}}}`, val || `{{${i + 1}}}`),
+                                          comp.text
+                                        )}
+                                      </p>
+                                    )}
+                                    {comp.type === 'FOOTER' && comp.text && (
+                                      <p className="text-xs text-gray-500 mt-2">{comp.text}</p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                  /* Message Content - Only shown for non-official API */
                   <div className="space-y-4">
                     <div className="flex items-center space-x-3">
                       <Lucide
@@ -10442,8 +10845,10 @@ function Main() {
                       </div>
                     )}
                   </div>
+                  )}
 
-                  {/* Media Upload */}
+                  {/* Media Upload - Only for non-official API */}
+                  {!isOfficialApi && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-3">
                       <div className="flex items-center space-x-3">
@@ -10532,8 +10937,10 @@ function Main() {
                       </div>
                     </div>
                   </div>
+                  )}
 
-                  {/* Scheduling Options */}
+                  {/* Scheduling Options - Only for non-official API */}
+                  {!isOfficialApi && (
                   <div className="bg-white/5 dark:bg-slate-700/10 backdrop-blur-xl rounded-3xl p-8 border border-white/20 dark:border-slate-600/20 shadow-inner space-y-6">
                     <div className="flex items-center space-x-4">
                       <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-500/20 to-purple-500/20 backdrop-blur-sm flex items-center justify-center border border-white/10">
@@ -10705,9 +11112,10 @@ function Main() {
                       </div>
                     </div>
                   </div>
+                  )}
 
                   {/* Progress Bar (shown during sending) */}
-                  {isScheduling && (
+                  {(isScheduling || isSendingBlastTemplate) && (
                     <div className="bg-blue-500/10 backdrop-blur-xl rounded-3xl p-6 border border-blue-400/20 shadow-inner">
                       <div className="flex items-center justify-between mb-4">
                         <span className="text-sm font-medium text-blue-300 flex items-center gap-3">
@@ -10717,7 +11125,7 @@ function Main() {
                               className="w-4 h-4 text-white"
                             />
                           </div>
-                          Scheduling messages...
+                          {isSendingBlastTemplate ? "Sending templates..." : "Scheduling messages..."}
                         </span>
                         <span className="text-sm text-blue-300 font-semibold bg-blue-500/20 px-4 py-2 rounded-full backdrop-blur-sm border border-blue-400/20">
                           {Math.round(progress)}%
@@ -10743,37 +11151,72 @@ function Main() {
                   <div className="flex space-x-3">
                     <Button
                       variant="outline-secondary"
-                      onClick={() => setBlastMessageModal(false)}
-                      disabled={isScheduling}
+                      onClick={() => {
+                        setBlastMessageModal(false);
+                        setSelectedBlastTemplate(null);
+                        setBlastTemplateVariables([]);
+                      }}
+                      disabled={isScheduling || isSendingBlastTemplate}
                       className="px-6 py-3 bg-white/5 hover:bg-white/10 dark:bg-slate-700/20 dark:hover:bg-slate-600/30 backdrop-blur-sm border border-white/20 dark:border-slate-600/20 text-white/90 hover:text-white rounded-2xl transition-all duration-200 font-medium"
                     >
                       Cancel
                     </Button>
-                    <Button
-                      variant="primary"
-                      onClick={sendBlastMessage}
-                      disabled={
-                        selectedContacts.length === 0 ||
-                        !blastMessage.trim() ||
-                        phoneIndex === null ||
-                        phoneIndex === undefined ||
-                        !phoneNames[phoneIndex] ||
-                        isScheduling
-                      }
-                      className="px-8 py-3 bg-gradient-to-r from-blue-500 via-violet-500 to-purple-500 hover:from-blue-600 hover:via-violet-600 hover:to-purple-600 border-0 text-white rounded-2xl transition-all duration-200 font-semibold shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                    >
-                      {isScheduling ? (
-                        <div className="flex items-center space-x-2">
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          <span>Scheduling...</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center space-x-2">
-                          <Lucide icon="Send" className="w-4 h-4" />
-                          <span>Schedule Message</span>
-                        </div>
-                      )}
-                    </Button>
+                    
+                    {/* Different button for Official API vs non-official */}
+                    {isOfficialApi ? (
+                      <Button
+                        variant="primary"
+                        onClick={sendBlastTemplateMessage}
+                        disabled={
+                          selectedContacts.length === 0 ||
+                          !selectedBlastTemplate ||
+                          phoneIndex === null ||
+                          phoneIndex === undefined ||
+                          isSendingBlastTemplate ||
+                          (getTemplateVariableCount(selectedBlastTemplate) > 0 && 
+                           blastTemplateVariables.some(v => !v.trim()))
+                        }
+                        className="px-8 py-3 bg-gradient-to-r from-blue-500 via-violet-500 to-purple-500 hover:from-blue-600 hover:via-violet-600 hover:to-purple-600 border-0 text-white rounded-2xl transition-all duration-200 font-semibold shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                      >
+                        {isSendingBlastTemplate ? (
+                          <div className="flex items-center space-x-2">
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <span>Sending...</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center space-x-2">
+                            <Lucide icon="Send" className="w-4 h-4" />
+                            <span>Send Template</span>
+                          </div>
+                        )}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        onClick={sendBlastMessage}
+                        disabled={
+                          selectedContacts.length === 0 ||
+                          !blastMessage.trim() ||
+                          phoneIndex === null ||
+                          phoneIndex === undefined ||
+                          !phoneNames[phoneIndex] ||
+                          isScheduling
+                        }
+                        className="px-8 py-3 bg-gradient-to-r from-blue-500 via-violet-500 to-purple-500 hover:from-blue-600 hover:via-violet-600 hover:to-purple-600 border-0 text-white rounded-2xl transition-all duration-200 font-semibold shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                      >
+                        {isScheduling ? (
+                          <div className="flex items-center space-x-2">
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <span>Scheduling...</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center space-x-2">
+                            <Lucide icon="Send" className="w-4 h-4" />
+                            <span>Schedule Message</span>
+                          </div>
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -12756,6 +13199,20 @@ function Main() {
             </Dialog.Panel>
           </div>
         </Dialog>
+
+        {/* Template Selector Modal for individual sends */}
+        <TemplateSelectorModal
+          isOpen={isTemplateSelectorOpen}
+          onClose={() => {
+            setIsTemplateSelectorOpen(false);
+            setTemplateContactsToSend([]);
+            setPendingMessageToSend(null);
+          }}
+          onSend={handleSendTemplate}
+          companyId={companyId}
+          phoneIndex={phoneIndex || 0}
+          contactName=""
+        />
 
         <ToastContainer
           position="top-right"
