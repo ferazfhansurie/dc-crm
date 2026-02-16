@@ -1176,7 +1176,14 @@ function Main() {
 
       const companyData = await companyResponse.json();
 
-      // Call the sync contacts endpoint
+      // Check if company is using Cloud API (v2)
+      if (companyData.v2 === true) {
+        setFetching(false);
+        toast.info("Contact syncing is automatic for WhatsApp Cloud API. Contacts are synced via webhooks when messages are received.");
+        return;
+      }
+
+      // Call the sync contacts endpoint (only for WhatsApp Web.js clients)
       const syncResponse = await fetch(
         `${baseUrl}/api/sync-contacts/${companyId}`,
         {
