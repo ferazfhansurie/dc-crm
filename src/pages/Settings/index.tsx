@@ -15,6 +15,7 @@ import { Dialog } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import { BACKEND_URL } from "@/config/backend";
 import WhatsAppEmbeddedSignup from "@/components/WhatsAppEmbeddedSignup";
+import WhatsAppFallback from "@/components/WhatsAppFallback";
 
 function SettingsPage() {
   const dispatch = useAppDispatch();
@@ -1154,6 +1155,29 @@ console.log("userEmail:", userEmail);
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* WhatsApp Fallback Connection Section */}
+          {companyId && isCloudApiConnected && (
+            <div className="group relative bg-white/70 dark:bg-slate-800/70 backdrop-blur-2xl rounded-3xl border border-white/30 dark:border-slate-700/30 p-4 mb-4 shadow-2xl shadow-slate-200/20 dark:shadow-slate-900/40 transition-all duration-500 hover:shadow-3xl hover:shadow-slate-200/30 dark:hover:shadow-slate-900/60">
+              <div className="flex items-center space-x-4 mb-4">
+                <div className="p-3 rounded-2xl bg-gradient-to-br from-orange-500/20 to-amber-500/20 dark:from-orange-400/20 dark:to-amber-400/20 backdrop-blur-sm border border-orange-200/40 dark:border-orange-700/40">
+                  <Lucide icon="Smartphone" className="w-8 h-8 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold bg-gradient-to-r from-orange-600 to-amber-600 dark:from-orange-400 dark:to-amber-400 bg-clip-text text-transparent">
+                    WhatsApp Fallback Connection
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Auto-sends via personal WhatsApp when 24h Cloud API window expires
+                  </p>
+                </div>
+              </div>
+              <WhatsAppFallback
+                companyId={companyId}
+                serverUrl={apiUrl ? apiUrl.replace('/api', '').replace('http://', 'wss://').replace('https://', 'wss://') : "wss://bisnesgpt.jutateknologi.com"}
+              />
             </div>
           )}
 
